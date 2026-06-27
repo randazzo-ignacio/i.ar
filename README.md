@@ -42,11 +42,11 @@ ansible-playbook playbooks/cloudflare.yml    --vault-password-file .vault_pass
 
 | Host          | Domain         | WG IP       | Role                          |
 |---------------|----------------|-------------|-------------------------------|
-| randazzo-ar   | randazzo.ar    | 10.66.0.1   | Proxy hub, Caddy, CF Tunnel   |
-| ob-ar         | 0b.ar          | 10.66.0.2   | AI playground, Docker          |
-| i-ar          | i.ar           | 10.66.0.3   | Ollama, tool static page       |
-| laptop        | (local)        | 10.66.0.4   | Future NPU agent              |
-| server-pc     | (local)        | 10.66.0.5   | GPU Ollama, local services     |
+| rammstein     | randazzo.ar    | 10.66.0.1   | Proxy hub, Caddy, CF Tunnel   |
+| greenday      | 0b.ar          | 10.66.0.2   | AI playground, Docker          |
+| daftpunk      | i.ar           | 10.66.0.3   | Ollama, emacboros static page |
+| yoga          | (local)        | 10.66.0.4   | Future NPU agent              |
+| sophon        | (local)        | 10.66.0.5   | GPU Ollama, local services     |
 
 ## Variable Hierarchy (DRY)
 

@@ -1,0 +1,14 @@
+---
+# roles/static-page/defaults/main.yml
+# Defaults for the static landing page deployment.
+
+# Where to serve the static page
+static_page_port: 8080
+static_page_root: "/var/www/emacboros"
+
+# The web server to use (python3 http.server via systemd, or nginx)
+static_page_server: "python"  # "python" or "nginx"
+
+# User that owns the web files
+static_page_user: "www-data"
+static_page_group: "www-data"

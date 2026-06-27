@@ -9,9 +9,10 @@
     # admin off
 }
 
-# ── randazzo.ar — main site (static page from i-ar) ────────
+# ── randazzo.ar — personal portfolio (static page, served locally) ──
 {{ domains.proxy }} {
-    reverse_proxy {{ caddy_config[0].reverse_proxy | default('10.66.0.3:80') }}
+    root * /var/www/randazzo.ar
+    file_server
     encode gzip zstd
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
@@ -26,13 +27,15 @@
     redir https://{{ domains.proxy }}{uri} permanent
 }
 
-# ── i.ar — tool static page ────────────────────────────────
+# ── i.ar — emacboros landing page (static page from daftpunk) ──
 {{ domains.ollama }} {
     reverse_proxy 10.66.0.3:{{ tool_static_port | default(8080) }}
     encode gzip zstd
     header {
         Strict-Transport-Security "max-age=31536000; includeSubDomains"
         X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
     }
 }
 

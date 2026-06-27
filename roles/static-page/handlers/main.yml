@@ -1,0 +1,8 @@
+---
+# roles/static-page/handlers/main.yml
+# Handler to restart the static-page service on file changes.
+
+- name: restart static-page
+  service:
+    name: static-page
+    state: restarted

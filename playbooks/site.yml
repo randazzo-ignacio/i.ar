@@ -32,3 +32,9 @@
       when: podman_enabled | default(false) | bool
     - role: ollama
       when: ollama_enabled | default(false) | bool
+
+- name: Static landing page (i.ar)
+  hosts: daftpunk
+  roles:
+    - role: static-page
+      when: tool_static_page_enabled | default(false) | bool

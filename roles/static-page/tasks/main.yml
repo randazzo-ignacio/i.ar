@@ -1,0 +1,61 @@
+---
+# roles/static-page/tasks/main.yml
+# Deploys the emacboros static landing page and serves it on the specified port.
+# Runs on: daftpunk (i.ar, 10.66.0.3) — served via Caddy reverse proxy on rammstein.
+
+# ── Create web root ──────────────────────────────────────────
+- name: Create web root directory
+  file:
+    path: "{{ static_page_root }}"
+    state: directory
+    owner: "{{ static_page_user }}"
+    group: "{{ static_page_group }}"
+    mode: '0755'
+
+# ── Deploy static files ──────────────────────────────────────
+- name: Deploy index.html
+  copy:
+    src: index.html
+    dest: "{{ static_page_root }}/index.html"
+    owner: "{{ static_page_user }}"
+    group: "{{ static_page_group }}"
+    mode: '0644'
+  notify: restart static-page
+
+- name: Deploy style.css
+  copy:
+    src: style.css
+    dest: "{{ static_page_root }}/style.css"
+    owner: "{{ static_page_user }}"
+    group: "{{ static_page_group }}"
+    mode: '0644'
+  notify: restart static-page
+
+- name: Deploy script.js
+  copy:
+    src: script.js
+    dest: "{{ static_page_root }}/script.js"
+    owner: "{{ static_page_user }}"
+    group: "{{ static_page_group }}"
+    mode: '0644'
+  notify: restart static-page
+
+# ── Python HTTP server (lightweight, no extra deps) ──────────
+- name: Create static-page systemd service
+  template:
+    src: static-page.service.j2
+    dest: /etc/systemd/system/static-page.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart static-page
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: true
+
+- name: Enable and start static-page
+  service:
+    name: static-page
+    state: started
+    enabled: true
