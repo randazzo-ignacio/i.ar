@@ -32,6 +32,10 @@
     redir https://{{ domains.proxy }}{uri} permanent
 }
 
+camaras.{{ domains.proxy }} {
+    reverse_proxy 10.66.0.5:8971
+}
+
 {% elif inventory_hostname == 'daftpunk' %}
 # ═══════════════════════════════════════════════════════════
 # daftpunk — i.ar (emacboros landing page, static)

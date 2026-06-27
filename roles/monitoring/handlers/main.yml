@@ -1,0 +1,12 @@
+---
+# roles/monitoring/handlers/main.yml
+
+- name: restart monitoring
+  command: "podman-compose -f {{ monitoring_compose_dir }}/compose.yml restart"
+  args:
+    chdir: "{{ monitoring_compose_dir }}"
+  changed_when: false
+
+- name: reload systemd
+  systemd:
+    daemon_reload: true

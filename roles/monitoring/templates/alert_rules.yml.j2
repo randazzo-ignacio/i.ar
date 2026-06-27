@@ -1,0 +1,106 @@
+# ── Alert Rules ──────────────────────────────────────────────
+# Alerts that catch the "down at 4am" scenario.
+# Prometheus evaluates these every 15s and fires when conditions persist.
+
+groups:
+  # ── Host Availability ────────────────────────────────────
+  - name: "host_availability"
+    rules:
+      # Host unreachable for >2 minutes (not just a blip)
+      - alert: "HostDown"
+        expr: "up{job=\"node_exporters\"} == 0"
+        for: 2m
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "Host {{ $labels.instance }} is down"
+          description: "{{ $labels.instance }} has been unreachable for >2 minutes."
+
+      # Service unreachable
+      - alert: "ServiceDown"
+        expr: "up{} == 0 and on() (count(up{job=\"node_exporters\"} == 0) by (instance) > 0)"
+        for: 2m
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "Service {{ $labels.job }} on {{ $labels.instance }} is down"
+          description: "{{ $labels.job }} has been unreachable for >2 minutes."
+
+  # ── Resource Alerts ───────────────────────────────────────
+  - name: "host_resources"
+    rules:
+      # High CPU (>80% for >5 minutes)
+      - alert: "HighCpuUsage"
+        expr: "100 - (avg by(instance)(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) * 100) > 80"
+        for: 5m
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "High CPU on {{ $labels.instance }}"
+          description: "CPU usage is above 80% for >5 minutes."
+
+      # High memory (>90% for >5 minutes)
+      - alert: "HighMemoryUsage"
+        expr: "(1 - (node_memory_MemAvailable_bytes / node_memory_MemTotal_bytes)) * 100 > 90"
+        for: 5m
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "High memory on {{ $labels.instance }}"
+          description: "Memory usage is above 90% for >5 minutes."
+
+      # Disk space low (<10% free)
+      - alert: "LowDiskSpace"
+        expr: "(1 - (node_filesystem_avail_bytes{fstype!~\"tmpfs|overlay\"} / node_filesystem_size_bytes{fstype!~\"tmpfs|overlay\"})) * 100 > 90"
+        for: 10m
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "Low disk space on {{ $labels.instance }}"
+          description: "Disk usage is above 90% on {{ $labels.mountpoint }} for >10 minutes."
+
+  # ── Container Alerts ──────────────────────────────────────
+  - name: "containers"
+    rules:
+      # Container down
+      - alert: "ContainerDown"
+        expr: "rate(container_last_seen[5m]) == 0"
+        for: 2m
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "Container {{ $labels.name }} down on {{ $labels.instance }}"
+          description: "Container {{ $labels.name }} has been down for >2 minutes."
+
+      # Container high CPU
+      - alert: "ContainerHighCpu"
+        expr: "rate(container_cpu_usage_seconds_total[5m]) * 100 > 90"
+        for: 5m
+        labels:
+          severity: "warning"
+        annotations:
+          summary: "Container {{ $labels.name }} high CPU on {{ $labels.instance }}"
+          description: "Container {{ $labels.name }} CPU usage is above 90% for >5 minutes."
+
+  # ── Network Alerts ─────────────────────────────────────────
+  - name: "network"
+    rules:
+      # WireGuard interface down
+      - alert: "WireGuardInterfaceDown"
+        expr: "node_netdev_carrier{device=\"wg0\"} == 0"
+        for: 2m
+        labels:
+          severity: "critical"
+        annotations:
+          summary: "WireGuard interface down on {{ $labels.instance }}"
+          description: "WireGuard (wg0) interface is down for >2 minutes."
+
+      # High network latency (to Prometheus, self-measured)
+      - alert: "HighScrapeLatency"
+        expr: "scrape_duration_seconds > 2"
+        for: 5m
+        labels:
+          severity: "info"
+        annotations:
+          summary: "High scrape latency for {{ $labels.job }} on {{ $labels.instance }}"
+          description: "Scrape duration exceeds 2 seconds for >5 minutes."

@@ -1,0 +1,68 @@
+---
+# roles/node-exporter/tasks/main.yml
+# Installs node_exporter as a systemd service on each host.
+# Listens on the host's WireGuard IP only — no public exposure.
+# Prometheus on daftpunk scrapes these endpoints over WireGuard.
+
+# ── Create user ─────────────────────────────────────────────
+- name: Create node-exporter user
+  user:
+    name: "{{ node_exporter_user }}"
+    system: true
+    create_home: false
+    shell: /sbin/nologin
+
+# ── Download and install binary ─────────────────────────────
+- name: Download node_exporter archive
+  get_url:
+    url: "https://github.com/prometheus/node_exporter/releases/download/v{{ node_exporter_version }}/node_exporter-{{ node_exporter_version }}.linux-amd64.tar.gz"
+    dest: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+    mode: '0644'
+  register: download
+
+- name: Extract node_exporter
+  command: "tar xzf /tmp/node_exporter-{{ node_exporter_version }}.tar.gz -C /tmp"
+  when: download.changed
+  changed_when: false
+
+- name: Install node_exporter binary
+  copy:
+    src: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64/node_exporter"
+    dest: "{{ node_exporter_bin }}"
+    remote_src: yes
+    owner: root
+    group: root
+    mode: '0755'
+  when: download.changed
+
+- name: Clean up archive
+  file:
+    path: "/tmp/node_exporter-{{ node_exporter_version }}.tar.gz"
+    state: absent
+  when: download.changed
+
+- name: Clean up extracted files
+  file:
+    path: "/tmp/node_exporter-{{ node_exporter_version }}.linux-amd64"
+    state: absent
+  when: download.changed
+
+# ── Configure systemd service ───────────────────────────────
+- name: Deploy node_exporter systemd service
+  template:
+    src: node_exporter.service.j2
+    dest: /etc/systemd/system/node_exporter.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart node_exporter
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: true
+
+- name: Enable and start node_exporter
+  service:
+    name: node_exporter
+    state: started
+    enabled: true
