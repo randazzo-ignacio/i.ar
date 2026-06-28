@@ -12,20 +12,15 @@ Type=simple
 User={{ node_exporter_user }}
 Group={{ node_exporter_user }}
 ExecStart={{ node_exporter_bin }} \
-    --web.listen-address={{ wg_ip }}:{{ node_exporter_port }} \
-    --web.disable-rootfs-info \
-    --collector.filesystem.mount-points-exclude=^/(dev|proc|sys|var/lib/docker/.+)($$|/) \
-    --collector.filesystem.fs-types-exclude=^(tmpfs|overlay|squashfs)$
+    --web.listen-address={{ wg_ip }}:{{ node_exporter_port }}
 
 Restart=on-failure
 RestartSec=5
 
-# Hardening
+# Hardening (relaxed for node_exporter — needs to read /proc, /sys, filesystems)
 NoNewPrivileges=true
-ProtectSystem=strict
 ProtectHome=true
 PrivateTmp=true
-PrivateDevices=true
 ProtectKernelModules=true
 ProtectKernelTunables=true
 
