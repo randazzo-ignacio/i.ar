@@ -1,3 +1,0 @@
-* Infrastructure scripts for i.ar deployment
-
-clone this repo (the infra submodule, not the entire i.ar repo) into your server, and run install.sh
