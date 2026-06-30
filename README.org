@@ -53,7 +53,44 @@ Emacboros implements multiple layers of security:
 - Air-gapped systems design
 - Identity management with aliases
 - Audit logging of all file operations and command executions
-- File guard protecting critical paths
+- File guard protecting critical paths (see below)
+
+**File Guard Protected Categories:**
+The file guard (~file_guard.el~) enforces write, replace, and append
+restrictions on critical system files. Protected paths are organized
+into two tiers:
+
+***Always Protected (cannot be bypassed):**
+1. *Agent prompt files* (~agents.d/<name>/prompt.org~) — prevents agents from rewriting their own or other agents' prompts
+2. *Shared context* (~agents.d/base_context.org~) — prevents context tampering
+3. *HISTORY.log files* — append-only; overwrite and replace are blocked
+
+***Conditionally Protected (relaxed in self-modification mode):**
+4. *Emacs Lisp source* (~init.el~, ~init.d/*.el~) — prevents tool tampering
+5. *Container config* (~Containerfile~, ~emacboros.sh~) — prevents container escape
+6. *Git hooks* (~.git/hooks/*~) — prevents scheduled execution
+
+**Self-Modification Mode:**
+When ~my-gptel--guard-allow-self-modification~ is set to non-nil,
+categories 4–6 are relaxed, allowing trusted agents to modify Emacs
+Lisp source, container configuration, and git hooks during development.
+
+Categories 1–3 remain protected regardless of this setting. An agent
+should never silently rewrite its own prompt or the shared context.
+
+To enable for the current session:
+#+BEGIN_SRC elisp
+  (setq my-gptel--guard-allow-self-modification t)
+#+END_SRC
+
+To enable persistently via Emacs customize:
+- ~M-x customize-variable RET my-gptel--guard-allow-self-modification RET~
+- Toggle to ~t~, then save for future sessions
+
+*Warning:* This mode is intended for development sessions only. Do
+NOT enable for CTF or untrusted-content sessions. This is a software
+check (defense-in-depth); container mounts should also be read-only
+for categories 4–6 in production.
 
 * Agent Architecture
 The system supports dynamic agent personas through gptel integration:
