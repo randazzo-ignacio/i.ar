@@ -1,0 +1,54 @@
+FROM quay.io/fedora/fedora@sha256:0ad2ef05326ffb8b2db89c36117fa5c430b61aed3c0432dedeae5bd9759e71af
+
+RUN dnf update -y
+
+RUN dnf install -y \
+	sudo \
+        emacs \
+        bash \
+        coreutils \
+        findutils \
+        git \
+        curl \
+        bind-utils \
+        nmap \
+        nmap-ncat \
+        openssl \
+        python3 \
+        python3-pip \
+        jq \
+        whois \
+        traceroute \
+        tcpdump \
+        ripgrep \
+        sed \
+        grep \
+        gawk \
+        tar \
+        gzip \
+        unzip \
+        make \
+        gcc \
+    && dnf clean all
+
+RUN useradd -m -s /bin/bash emacboros
+RUN mkdir -p /home/emacboros/workspace
+RUN mkdir -p /home/emacboros/i.ar
+RUN mkdir -p /home/emacboros/.emacs.d
+RUN chown -R emacboros:emacboros /home/emacboros
+RUN echo "emacboros ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+
+# Preflight mount audit script — runs before Emacs to verify container hardening
+COPY scripts/preflight.sh /usr/local/bin/preflight.sh
+COPY scripts/permission_fix.sh /usr/local/bin/permission_fix.sh
+RUN chmod +x /usr/local/bin/preflight.sh
+RUN chmod +x /usr/local/bin/permission_fix.sh
+
+# ---------------------------------------------------------------------------
+# Working directory
+# ---------------------------------------------------------------------------
+WORKDIR /home/emacboros
+USER emacboros
+
+# Preflight audit runs first, then Emacs starts if the audit passes
+ENTRYPOINT ["/bin/bash", "-c", "preflight.sh && permission_fix.sh && exec emacs --no-x --load /root/.emacs.d/init.el"]
