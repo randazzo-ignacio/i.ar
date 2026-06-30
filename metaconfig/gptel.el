@@ -17,9 +17,17 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
+(defvar emacboros-ollama-host nil
+  "Ollama API host. Set from EMACBOROS_OLLAMA_HOST env var or defaults to remote.")
+
+;; Determine Ollama host: check environment variable first, fall back to remote default.
+(setq emacboros-ollama-host
+      (or (getenv "EMACBOROS_OLLAMA_HOST")
+          "10.66.0.3:11434"))
+
 (setq emacboros-gptel-backend
       (gptel-make-ollama "Ollama"
-                         :host "10.66.0.3:11434"
+                         :host emacboros-ollama-host
                          :stream t
                          :models '("north-mini-code-1.0:q8_0"
                                    "granite4.1:8b-q8_0"
