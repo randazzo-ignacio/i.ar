@@ -1,0 +1,145 @@
+# Emacboros - Agentic Emacs Workspace
+
+* Overview
+This repository contains an agentic Emacs workspace designed for privacy-preserving, extensible development and AI assistance. It follows the philosophy of local-first computing, containment first security, and human agency empowerment.
+
+**Core Architecture:**
+- Local-first Emacs configuration with agent orchestration
+- Containerized deployment with hardened security
+- Distributed hardware design for resilience
+- No backdoors or telemetry - fully auditable
+
+* Table of Contents
+:PROPERTIES:
+:TOC: 3
+:END:
+
+* Repository Structure
+The workspace is organized into several key components:
+
+**1. Containers**
+- `/containers/` - Container definitions and build scripts
+- `/containers/images/emacboros/` - Main Emacs container image
+- `/containers/build.sh` - Podman-based container builder
+
+**2. Emacs Configuration**
+- `/emacs.d/` - Core Emacs configuration (~450KB)
+- `/emacs.d/init.el` - Entry point for all Emacs functionality
+- `/emacs.d/agents.d/` - Dynamic agent personas directory
+- `/emacs.d/init.d/` - Modular Emacs Lisp components
+
+**3. Infrastructure**
+- `/infra/` - Ansible-based infrastructure as code
+- `/infra/README.md` - Complete infrastructure documentation
+- `/infra/ansible.cfg` - Ansible configuration
+
+**4. Knowledge Base**
+- `/knowledge/` - System administration and operational knowledge
+- `/knowledge/linux/rename-user.org` - Linux user management procedures
+
+**5. Metaconfig**
+- `/metaconfig/header.sh` - Logging and utility functions for scripts
+
+* Security Features
+Emacboros implements multiple layers of security:
+
+**Container Hardening:**
+- Preflight mount audit prevents container escapes
+- Capability dropping (only NET_RAW, NET_BIND_SERVICE retained)
+- Writable path restrictions on dangerous system locations
+- Read-only root filesystem overlay
+
+**Operational Security:**
+- Air-gapped systems design
+- Identity management with aliases
+- Audit logging of all file operations and command executions
+- File guard protecting critical paths
+
+* Agent Architecture
+The system supports dynamic agent personas through gptel integration:
+
+- **Agent Discovery**: Automatically detects agents in `agents.d/<name>/prompt.org`
+- **Dynamic Loading**: Seamlessly expands Org-mode includes for each agent profile
+- **State Management**: Tracks current agent and associated file paths
+- **Memory Tools**: Agent-specific memory summarization available via C-c m
+
+**Key Emacs Components:**
+- `agent_loader.el` - Dynamic agent discovery and loading
+- `delegate_tool.el` - Multi-agent delegation capabilities
+- `gptel_setup.el` - GPTEL backend configuration
+- Various tools for code execution, file operations, and system tasks
+
+* Development Workflow
+**Prerequisites:**
+- Podman or Docker (for container builds)
+- Emacs 28+ with native compilation support
+- Python 3.8+
+
+**Building Containers:**
+#+BEGIN_SRC bash
+./containers/build.sh
+#+END_SRC
+
+This script builds all images defined in the containers/images/ directory.
+
+**Running Emacs:**
+The main container entry point runs:
+1. Preflight mount audit (security check)
+2. Permission fix verification
+3. Emacs startup with loaded configuration
+
+**Local Development:**
+- Clone this repository
+- Run `emacs --load /path/to/init.el` to start the workspace
+- Use `C-c a` to load different agent personas
+- Access tools via gptel interface
+
+* Infrastructure as Code
+The Ansible playbooks provide reproducible infrastructure:
+
+**Target Hosts:**
+- Cloud VPS instances (rammstein, greenday, daftpunk)
+- Local machines (yoga, sophon)
+- Unified WireGuard mesh network with Cloudflare Tunnel fallback
+
+**Playbook Structure:**
+- `playbooks/site.yml` - Full infrastructure deployment
+- Individual playbooks for specific components
+- Role-based configuration management
+
+* Philosophy and Principles
+
+**1. Privacy First**
+- All processing occurs locally
+- No cloud dependencies or telemetry
+- Local-first design ensures data sovereignty
+
+**2. Containment First**
+- Every autonomous capability has a kill switch
+- Audit logs for all operations
+- Defined scope with clear boundaries
+
+**3. Precision Over Speed**
+- Measured approaches to system changes
+- Cost of mistakes considered in terms of lives
+- Conservative security posture
+
+**4. Human Agency**
+- Systems empower individuals, not control them
+- No backdoors or hidden capabilities
+- Fully auditable and inspectable code
+
+* License
+This project is licensed under the GNU General Public License v3.0.
+
+* Contributing
+Contributions follow the same security-first principles:
+- All changes must be auditable
+- Security reviews required for any new capabilities
+- Containment mechanisms tested before deployment
+
+* Getting Help
+For operational assistance, consult:
+- `/knowledge/linux/rename-user.org` - System administration procedures
+- Container logs via `podman logs`
+- Emacs debug buffers and echo area messages
