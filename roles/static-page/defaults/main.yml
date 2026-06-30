@@ -1,0 +1,6 @@
+---
+# roles/static-page/defaults/main.yml
+# Defaults for the static landing page deployment.
+
+# Where to serve the static page (Caddy file_server reads from here)
+static_page_root: "/var/www/emacboros"

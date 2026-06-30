@@ -1,0 +1,6 @@
+---
+# roles/portfolio-page/defaults/main.yml
+# Defaults for the personal portfolio static page.
+
+# Where to serve the portfolio (Caddy file_server reads from here)
+portfolio_page_root: "/var/www/randazzo.ar"

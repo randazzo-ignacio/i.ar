@@ -1,0 +1,12 @@
+---
+# roles/caddy/handlers/main.yml
+
+- name: reload caddy
+  service:
+    name: caddy
+    state: reloaded
+
+- name: restart caddy
+  service:
+    name: caddy
+    state: restarted

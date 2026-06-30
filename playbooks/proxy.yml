@@ -1,0 +1,10 @@
+---
+# playbooks/proxy.yml — Caddy + Cloudflare tunnel on proxy server.
+# Usage: ansible-playbook playbooks/proxy.yml --vault-password-file .vault_pass
+
+- name: Configure proxy server
+  hosts: proxy
+  roles:
+    - caddy
+    - role: cloudflare-tunnel
+      when: cloudflare_tunnel_enabled | default(false) | bool

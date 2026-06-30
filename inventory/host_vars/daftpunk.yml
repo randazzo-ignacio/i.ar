@@ -1,0 +1,12 @@
+wg_ip: "10.66.0.3"
+wg_endpoint: "i.ar"  # public endpoint for WireGuard
+
+# Ollama configuration — 16 cores, 64GB RAM (CPU-only)
+ollama_enabled: true
+ollama_models:
+  - "llama3.3:70b"
+  - "qwen2.5-coder:14b"
+ollama_listen: "10.66.0.3"  # bind to WireGuard IP only
+
+# Static web page — emacboros landing page served by Caddy file_server
+tool_static_page_enabled: true

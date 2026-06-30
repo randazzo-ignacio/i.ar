@@ -1,0 +1,37 @@
+# .gitignore
+# Protect secrets from being committed
+
+# Vault password file
+.vault_pass
+
+# Generated WireGuard keys
+wg-keys/
+
+# Generated keys (any location)
+*.private
+*.key
+
+# Ansible retry files
+*.retry
+
+# Ansible cache
+.ansible/
+
+# Python
+__pycache__/
+*.pyc
+
+# Editor
+*.swp
+*.swo
+*~
+\#*\#
+.\#*
+
+# OS
+.DS_Store
+Thumbs.db
+
+# NOTE: group_vars/vault.yml SHOULD be committed — it is encrypted with ansible-vault.
+# Verify with: ansible-vault view group_vars/vault.yml (should prompt for password)
+# If you can read it without a password prompt, it is NOT encrypted.

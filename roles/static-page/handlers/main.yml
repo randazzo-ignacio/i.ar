@@ -1,0 +1,4 @@
+---
+# roles/static-page/handlers/main.yml
+# No handlers needed — Caddy serves files directly from disk.
+# File changes are picked up on next request (no restart required).

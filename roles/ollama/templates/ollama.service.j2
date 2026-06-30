@@ -1,0 +1,16 @@
+# {{ ansible_managed }}
+[Unit]
+Description=Ollama Service
+After=network-online.target
+
+[Service]
+Type=simple
+User={{ ollama_user }}
+ExecStart={{ ollama_install_dir }}/ollama serve
+Restart=always
+RestartSec=3
+Environment="OLLAMA_HOST={{ ollama_listen }}:{{ ollama_port }}"
+Environment="OLLAMA_MODELS={{ ollama_models_dir }}"
+
+[Install]
+WantedBy=multi-user.target

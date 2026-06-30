@@ -1,0 +1,7 @@
+---
+# roles/node-exporter/handlers/main.yml
+
+- name: restart node_exporter
+  service:
+    name: node_exporter
+    state: restarted

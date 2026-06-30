@@ -1,0 +1,13 @@
+wg_ip: "10.66.0.5"
+# No wg_endpoint — spoke connects to hub, no public endpoint needed.
+
+# Ollama with GPU offloading
+ollama_enabled: true
+ollama_gpu: true
+ollama_models:
+  - "llama3.3:70b"
+  - "qwen2.5-coder:14b"
+ollama_listen: "10.66.0.5"  # bind to WireGuard IP only
+
+# Podman (for GPU container support)
+podman_enabled: true

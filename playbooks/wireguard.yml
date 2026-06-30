@@ -1,0 +1,8 @@
+---
+# playbooks/wireguard.yml — WireGuard only (re-keying or mesh changes).
+# Usage: ansible-playbook playbooks/wireguard.yml --vault-password-file .vault_pass
+
+- name: Configure WireGuard mesh
+  hosts: all
+  roles:
+    - wireguard

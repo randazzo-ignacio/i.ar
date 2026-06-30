@@ -1,0 +1,104 @@
+# {{ ansible_managed }}
+# Caddyfile — per-host site configuration
+# Caddy handles TLS automatically via Let's Encrypt.
+# Each host only defines the domains it actually serves.
+# Generated for: {{ inventory_hostname }} ({{ wg_ip }})
+
+{
+    email {{ caddy_email }}
+    # admin off
+}
+
+{% if inventory_hostname == 'rammstein' %}
+# ═══════════════════════════════════════════════════════════
+# rammstein — randazzo.ar (personal portfolio, static)
+# ═══════════════════════════════════════════════════════════
+
+# ── randazzo.ar — personal portfolio (local static) ────────
+{{ domains.proxy }} {
+    root * /var/www/randazzo.ar
+    file_server
+    encode gzip zstd
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+    }
+}
+
+# ── randazzo.com.ar — redirect to randazzo.ar ──────────────
+{{ domains.proxy_alt }} {
+    redir https://{{ domains.proxy }}{uri} permanent
+}
+
+camaras.{{ domains.proxy }} {
+    reverse_proxy 10.66.0.5:8971
+}
+
+{% elif inventory_hostname == 'daftpunk' %}
+# ═══════════════════════════════════════════════════════════
+# daftpunk — i.ar (emacboros landing page + grafana)
+# ═══════════════════════════════════════════════════════════
+
+# ── i.ar — emacboros landing page (local static) ───────────
+{{ domains.ollama }} {
+    root * {{ static_page_root | default('/var/www/emacboros') }}
+    file_server
+    encode gzip zstd
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+    }
+}
+
+# ── grafana.i.ar — Grafana dashboards (reverse proxy) ──────
+grafana.{{ domains.ollama }} {
+    reverse_proxy 10.66.0.3:{{ grafana_port | default(3000) }}
+    encode gzip zstd
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options nosniff
+        X-Frame-Options DENY
+        Referrer-Policy no-referrer
+    }
+}
+
+{% elif inventory_hostname == 'greenday' %}
+# ═══════════════════════════════════════════════════════════
+# greenday — 0b.ar (AI playground, reverse proxy)
+# ═══════════════════════════════════════════════════════════
+
+# ── 0b.ar — AI playground (local reverse proxy) ────────────
+{{ domains.ai }} {
+    reverse_proxy 127.0.0.1:80
+    encode gzip zstd
+    # Restrict access — only via WireGuard or authenticated
+    # @blocked not remote 10.66.0.0/24
+    # respond @blocked 403
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains"
+        X-Content-Type-Options nosniff
+    }
+}
+
+{% endif %}
+# ── Additional reverse proxies (add as needed) ────────────
+# Example: expose a local app running on sophon
+# app.randazzo.ar {
+#     reverse_proxy 10.66.0.5:3000
+# }
+
+# ── Ollama API (internal only, no public exposure) ────────
+# ollama.i.ar {
+#     reverse_proxy 127.0.0.1:11434
+#     @allowed remote 10.66.0.0/24
+#     handle @allowed {
+#         reverse_proxy 127.0.0.1:11434
+#     }
+#     handle {
+#         respond 403
+#     }
+# }

@@ -1,0 +1,46 @@
+# {{ ansible_managed }}
+# WireGuard configuration for {{ inventory_hostname }}
+# Topology: hub-and-spoke — {{ wg_hub }} is the hub
+# All traffic between peers is routed through the hub.
+
+[Interface]
+PrivateKey = {{ wg_private_keys[inventory_hostname] }}
+Address = {{ wg_ip }}/{{ wg_network | regex_replace('^.*\\/', '') }}
+ListenPort = {{ wg_port }}
+{% if inventory_hostname == wg_hub %}
+# Hub node — routes between all peers
+{% else %}
+# Spoke — connects to hub, routes all WG traffic through it
+{% endif %}
+MTU = {{ wg_mtu }}
+
+{% if inventory_hostname == wg_hub %}
+# ════════════════════════════════════════════════════════════
+# HUB: All peers listed here, hub routes between them
+# ════════════════════════════════════════════════════════════
+
+{% for host in groups['all'] %}
+{% if host != inventory_hostname %}
+# Peer: {{ host }} ({{ hostvars[host]['wg_ip'] }})
+[Peer]
+PublicKey = {{ wg_public_keys[host] }}
+AllowedIPs = {{ hostvars[host]['wg_ip'] }}/32
+{% if hostvars[host].get('wg_endpoint') %}
+Endpoint = {{ hostvars[host]['wg_endpoint'] }}:{{ wg_port }}
+{% endif %}
+PersistentKeepalive = {{ wg_keepalive }}
+
+{% endif %}
+{% endfor %}
+{% else %}
+# ════════════════════════════════════════════════════════════
+# SPOKE: Connect to hub, route all WG traffic through it
+# ════════════════════════════════════════════════════════════
+
+# Peer: {{ wg_hub }} (hub)
+[Peer]
+PublicKey = {{ wg_public_keys[wg_hub] }}
+Endpoint = {{ hostvars[wg_hub]['wg_endpoint'] }}:{{ wg_port }}
+AllowedIPs = {{ wg_network }}
+PersistentKeepalive = {{ wg_keepalive }}
+{% endif %}

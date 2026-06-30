@@ -1,0 +1,7 @@
+---
+# roles/wireguard/handlers/main.yml
+
+- name: restart wireguard
+  service:
+    name: "wg-quick@{{ wg_interface }}"
+    state: restarted

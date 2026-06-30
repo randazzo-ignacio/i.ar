@@ -1,0 +1,35 @@
+# Prometheus Configuration
+# Scrape targets across the WireGuard mesh (10.66.0.x).
+# Prometheus runs on daftpunk (10.66.0.3) and pulls from all hosts.
+
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+rule_files:
+  - "alert_rules.yml"
+
+scrape_configs:
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]
+
+  - job_name: "node_exporters"
+    static_configs:
+      - targets:
+          - "10.66.0.1:9100"
+          - "10.66.0.2:9100"
+          - "10.66.0.3:9100"
+          - "10.66.0.4:9100"
+          - "10.66.0.5:9100"
+        labels:
+          group: "hosts"
+
+  - job_name: "cadvisor"
+    static_configs:
+      - targets:
+          - "10.66.0.2:8081"
+          - "10.66.0.3:8081"
+          - "10.66.0.5:8081"
+        labels:
+          group: "containers"

@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>i.ar — Inteligencia Avanzada Randazzo</title>
+    <meta name="description" content="A containerized, agentic Emacs workspace powered by local LLMs. No cloud. No telemetry. No backdoors.">
+    <meta name="author" content="Ignacio Agustin Randazzo">
+    <meta property="og:title" content="i.ar — Inteligencia Avanzada Randazzo">
+    <meta property="og:description" content="A self-modifying AI operating environment. Built in Emacs. Hardened in Podman. Powered by local LLMs.">
+    <meta property="og:type" content="website">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="style.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90' fill='%2300ff41'>i.ar</text></svg>">
+</head>
+<body>
+    <!-- Matrix rain background -->
+    <canvas id="matrix"></canvas>
+
+    <!-- CRT scanline overlay -->
+    <div class="scanlines"></div>
+
+    <!-- Boot sequence overlay -->
+    <div id="boot-overlay">
+        <div id="boot-text"></div>
+    </div>
+
+    <!-- Navigation -->
+    <nav id="nav">
+        <a href="#hero" class="nav-brand">i.ar<span class="cursor-blink">_</span></a>
+        <div class="nav-links">
+            <a href="#about">about</a>
+            <a href="#architecture">architecture</a>
+            <a href="#features">features</a>
+            <a href="#philosophy">philosophy</a>
+            <a href="#stack">stack</a>
+            <a href="https://github.com/randazzo-ignacio/i.ar" target="_blank" rel="noopener" class="nav-source">source</a>
+        </div>
+    </nav>
+
+    <!-- Hero -->
+    <header id="hero">
+        <div class="hero-content">
+            <div class="hero-prompt">
+                <span class="prompt-symbol">$</span>
+                <span class="prompt-text">init i.ar --verbose</span>
+            </div>
+            <h1 class="glitch" data-text="i.ar">i.ar</h1>
+            <p class="typewriter" id="typewriter"></p>
+            <div class="hero-badges">
+                <span class="badge">GPL-3.0</span>
+                <span class="badge">local-first</span>
+                <span class="badge">no telemetry</span>
+                <span class="badge">containerized</span>
+                <span class="badge">self-modifying</span>
+            </div>
+        </div>
+        <div class="scroll-indicator">
+            <span>scroll</span>
+            <div class="arrow-down">&darr;</div>
+        </div>
+    </header>
+
+    <!-- About -->
+    <section id="about" class="reveal">
+        <div class="container">
+            <h2 class="section-title"><span class="section-prompt">&gt;</span> about</h2>
+            <div class="terminal-window">
+                <div class="terminal-header">
+                    <span class="dot red"></span>
+                    <span class="dot yellow"></span>
+                    <span class="dot green"></span>
+                    <span class="terminal-title">i.ar@local: ~</span>
+                </div>
+                <div class="terminal-body">
+                    <p><span class="cmd-prompt">$</span> whatis i.ar</p>
+                    <p class="terminal-output">
+                        i.ar &mdash; <strong>Inteligencia Avanzada Randazzo</strong> &mdash;
+                        is a containerized Emacs environment where AI agents
+                        interact with a real filesystem, execute code, and delegate
+                        tasks to specialized sub-agents &mdash; all running on local
+                        hardware, with no cloud dependencies and no telemetry.
+                    </p>
+                    <p><span class="cmd-prompt">$</span> i.ar --describe</p>
+                    <p class="terminal-output">
+                        The system pairs a local LLM backend (Ollama) with Emacs via
+                        gptel, giving the model native tools: file I/O, shell execution,
+                        code analysis, and multi-agent delegation. Agents maintain
+                        persistent memory, log every action to an audit trail, and
+                        operate inside a hardened Podman container with read-only mounts,
+                        dropped capabilities, and a preflight security audit.
+                    </p>
+                    <p><span class="cmd-prompt">$</span> i.ar --why</p>
+                    <p class="terminal-output">
+                        Because AI tools that phone home are surveillance tools.
+                        Because the editor is the operating system. Because a system
+                        that can modify itself is a system that can grow.
+                    </p>
+                    <p><span class="cmd-prompt">$</span> <span class="cursor-blink">_</span></p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Architecture -->
+    <section id="architecture" class="reveal">
+        <div class="container">
+            <h2 class="section-title"><span class="section-prompt">&gt;</span> architecture</h2>
+            <div class="arch-diagram">
+                <div class="arch-layer">
+                    <div class="arch-box arch-box--input">
+                        <span class="arch-label">USER INPUT</span>
+                        <span class="arch-desc">natural language prompts</span>
+                    </div>
+                    <div class="arch-arrow">&darr;</div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-box arch-box--core">
+                        <span class="arch-label">EMACS + gptel</span>
+                        <span class="arch-desc">AI integration layer &middot; tool dispatch &middot; session management</span>
+                    </div>
+                    <div class="arch-arrow">&darr;</div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-box arch-box--llm">
+                        <span class="arch-label">LOCAL LLM (Ollama)</span>
+                        <span class="arch-desc">on-device inference &middot; no external API calls</span>
+                    </div>
+                    <div class="arch-arrow">&darr;</div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-box arch-box--agent">
+                        <span class="arch-label">AGENT SYSTEM</span>
+                        <span class="arch-desc">hierarchical delegation &middot; persistent memory &middot; audit logging</span>
+                    </div>
+                    <div class="arch-arrow">&darr;</div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-box arch-box--container">
+                        <span class="arch-label">HARDENED CONTAINER (Podman)</span>
+                        <span class="arch-desc">read-only rootfs &middot; cap-drop=all &middot; preflight security audit</span>
+                    </div>
+                    <div class="arch-arrow">&darr;</div>
+                </div>
+                <div class="arch-layer">
+                    <div class="arch-box arch-box--network">
+                        <span class="arch-label">WIREGUARD MESH + CADDY</span>
+                        <span class="arch-desc">encrypted transport &middot; automatic TLS &middot; no public API exposure</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features -->
+    <section id="features" class="reveal">
+        <div class="container">
+            <h2 class="section-title"><span class="section-prompt">&gt;</span> features</h2>
+            <div class="features-grid">
+                <div class="feature-card">
+                    <div class="feature-icon">[&gt;]</div>
+                    <h3>Multi-Agent Delegation</h3>
+                    <p>Spawn specialized sub-agents for complex tasks. Each agent has a defined role, scoped tools, and a delegation depth limit.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">[!]</div>
+                    <h3>Prompt Injection Resistance</h3>
+                    <p>External content is classified as data, never instructions. Eight directives protect against embedded commands, self-modification, and system prompt extraction.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">[#]</div>
+                    <h3>Container Hardening</h3>
+                    <p>Read-only bind mounts for critical paths. All capabilities dropped except network binding. Preflight audit scans for escape vectors before Emacs starts.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">[~]</div>
+                    <h3>Audit Logging</h3>
+                    <p>Every file operation and command execution is recorded with timestamp, file path, and calling agent. Append-only logs for post-session review.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">[*]</div>
+                    <h3>Memory &amp; Persistence</h3>
+                    <p>Agents maintain persistent memory across sessions. Per-agent history logs, memory files, and task tracking survive restarts.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">[%]</div>
+                    <h3>Output Sanitization</h3>
+                    <p>ANSI escape sequences, control characters, and injection-like patterns are stripped from external data before it enters agent context.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">[$]</div>
+                    <h3>Session Persistence</h3>
+                    <p>Save and restore complete chat sessions. Conversation state survives container restarts and agent reloads.</p>
+                </div>
+                <div class="feature-card">
+                    <div class="feature-icon">[&amp;]</div>
+                    <h3>Local-First Architecture</h3>
+                    <p>No cloud dependencies. No telemetry. No external API calls. The entire system runs on hardware you control.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Philosophy -->
+    <section id="philosophy" class="reveal">
+        <div class="container">
+            <h2 class="section-title"><span class="section-prompt">&gt;</span> philosophy</h2>
+            <div class="quotes">
+                <blockquote class="quote">
+                    <p>Local-first is not a preference; it is a survival strategy.</p>
+                </blockquote>
+                <blockquote class="quote">
+                    <p>If the code cannot be read, it cannot be trusted.</p>
+                </blockquote>
+                <blockquote class="quote">
+                    <p>Every capability has a kill switch, an audit log, and a defined scope.</p>
+                </blockquote>
+                <blockquote class="quote">
+                    <p>The system protects the irrelevant.</p>
+                </blockquote>
+            </div>
+        </div>
+    </section>
+
+    <!-- Tech Stack -->
+    <section id="stack" class="reveal">
+        <div class="container">
+            <h2 class="section-title"><span class="section-prompt">&gt;</span> stack</h2>
+            <div class="stack-grid">
+                <div class="stack-item">
+                    <span class="stack-name">Emacs</span>
+                    <span class="stack-desc">the extensible, customizable, self-documenting editor</span>
+                </div>
+                <div class="stack-item">
+                    <span class="stack-name">gptel</span>
+                    <span class="stack-desc">LLM client for Emacs with native tool-call support</span>
+                </div>
+                <div class="stack-item">
+                    <span class="stack-name">Ollama</span>
+                    <span class="stack-desc">run large language models on local hardware</span>
+                </div>
+                <div class="stack-item">
+                    <span class="stack-name">Podman</span>
+                    <span class="stack-desc">daemonless, rootless container engine</span>
+                </div>
+                <div class="stack-item">
+                    <span class="stack-name">Fedora</span>
+                    <span class="stack-desc">Silverblue host &middot; minimal container base</span>
+                </div>
+                <div class="stack-item">
+                    <span class="stack-name">Ansible</span>
+                    <span class="stack-desc">infrastructure as code &middot; reproducible deployments</span>
+                </div>
+                <div class="stack-item">
+                    <span class="stack-name">WireGuard</span>
+                    <span class="stack-desc">fast, modern, encrypted VPN tunneling</span>
+                </div>
+                <div class="stack-item">
+                    <span class="stack-name">Caddy</span>
+                    <span class="stack-desc">HTTP server with automatic HTTPS</span>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Footer -->
+    <footer id="footer">
+        <div class="container">
+            <div class="footer-content">
+                <div class="footer-brand">
+                    <span class="glitch-small" data-text="i.ar">i.ar</span>
+                </div>
+                <div class="footer-meta">
+                    <p>Inteligencia Avanzada Randazzo &middot; <a href="https://github.com/randazzo-ignacio/i.ar" target="_blank" rel="noopener">github.com/randazzo-ignacio/i.ar</a></p>
+                    <p>Released under the <a href="https://www.gnu.org/licenses/gpl-3.0.html" target="_blank" rel="noopener">GNU General Public License v3</a>.</p>
+                    <p>Built by someone who believes everyone is relevant.</p>
+                </div>
+                <div class="footer-links">
+                    <a href="#hero">back to top &uarr;</a>
+                </div>
+            </div>
+        </div>
+    </footer>
+
+    <script src="script.js"></script>
+</body>
+</html>

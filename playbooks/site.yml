@@ -1,0 +1,45 @@
+---
+# playbooks/site.yml — Master playbook: runs all roles in order.
+# Usage: ansible-playbook playbooks/site.yml --vault-password-file .vault_pass
+
+- name: Base configuration (all hosts)
+  hosts: all
+  roles:
+    - base
+
+- name: WireGuard mesh (all hosts)
+  hosts: all
+  roles:
+    - wireguard
+
+- name: Cloud servers — Caddy install + site config
+  hosts: cloud
+  roles:
+    - caddy
+    - role: cloudflare-tunnel
+      when: cloudflare_tunnel_enabled | default(false) | bool
+
+- name: AI playground
+  hosts: ai_playground
+  roles:
+    - podman
+    - ai-environment
+
+- name: Ollama hosts
+  hosts: ollama_hosts
+  roles:
+    - role: podman
+      when: podman_enabled | default(false) | bool
+    - role: ollama
+      when: ollama_enabled | default(false) | bool
+
+- name: i.ar — deploy static page content (after Caddy created web root)
+  hosts: daftpunk
+  roles:
+    - role: static-page
+      when: tool_static_page_enabled | default(false) | bool
+
+- name: randazzo.ar — deploy portfolio page (after Caddy created web root)
+  hosts: rammstein
+  roles:
+    - portfolio-page

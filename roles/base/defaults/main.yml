@@ -1,0 +1,23 @@
+---
+# roles/base/defaults/main.yml
+# Default values for the base role — can be overridden by group_vars/host_vars.
+
+# ── SSH ────────────────────────────────────────────────────
+ssh_port: 22
+ssh_password_auth: "no"
+ssh_permit_root_login: "no"
+
+# ── Timezone ───────────────────────────────────────────────
+timezone: "UTC"
+
+# ── Sysctl hardening ───────────────────────────────────────
+base_sysctl_settings:
+  - { key: 'net.ipv4.ip_forward', value: '1' }  # needed for WireGuard
+  - { key: 'net.ipv4.conf.all.forwarding', value: '1' }
+  - { key: 'net.ipv4.conf.default.rp_filter', value: '1' }
+  - { key: 'net.ipv4.tcp_syncookies', value: '1' }
+  - { key: 'net.ipv4.conf.all.accept_redirects', value: '0' }
+  - { key: 'net.ipv4.conf.all.send_redirects', value: '0' }
+  - { key: 'net.ipv6.conf.all.accept_redirects', value: '0' }
+  - { key: 'kernel.dmesg_restrict', value: '1' }
+  - { key: 'kernel.kptr_restrict', value: '2' }

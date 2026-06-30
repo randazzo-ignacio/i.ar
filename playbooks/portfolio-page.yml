@@ -1,0 +1,8 @@
+---
+# playbooks/portfolio-page.yml — Deploy only the personal portfolio.
+# Usage: ansible-playbook playbooks/portfolio-page.yml --vault-password-file .vault_pass
+
+- name: randazzo.ar — deploy portfolio page
+  hosts: rammstein
+  roles:
+    - portfolio-page

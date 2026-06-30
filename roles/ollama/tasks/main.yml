@@ -1,0 +1,99 @@
+---
+# roles/ollama/tasks/main.yml
+# Installs Ollama and pulls specified models.
+# Runs on: i-ar (cloud, Fedora, CPU-only), server-pc (local, Fedora, GPU)
+# All servers run Fedora Server 44 or AlmaLinux 10 (RHEL family).
+
+# ── Create ollama user ──────────────────────────────────────
+- name: Create ollama user
+  user:
+    name: "{{ ollama_user }}"
+    system: true
+    create_home: false
+    shell: /sbin/nologin
+
+#- name: Create models directory
+#  file:
+#    path: "{{ ollama_models_dir }}"
+#    state: directory
+#    owner: "{{ ollama_user }}"
+#    group: "{{ ollama_user }}"
+#    mode: '0755'
+
+## ── Install GPU drivers (server-pc only) ───────────────────
+#- name: Install NVIDIA container toolkit (GPU hosts)
+#  block:
+#    - name: Install NVIDIA container toolkit
+#      dnf:
+#        name: nvidia-container-toolkit
+#        state: present
+#
+#    - name: Configure Podman for NVIDIA runtime
+#      command: nvidia-ctk runtime configure --runtime=podman
+#      changed_when: false
+#
+#    - name: Restart Podman
+#      service:
+#        name: podman
+#        state: restarted
+#  when: ollama_gpu | bool
+
+# ── Install Ollama ──────────────────────────────────────────
+- name: Download and install Ollama
+  shell: |
+    curl -fsSL https://ollama.com/install.sh | sh
+  args:
+    creates: "{{ ollama_install_dir }}/ollama"
+  environment:
+    OLLAMA_VERSION: "{{ ollama_version }}"
+
+# ── Configure Ollama service ───────────────────────────────
+- name: Create systemd override directory
+  file:
+    path: /etc/systemd/system/ollama.service.d
+    state: directory
+    owner: root
+    group: root
+    mode: '0755'
+
+- name: Create Ollama systemd service
+  template:
+    src: ollama.service.j2
+    dest: /etc/systemd/system/ollama.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart ollama
+
+- name: Create Ollama environment override
+  copy:
+    dest: /etc/systemd/system/ollama.service.d/override.conf
+    content: |
+      [Service]
+      Environment="OLLAMA_HOST={{ ollama_listen }}:{{ ollama_port }}"
+      Environment="OLLAMA_MODELS={{ ollama_models_dir }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: restart ollama
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: true
+  notify: restart ollama
+
+- name: Enable and start Ollama
+  service:
+    name: ollama
+    state: started
+    enabled: true
+
+# ── Pull models ────────────────────────────────────────────
+- name: Pull Ollama models
+  command: "ollama pull {{ item }}"
+  become: true
+  become_user: "{{ ollama_user }}"
+  loop: "{{ ollama_models }}"
+  changed_when: false
+  async: 600
+  poll: 30

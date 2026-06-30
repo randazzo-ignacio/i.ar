@@ -1,0 +1,6 @@
+wg_ip: "10.66.0.2"
+wg_endpoint: "0b.ar"  # public endpoint for WireGuard
+
+# Podman + AI environment
+podman: true
+ai_agent_ssh_public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIEQ6KfLd1Uqb4cMDl7A2b4cN1z1f3/OaOqrBZzhQ6Fvl ai-agent"

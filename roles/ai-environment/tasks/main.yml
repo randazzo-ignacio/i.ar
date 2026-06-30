@@ -1,0 +1,85 @@
+---
+# roles/ai-environment/tasks/main.yml
+# Sets up the AI playground VPS (ob-ar):
+# - AI agent user with SSH key access
+# - Working directory structure
+# - Resource limits and safety constraints
+# All servers run Fedora Server 44 or AlmaLinux 10 (RHEL family).
+
+# ── Create AI agent user ────────────────────────────────────
+- name: Create ai-agent user
+  user:
+    name: ai-agent
+    shell: /bin/bash
+    create_home: true
+
+# ── Deploy SSH keys ────────────────────────────────────────
+- name: Add AI agent SSH key
+  authorized_key:
+    user: ai-agent
+    key: "{{ ai_agent_ssh_public_key }}"
+    comment: "ai-agent-ed25519"
+
+# ── Working directories ────────────────────────────────────
+- name: Create AI working directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: ai-agent
+    group: ai-agent
+    mode: '0755'
+  loop:
+    - /home/ai-agent/workspace
+    - /home/ai-agent/workspace/projects
+    - /home/ai-agent/workspace/containers
+    - /home/ai-agent/workspace/scripts
+    - /home/ai-agent/workspace/data
+
+# ── Resource limits (prevent runaway processes) ────────────
+- name: Set process limits for ai-agent
+  copy:
+    dest: /etc/security/limits.d/ai-agent.conf
+    content: |
+      ai-agent soft nproc 500
+      ai-agent hard nproc 1000
+      ai-agent soft fsize 10485760
+      ai-agent hard fsize 52428800
+    owner: root
+    group: root
+    mode: '0644'
+
+# ── tmux config for persistent sessions ────────────────────
+- name: Create tmux config for ai-agent
+  copy:
+    dest: /home/ai-agent/.tmux.conf
+    content: |
+      set -g mouse on
+      set -g history-limit 50000
+      set -g default-terminal "screen-256color"
+      setw -g mode-keys vi
+      set -g status-interval 5
+      set -g status-left '[#S] '
+      set -g status-right '%Y-%m-%d %H:%M'
+    owner: ai-agent
+    group: ai-agent
+    mode: '0644'
+
+# ── Bash profile for ai-agent ───────────────────────────────
+- name: Configure bash profile for ai-agent
+  copy:
+    dest: /home/ai-agent/.bashrc
+    content: |
+      export PS1='\\u@\\h:\\w\\$ '
+      export PATH="$HOME/workspace/scripts:$PATH"
+      export EDITOR=vim
+      alias ll='ls -alF'
+    owner: ai-agent
+    group: ai-agent
+    mode: '0644'
+
+# ── Ensure Podman is running ────────────────────────────────
+- name: Ensure Podman is enabled
+  service:
+    name: podman
+    state: started
+    enabled: true

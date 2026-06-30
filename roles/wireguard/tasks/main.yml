@@ -1,0 +1,65 @@
+---
+# roles/wireguard/tasks/main.yml
+# Sets up a full WireGuard mesh: every peer can reach every other peer.
+# The proxy server (randazzo-ar) acts as the hub — all peers tunnel through it.
+# All servers run Fedora Server 44 or AlmaLinux 10 (RHEL family).
+
+# ── Install WireGuard ──────────────────────────────────────
+- name: Install WireGuard
+  dnf:
+    name: wireguard-tools
+    state: present
+  when: "'cloud' in group_names"
+
+# ── Generate wg0 config ────────────────────────────────────
+- name: Create WireGuard config
+  template:
+    src: wg0.conf.j2
+    dest: "/etc/wireguard/{{ wg_interface }}.conf"
+    owner: root
+    group: root
+    mode: '0600'
+  notify: restart wireguard
+
+# ── Enable and start WireGuard ─────────────────────────────
+- name: Enable wg-quick@{{ wg_interface }}
+  service:
+    name: "wg-quick@{{ wg_interface }}"
+    state: started
+    enabled: true
+
+# ── Ensure IP forwarding is enabled (hub node only) ────────
+- name: Enable IP forwarding on hub
+  sysctl:
+    name: net.ipv4.ip_forward
+    value: '1'
+    state: present
+    reload: true
+  when: inventory_hostname == wg_hub
+
+# ── Allow WireGuard through firewall ───────────────────────
+- name: Allow WireGuard port through firewalld
+  ansible.posix.firewalld:
+    port: "{{ wg_port }}/udp"
+    permanent: true
+    state: enabled
+    immediate: true
+  when: "'cloud' in group_names"
+
+- name: Allow forwarded traffic on hub firewalld
+  ansible.posix.firewalld:
+    masquerade: true
+    zone: public
+    permanent: true
+    state: enabled
+    immediate: true
+  when: inventory_hostname == wg_hub
+
+- name: Allow WG interface in firewalld
+  ansible.posix.firewalld:
+    interface: "{{ wg_interface }}"
+    zone: trusted
+    permanent: true
+    state: enabled
+    immediate: true
+  when: "'cloud' in group_names"

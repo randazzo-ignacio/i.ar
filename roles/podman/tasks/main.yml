@@ -1,0 +1,29 @@
+---
+# roles/podman/tasks/main.yml
+# Installs Podman and Podman Compose on hosts that need it.
+# Used on: ob-ar (AI playground), server-pc (local), i-ar (cloud)
+# All servers run Fedora Server 44 or AlmaLinux 10 (RHEL family).
+
+# ── Install EPEL for compose  ─────────────────────────────────────────
+- name: Install EPEL
+  dnf:
+    name:
+      - epel-release
+    state: present
+  when: "'cloud' in group_names"
+
+# ── Install Podman ─────────────────────────────────────────
+- name: Install Podman
+  dnf:
+    name:
+      - podman
+      - podman-compose
+    state: present
+  when: "'cloud' in group_names"
+
+# ── Enable Podman ──────────────────────────────────────────
+- name: Enable and start Podman
+  service:
+    name: podman
+    state: started
+    enabled: true

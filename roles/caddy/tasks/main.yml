@@ -1,0 +1,72 @@
+---
+# roles/caddy/tasks/main.yml
+# Installs Caddy on cloud hosts. Each host gets a per-host Caddyfile
+# generated from Caddyfile.j2 (only the domains that host serves).
+# Caddy handles TLS automatically via Let's Encrypt.
+# All servers run Fedora Server 44 or AlmaLinux 10 (RHEL family).
+
+# ── Install Caddy ──────────────────────────────────────────
+- name: Add Caddy COPR repo
+  command: "dnf copr enable -y @caddy/caddy"
+  args:
+    creates: /etc/yum.repos.d/_copr_copr.fedorainfracloud.org_group_caddy_caddy.repo
+
+- name: Install Caddy
+  dnf:
+    name: caddy
+    state: present
+
+# ── Create web roots for static sites ──────────────────────
+# Caddy on Fedora runs as the 'caddy' user. Static files must be
+# readable by caddy. Each host that serves static content gets its
+# web root created here. Content roles (static-page, portfolio-page)
+# fill them with files.
+- name: Create emacboros web root (daftpunk only)
+  file:
+    path: "{{ static_page_root | default('/var/www/emacboros') }}"
+    state: directory
+    owner: caddy
+    group: caddy
+    mode: '0755'
+  when: inventory_hostname == 'daftpunk'
+
+- name: Create portfolio web root (rammstein only)
+  file:
+    path: "{{ portfolio_page_root | default('/var/www/randazzo.ar') }}"
+    state: directory
+    owner: caddy
+    group: caddy
+    mode: '0755'
+  when: inventory_hostname == 'rammstein'
+
+# ── Configure Caddy ───────────────────────────────────────
+- name: Deploy Caddyfile
+  template:
+    src: Caddyfile.j2
+    dest: "{{ caddy_config_path }}"
+    owner: root
+    group: root
+    mode: '0644'
+  notify: reload caddy
+
+# ── Allow HTTP/HTTPS through firewall ──────────────────────
+- name: Allow HTTP through firewalld
+  ansible.posix.firewalld:
+    service: http
+    permanent: true
+    state: enabled
+    immediate: true
+
+- name: Allow HTTPS through firewalld
+  ansible.posix.firewalld:
+    service: https
+    permanent: true
+    state: enabled
+    immediate: true
+
+# ── Enable Caddy ───────────────────────────────────────────
+- name: Enable and start Caddy
+  service:
+    name: caddy
+    state: started
+    enabled: true

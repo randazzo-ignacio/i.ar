@@ -1,0 +1,6 @@
+wg_ip: "10.66.0.1"
+wg_endpoint: "randazzo.ar"  # public endpoint for WireGuard
+
+# Cloudflare tunnel (fallback VPN)
+cloudflare_tunnel_enabled: false
+cloudflare_domain: "randazzo.net.ar"

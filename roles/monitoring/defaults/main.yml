@@ -1,0 +1,29 @@
+---
+# roles/monitoring/defaults/main.yml
+# Defaults for the monitoring stack (Prometheus + Grafana).
+
+# ── Prometheus ──────────────────────────────────────────────
+prometheus_version: "v2.52.0"
+prometheus_retention: "30d"
+prometheus_port: 9090
+
+# ── Grafana ────────────────────────────────────────────────
+grafana_version: "11.0.0"
+grafana_port: 3000
+grafana_admin_user: "admin"
+grafana_admin_password: "changeme"
+
+# ── Node Exporter ───────────────────────────────────────────
+node_exporter_version: "1.8.1"
+node_exporter_port: 9100
+
+# ── cAdvisor ───────────────────────────────────────────────
+cadvisor_port: 8081
+
+# ── Storage paths ───────────────────────────────────────────
+monitoring_data_dir: "/var/lib/monitoring"
+prometheus_data_dir: "{{ monitoring_data_dir }}/prometheus"
+grafana_data_dir: "{{ monitoring_data_dir }}/grafana"
+
+# ── Compose file location ───────────────────────────────────
+monitoring_compose_dir: "/opt/monitoring"

@@ -1,0 +1,8 @@
+---
+# playbooks/cloudflare.yml — Cloudflare tunnel (fallback VPN).
+# Usage: ansible-playbook playbooks/cloudflare.yml --vault-password-file .vault_pass
+
+- name: Configure Cloudflare tunnel
+  hosts: proxy
+  roles:
+    - cloudflare-tunnel
