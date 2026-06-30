@@ -1,0 +1,11 @@
+== Code coverage text report ==
+task_tools : Percent 91% [Relevant: 68 Covered: 62 Missed: 6]
+session_persistence : Percent 0% [Relevant: 94 Covered: 0 Missed: 94]
+replacement_tool : Percent 93% [Relevant: 15 Covered: 14 Missed: 1]
+reload_tools : Percent 63% [Relevant: 33 Covered: 21 Missed: 12]
+memory_tools : Percent 39% [Relevant: 127 Covered: 50 Missed: 77]
+fs_tools : Percent 85% [Relevant: 40 Covered: 34 Missed: 6]
+delegate_tool : Percent 30% [Relevant: 95 Covered: 29 Missed: 66]
+code_tools : Percent 100% [Relevant: 27 Covered: 27 Missed: 0]
+check_elisp_tool : Percent 97% [Relevant: 48 Covered: 47 Missed: 1]
+agent_loader : Percent 26% [Relevant: 26 Covered: 7 Missed: 19]
