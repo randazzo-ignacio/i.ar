@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
 ;; Emacboros --- Darwin Continuous Agent Cycle
-;; Copyright (C) 2026 Ignacio Agustin Randazzo
+;; Copyright (C) 2026 Ignacio Agustin Randizzo
 ;;
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the Free Software Foundation, version 3.
@@ -90,13 +90,13 @@ timeout."
          (cycle-buf (get-buffer-create "*darwin-cycle*"))
          (completed nil)
          (exit-code 0)
-         (cycle-start (current-time)))
+         (cycle-start (current-time))
+         (tool-call-count 0))
     (message "[darwin] Starting cycle with %ds timeout" timeout)
     (with-current-buffer cycle-buf
       (text-mode)
       (gptel-mode 1)
       (setq-local gptel-system-prompt profile)
-      ;; gptel--system-message is obsolete in newer gptel; gptel-system-prompt is the canonical var
       (setq-local gptel-confirm-tool-calls nil)
       (setq-local gptel-stream t)
       (setq-local my-gptel--current-agent-name "darwin")
@@ -104,6 +104,20 @@ timeout."
                   (expand-file-name "agents.d/darwin/prompt.org" user-emacs-directory))
       ;; Set self-modification mode so darwin can edit init.d/*.el
       (setq my-gptel--guard-allow-self-modification t)
+
+      ;; Tool call tracker: log every tool call for debugging
+      (add-hook 'gptel-post-tool-call-functions
+                (lambda (info)
+                  (cl-incf tool-call-count)
+                  (let ((name (plist-get info :name))
+                        (args (plist-get info :args))
+                        (result (plist-get info :result)))
+                    (message "[darwin] Tool call #%d: %s args=%.100s result=%.200s"
+                             tool-call-count name
+                             (prin1-to-string args)
+                             (if (stringp result) result (prin1-to-string result)))))
+                nil t)
+
       ;; Completion hook: set completed flag and schedule Emacs exit
       (let ((done-hook
              (lambda (start end)
@@ -113,7 +127,7 @@ timeout."
                    (message "[darwin] Cycle completed in %.1fs" elapsed)
                    (when (and start end (< start end))
                      (let ((response (buffer-substring-no-properties start end)))
-                       (message "[darwin] Response: %.200s" response)))
+                       (message "[darwin] Response: %.500s" response)))
                    ;; Exit Emacs after a short delay to allow any final output
                    (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))))))
         (add-hook 'gptel-post-response-functions done-hook nil t)
@@ -138,15 +152,34 @@ timeout."
         (gptel-send)))
     ;; In batch mode, we need to process events until completion
     (when noninteractive
-      (while (not completed)
-        (accept-process-output nil 1)
-        ;; Check for dead timers / processes
-        (unless (or completed (get-buffer-process cycle-buf))
-          ;; No active process and not completed — check if gptel is still running
-          (let ((fsm (buffer-local-value 'gptel--fsm-last cycle-buf)))
-            (when (and fsm (not (gptel-fsm-p fsm)))
-              (setq completed t)
-              (message "[darwin] No active FSM, cycle appears done")
-              (run-with-timer 1 nil (lambda () (kill-emacs exit-code))))))))))
+      (let ((idle-count 0))
+        (while (not completed)
+          (accept-process-output nil 1)
+          ;; Check for dead timers / processes
+          (unless (or completed (get-buffer-process cycle-buf))
+            ;; No active process in cycle-buf — but there might be delegate
+            ;; subprocesses still running. Check for any active gptel requests.
+            (let ((active-requests nil))
+              (dolist (entry gptel--request-alist)
+                (let* ((fsm (cadr entry))
+                       (info (and fsm (gptel-fsm-p fsm) (gptel-fsm-info fsm)))
+                       (req-buf (and info (plist-get info :buffer))))
+                  (when (and req-buf (buffer-live-p req-buf))
+                    (setq active-requests t))))
+              (if active-requests
+                  (cl-incf idle-count)
+                ;; No active requests at all — check if the FSM is done
+                (let ((fsm (buffer-local-value 'gptel--fsm-last cycle-buf)))
+                  (when (and fsm (gptel-fsm-p fsm)
+                             (memq (gptel-fsm-state fsm) '(DONE ERRS ABRT)))
+                    (setq completed t)
+                    (message "[darwin] FSM reached terminal state: %s"
+                             (gptel-fsm-state fsm))
+                    (run-with-timer 1 nil (lambda () (kill-emacs exit-code)))))
+                ;; Safety: if idle for too long with no requests, bail out
+                (when (> idle-count 30)
+                  (setq completed t)
+                  (message "[darwin] No active requests for 30s, exiting")
+                  (run-with-timer 1 nil (lambda () (kill-emacs exit-code))))))))))))
 
 (provide 'darwin_cycle)

@@ -34,7 +34,6 @@ RUN dnf install -y \
     && dnf clean all
 
 RUN chsh -s /bin/bash root
-RUN mkdir -p /root/workspace
 RUN mkdir -p /root/i.ar
 RUN mkdir -p /root/.emacs.d
 

@@ -47,6 +47,8 @@ never break the operation it is auditing."
   (condition-case nil
       (let ((timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
             (agent (my-gptel--audit-get-agent-name)))
+        ;; Ensure the workspace directory exists before writing
+        (make-directory (file-name-directory my-gptel--audit-log-path) t)
         (with-temp-buffer
           (insert (format "[%s] %s | %s | %s\n" timestamp agent tool detail))
           (write-region (buffer-string) nil my-gptel--audit-log-path t 'silent)))
