@@ -13,7 +13,7 @@ IMAGE_NAME="iar-emacboros"
 CONTAINER_NAME="darwin-cycle"
 LOCAL_OLLAMA_HOST="${EMACBOROS_OLLAMA_HOST:-10.66.0.3:11434}"
 
-TIMEOUT=3600
+TIMEOUT=7200
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --timeout)
@@ -29,7 +29,7 @@ Runs one darwin autonomous cycle in the Emacs container.
 Each cycle: darwin wakes up, makes one change, reviews it, tests it, commits if green.
 
 Options:
-  --timeout SECONDS  Maximum time for the cycle (default: 3600 = 60 min)
+  --timeout SECONDS  Maximum time for the cycle (default: 7200 = 120 min)
   --help, -h          Show this message
 EOF
             exit 0

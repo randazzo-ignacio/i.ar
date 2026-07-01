@@ -10,24 +10,31 @@
 (require 'subr-x)
 
 ;;; --- Validation tests ---
+;; The delegate tool is async: validation errors are returned via the
+;; callback as error strings, not signaled as Emacs errors.
+
+(defvar test-delegate--callback-result nil
+  "Captures the callback response from delegate for testing.")
+
+(defun test-delegate--callback (result)
+  "Test callback that captures RESULT for inspection."
+  (setq test-delegate--callback-result result))
 
 (ert-deftest test-delegate-validates-agent-name ()
-  "delegate tool should reject empty or whitespace-only agent names."
-  (condition-case err
-      (my-gptel-tool-delegate "" "task" "context" 1)
-    (error
-     (should (string-match-p "agent" (error-message-string err))))
-    (:success
-     (ert-fail "Expected error for empty agent name"))))
+  "delegate tool should reject empty or whitespace-only agent names.
+The async callback should receive an error message mentioning 'agent'."
+  (setq test-delegate--callback-result nil)
+  (my-gptel-tool-delegate #'test-delegate--callback "" "task" "context")
+  (should test-delegate--callback-result)
+  (should (string-match-p "agent" test-delegate--callback-result)))
 
 (ert-deftest test-delegate-validates-task ()
-  "delegate tool should reject empty or whitespace-only task strings."
-  (condition-case err
-      (my-gptel-tool-delegate "coder" "" "context" 1)
-    (error
-     (should (string-match-p "task" (error-message-string err))))
-    (:success
-     (ert-fail "Expected error for empty task"))))
+  "delegate tool should reject empty or whitespace-only task strings.
+The async callback should receive an error message mentioning 'task'."
+  (setq test-delegate--callback-result nil)
+  (my-gptel-tool-delegate #'test-delegate--callback "coder" "" "context")
+  (should test-delegate--callback-result)
+  (should (string-match-p "task" test-delegate--callback-result)))
 
 (ert-deftest test-delegate-validates-agent-name-traversal ()
   "delegate tool should reject agent names with path traversal characters."
@@ -87,49 +94,59 @@
   (should (null (my-gptel--load-agent-profile "nonexistent_xyzzy_agent"))))
 
 ;;; --- Timeout parsing tests ---
+;; The delegate tool is async: nonexistent agent errors are returned
+;; via the callback, not signaled as Emacs errors.
 
 (ert-deftest test-delegate-timeout-integer ()
-  "delegate tool should accept integer timeout."
-  ;; We can't easily call the full function without a real agent,
-  ;; but we can test the timeout parsing logic by examining
-  ;; what happens when we call with a nonexistent agent.
-  (condition-case err
-      (my-gptel-tool-delegate "nonexistent_agent_xyzzy" "task" "ctx" 30)
-    (error
-     ;; Should fail with "not found", not timeout parsing error
-     (should (string-match-p "not found" (error-message-string err))))
-    (:success
-     (ert-fail "Expected error for nonexistent agent"))))
+  "delegate tool should accept integer timeout.
+With a nonexistent agent, the callback should receive 'not found'."
+  (setq test-delegate--callback-result nil)
+  (my-gptel-tool-delegate #'test-delegate--callback
+                          "nonexistent_agent_xyzzy" "task" "ctx" 30)
+  (should test-delegate--callback-result)
+  (should (string-match-p "not found" test-delegate--callback-result)))
 
 (ert-deftest test-delegate-timeout-string-converted ()
-  "delegate tool should convert string timeout to integer."
-  (condition-case err
-      (my-gptel-tool-delegate "nonexistent_agent_xyzzy" "task" "ctx" "30")
-    (error
-     ;; Should fail with "not found", not a type error
-     (should (string-match-p "not found" (error-message-string err))))
-    (:success
-     (ert-fail "Expected error for nonexistent agent"))))
+  "delegate tool should convert string timeout to integer.
+With a nonexistent agent, the callback should receive 'not found'."
+  (setq test-delegate--callback-result nil)
+  (my-gptel-tool-delegate #'test-delegate--callback
+                          "nonexistent_agent_xyzzy" "task" "ctx" "30")
+  (should test-delegate--callback-result)
+  (should (string-match-p "not found" test-delegate--callback-result)))
 
 (ert-deftest test-delegate-timeout-default-when-nil ()
-  "delegate tool should default timeout to 600 when nil."
-  (condition-case err
-      (my-gptel-tool-delegate "nonexistent_agent_xyzzy" "task" "ctx" nil)
-    (error
-     (should (string-match-p "not found" (error-message-string err))))
-    (:success
-     (ert-fail "Expected error for nonexistent agent"))))
+  "delegate tool should default timeout to 600 when nil.
+With a nonexistent agent, the callback should receive 'not found'."
+  (setq test-delegate--callback-result nil)
+  (my-gptel-tool-delegate #'test-delegate--callback
+                          "nonexistent_agent_xyzzy" "task" "ctx" nil)
+  (should test-delegate--callback-result)
+  (should (string-match-p "not found" test-delegate--callback-result)))
 
 ;;; --- Completion hook tests ---
 
 (ert-deftest test-delegate-completion-hook-sets-response ()
-  "my-gptel--delegate-completion-hook should set response and done flag."
+  "my-gptel--delegate-completion-fn should call the callback with the response text."
   (with-temp-buffer
-    (insert "prefix\n")
-    (let ((start (point))
-          (end (progn (insert "response text\n") (point))))
-      (my-gptel--delegate-completion-hook start end)
-      (should (string= my-gptel--delegate-response "response text\n"))
-      (should my-gptel--delegate-done))))
+    (insert "prefix\nresponse text here\n")
+    (let ((result nil)
+          (completed-sym (make-symbol "completed"))
+          (timer-sym (make-symbol "timer")))
+      (set completed-sym nil)
+      (set timer-sym nil)
+      (let ((fn (my-gptel--delegate-completion-fn
+                 (current-buffer)
+                 (lambda (r) (setq result r))
+                 "testagent"
+                 completed-sym
+                 timer-sym
+                 600)))
+        ;; Call with positions spanning "response text here\n"
+        (funcall fn 8 26))
+      (should result)
+      (should (string-match-p "response text" result))
+      ;; Completed flag should be set
+      (should (symbol-value completed-sym)))))
 
 (provide 'test-delegate)
