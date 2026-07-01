@@ -138,7 +138,7 @@ run() {
         -v "${REPO_DIR}/infra:/root/i.ar/infra:Z" \
         -v "${REPO_DIR}/utils:/root/i.ar/utils:Z" \
         -v "${REPO_DIR}/README.org:/root/i.ar/README.org:Z" \
-        "${DYNAMIC_MOUNT_OPTS[@]:-}" \
+        ${DYNAMIC_MOUNT_OPTS[@]+"${DYNAMIC_MOUNT_OPTS[@]}"} \
         "${IMAGE_NAME}" && \
         info "Container started" || \
         error "Container failed to start"
