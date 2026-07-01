@@ -62,12 +62,20 @@ Binds `test-fs--tmpdir' to the temp dir path."
       (should (string-match-p "empty\\.txt" result))
       (should (string-match-p "subdir" result)))))
 
-(ert-deftest test-fs-list-directory-excludes-dotfiles ()
-  "list_directory should exclude . and .. entries."
+(ert-deftest test-fs-list-directory-includes-hidden-files ()
+  "list_directory should include hidden files (dotfiles) but exclude . and .."
   (with-fs-fixture
+    ;; Create a hidden file
+    (with-temp-file (expand-file-name ".hidden" test-fs--tmpdir)
+      (insert "hidden\n"))
     (let ((result (my-gptel--fs-list-directory test-fs--tmpdir)))
-      (should-not (string-match-p "^\\.$" result))
-      (should-not (string-match-p "^\\.\\.$" result)))))
+      (should (stringp result))
+      ;; Should include the hidden file
+      (should (string-match-p "\\.hidden" result))
+      ;; Should NOT include . or .. as standalone entries
+      (should-not (string-match-p "^\\.\\.?$" result))
+      ;; Regular files should still be there
+      (should (string-match-p "hello\\.txt" result)))))
 
 (ert-deftest test-fs-list-directory-missing-returns-error ()
   "list_directory on nonexistent path should return error string."

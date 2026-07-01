@@ -26,6 +26,7 @@
 ;; Security: write_file and append_file check the file_guard before
 ;; writing. All write operations are logged to the audit log.
 
+(require 'cl-lib)
 (require 'file_guard)
 (require 'audit_log)
 
@@ -33,11 +34,13 @@
 
 (defun my-gptel--fs-list-directory (path)
   "List the contents of directory PATH.
-Returns newline-separated file names (excluding dotfiles).
+Returns newline-separated file names, including hidden files (dotfiles).
+Excludes only the . and .. directory entries.
 On error, returns a string starting with 'Error:'."
   (condition-case nil
       (mapconcat #'identity
-                 (directory-files (expand-file-name path) nil "^[^.]")
+                 (cl-remove-if (lambda (f) (member f '("." "..")))
+                               (directory-files (expand-file-name path) nil))
                  "\n")
     (error (format "Error: Directory '%s' not found or permission denied." path))))
 
