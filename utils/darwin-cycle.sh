@@ -11,7 +11,7 @@ source "${REPO_DIR}/metaconfig/header.sh"
 
 IMAGE_NAME="iar-emacboros"
 CONTAINER_NAME="darwin-cycle"
-LOCAL_OLLAMA_HOST="${EMACBOROS_OLLAMA_HOST:-10.66.0.3:11434}"
+LOCAL_OLLAMA_HOST="${EMACBOROS_OLLAMA_HOST:-10.66.0.5:11434}"
 
 TIMEOUT=7200
 while [[ $# -gt 0 ]]; do

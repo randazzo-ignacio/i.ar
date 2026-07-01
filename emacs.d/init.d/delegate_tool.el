@@ -103,13 +103,15 @@ with a timeout message or partial response."
   "Delegate a task to a sub-agent with a specific profile.  ASYNC tool.
 CALLBACK is gptel's async tool callback.  AGENT is the profile name.
 TASK is the task description.  CONTEXT is optional context.
-TIMEOUT is optional max seconds to wait (default 600)."
+TIMEOUT is optional max seconds to wait (default 600, minimum 1)."
   (let* ((ctx (or context "No additional context provided."))
          (timeout-secs (cond
                         ((integerp timeout) timeout)
                         ((stringp timeout) (string-to-number timeout))
                         ((numberp timeout) (floor timeout))
                         (t 600)))
+         ;; Ensure timeout is at least 1 second
+         (timeout-secs (max 1 timeout-secs))
          (agent-valid (and agent (stringp agent) (> (length agent) 0)
                            (string-match "[^[:space:]]" agent)))
          (task-valid (and task (stringp task) (> (length task) 0)
