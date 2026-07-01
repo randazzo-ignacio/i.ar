@@ -33,12 +33,10 @@ RUN dnf install -y \
         gcc \
     && dnf clean all
 
-RUN useradd -m -s /bin/bash emacboros
-RUN mkdir -p /home/emacboros/workspace
-RUN mkdir -p /home/emacboros/i.ar
-RUN mkdir -p /home/emacboros/.emacs.d
-RUN chown -R emacboros:emacboros /home/emacboros
-RUN echo "emacboros ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
+RUN chsh -s /bin/bash root
+RUN mkdir -p /root/workspace
+RUN mkdir -p /root/i.ar
+RUN mkdir -p /root/.emacs.d
 
 # Preflight mount audit script — runs before Emacs to verify container hardening
 COPY scripts/preflight.sh /usr/local/bin/preflight.sh
@@ -47,8 +45,8 @@ RUN chmod +x /usr/local/bin/preflight.sh
 # ---------------------------------------------------------------------------
 # Working directory
 # ---------------------------------------------------------------------------
-WORKDIR /home/emacboros
-USER emacboros
+WORKDIR /root
+USER root
 
 # Preflight audit runs first, then Emacs starts if the audit passes
 ENTRYPOINT ["/bin/bash", "-c", "preflight.sh && exec emacs --no-x --load /root/.emacs.d/init.el"]
