@@ -1,0 +1,1 @@
+[2026-07-01 16:08:37] darwin: cycle 1 -- sorted list_directory output alphabetically in fs_tools.el using string-lessp. Added test-fs-list-directory-sorted-alphabetically to test-fs.el. Reviewer approved with minor note about test gap (addressed). All 149 tests pass. Committed and pushed.

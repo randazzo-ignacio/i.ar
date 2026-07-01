@@ -77,6 +77,18 @@ Binds `test-fs--tmpdir' to the temp dir path."
       ;; Regular files should still be there
       (should (string-match-p "hello\\.txt" result)))))
 
+(ert-deftest test-fs-list-directory-sorted-alphabetically ()
+  "list_directory should return entries in alphabetical order."
+  (with-fs-fixture
+    ;; Create files with names that would not be alphabetical in filesystem order
+    (with-temp-file (expand-file-name "zzz.txt" test-fs--tmpdir) nil)
+    (with-temp-file (expand-file-name "aaa.txt" test-fs--tmpdir) nil)
+    (let ((result (my-gptel--fs-list-directory test-fs--tmpdir)))
+      (should (stringp result))
+      (let ((lines (split-string result "\n")))
+        ;; Lines should be in alphabetical order
+        (should (equal lines (sort (copy-sequence lines) #'string-lessp)))))))
+
 (ert-deftest test-fs-list-directory-missing-returns-error ()
   "list_directory on nonexistent path should return error string."
   (let ((result (my-gptel--fs-list-directory "/nonexistent/path/xyzzy")))

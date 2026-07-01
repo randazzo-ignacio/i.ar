@@ -39,8 +39,9 @@ Excludes only the . and .. directory entries.
 On error, returns a string starting with 'Error:'."
   (condition-case nil
       (mapconcat #'identity
-                 (cl-remove-if (lambda (f) (member f '("." "..")))
-                               (directory-files (expand-file-name path) nil))
+                 (sort (cl-remove-if (lambda (f) (member f '("." "..")))
+                                     (directory-files (expand-file-name path) nil))
+                       #'string-lessp)
                  "\n")
     (error (format "Error: Directory '%s' not found or permission denied." path))))
 

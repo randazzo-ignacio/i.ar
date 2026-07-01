@@ -23,7 +23,7 @@
 ;; Determine Ollama host: check environment variable first, fall back to remote default.
 (setq emacboros-ollama-host
       (or (getenv "EMACBOROS_OLLAMA_HOST")
-          "10.66.0.3:11434"))
+          "10.66.0.5:11434"))
 
 (setq emacboros-gptel-backend
       (gptel-make-ollama "Ollama"
