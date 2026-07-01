@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 SCRIPT_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")")"
-source "${SCRIPT_DIR}/metaconfig/header.sh"
+REPO_DIR="$(realpath "$SCRIPT_DIR/..")"
+source "${REPO_DIR}/metaconfig/header.sh"
 
 build() {
     IMAGE_DIR="$1"

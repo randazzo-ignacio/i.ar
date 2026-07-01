@@ -2,6 +2,9 @@
 
 (add-to-list 'load-path (expand-file-name "init.d" user-emacs-directory))
 
+;; Locale and UTF-8 configuration (must load before anything else)
+(load "locale.el")
+
 ;; Package manager setup
 (load "package_setup.el")
 

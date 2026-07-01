@@ -1,5 +1,7 @@
 FROM quay.io/fedora/fedora@sha256:0ad2ef05326ffb8b2db89c36117fa5c430b61aed3c0432dedeae5bd9759e71af
 
+ENV LANG=C.utf8
+
 RUN dnf update -y
 
 RUN dnf install -y \
@@ -40,9 +42,7 @@ RUN echo "emacboros ALL=(ALL) NOPASSWD:ALL" >> /etc/sudoers
 
 # Preflight mount audit script — runs before Emacs to verify container hardening
 COPY scripts/preflight.sh /usr/local/bin/preflight.sh
-COPY scripts/permission_fix.sh /usr/local/bin/permission_fix.sh
 RUN chmod +x /usr/local/bin/preflight.sh
-RUN chmod +x /usr/local/bin/permission_fix.sh
 
 # ---------------------------------------------------------------------------
 # Working directory
@@ -51,4 +51,4 @@ WORKDIR /home/emacboros
 USER emacboros
 
 # Preflight audit runs first, then Emacs starts if the audit passes
-ENTRYPOINT ["/bin/bash", "-c", "preflight.sh && permission_fix.sh && exec emacs --no-x --load /root/.emacs.d/init.el"]
+ENTRYPOINT ["/bin/bash", "-c", "preflight.sh && exec emacs --no-x --load /root/.emacs.d/init.el"]

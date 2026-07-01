@@ -124,6 +124,7 @@ run() {
         --cap-add=NET_BIND_SERVICE \
         ${NET_OPTS} \
         -e "EMACBOROS_OLLAMA_HOST=${OLLAMA_HOST}" \
+        -e "LANG=C.utf8" \
         --tmpfs /tmp:rw,size=256m \
         --tmpfs /run:rw,size=64m \
         --tmpfs /var/tmp:rw,size=64m \
