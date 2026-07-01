@@ -2,6 +2,7 @@
 set -euo pipefail
 REPO_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
 source "${REPO_DIR}/metaconfig/header.sh"
+source "${REPO_DIR}/utils/telegram.sh"
 
 # Darwin Cycle -- Autonomous self-improvement agent runner
 # Runs one darwin cycle inside the Emacs container with --local mode.

@@ -3,3 +3,4 @@ elpa/
 org-persist/
 auto-save-list/
 workspace
+*.elc

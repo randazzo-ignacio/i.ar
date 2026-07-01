@@ -15,11 +15,16 @@
 ;; 1. Creates a gptel buffer with darwin's agent profile
 ;; 2. Sends the cycle prompt ("Wake up. Do your thing. Stop.")
 ;; 3. Waits for the full delegation chain to complete (darwin -> reviewer -> tests -> commit)
-;; 4. Exits Emacs when done (or on timeout)
+;; 4. Sends a Telegram notification with cycle results
+;; 5. Exits Emacs when done (or on timeout)
 ;;
 ;; Usage (batch mode):
 ;;   emacs --batch -l /root/.emacs.d/init.el \
 ;;         --eval '(darwin-run-cycle :timeout 7200)'
+;;
+;; Telegram notifications require:
+;;   DARWIN_TELEGRAM_BOT_TOKEN -- bot token from @BotFather
+;;   DARWIN_TELEGRAM_CHAT_ID   -- your chat ID (message @userinfobot to get it)
 ;;
 ;; The cycle is self-contained: darwin reads its own memories, decides what to
 ;; change, delegates to reviewer, runs tests, commits, and logs.  All we do is
@@ -28,6 +33,7 @@
 (require 'gptel)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'json)
 
 ;;; --- Configuration ---
 
@@ -42,6 +48,26 @@ Each turn is one model response (with or without tool calls).
 This prevents infinite loops."
   :type 'integer
   :group 'darwin)
+
+(defcustom darwin-telegram-bot-token
+  (or (getenv "DARWIN_TELEGRAM_BOT_TOKEN") "")
+  "Telegram bot token for cycle notifications.
+Get this from @BotFather on Telegram.
+Can also be set via DARWIN_TELEGRAM_BOT_TOKEN env var."
+  :type 'string
+  :group 'darwin)
+
+(defcustom darwin-telegram-chat-id
+  (or (getenv "DARWIN_TELEGRAM_CHAT_ID") "")
+  "Telegram chat ID to send notifications to.
+Message @userinfobot on Telegram to get your chat ID.
+Can also be set via DARWIN_TELEGRAM_CHAT_ID env var."
+  :type 'string
+  :group 'darwin)
+
+(defvar darwin-cycle-result-message nil
+  "Message to send via Telegram when the cycle ends.
+Set this before killing Emacs.  Nil means no notification.")
 
 (defconst darwin-cycle-prompt
   "You are waking up for a new cycle. Follow your cycle protocol:
@@ -74,6 +100,43 @@ Go."
   "Continue your cycle. You are not done yet. Pick up where you left off and complete all remaining steps. Remember: delegation to reviewer, commit, history log, and memories update are MANDATORY. Do not stop until all steps are complete."
   "Prompt sent to darwin when it produces a text-only response (no tool calls)
 to nudge it to continue the cycle.")
+
+;;; --- Telegram notification ---
+
+(defun darwin--notify-telegram (message)
+  "Send MESSAGE via Telegram bot API.
+Requires `darwin-telegram-bot-token' and `darwin-telegram-chat-id' to be set.
+Silently skips if either is empty.  Logs success or failure."
+  (let ((token darwin-telegram-bot-token)
+        (chat-id darwin-telegram-chat-id))
+    (if (or (string-empty-p token)
+            (string-empty-p chat-id))
+        (message "[darwin] Telegram notification skipped (no token/chat-id configured)")
+      (let ((url (format "https://api.telegram.org/bot%s/sendMessage" token))
+            (payload (json-encode
+                      `(("chat_id" . ,chat-id)
+                        ("text" . ,message)
+                        ("parse_mode" . "Markdown")))))
+        (message "[darwin] Sending Telegram notification...")
+        (let ((result (with-temp-buffer
+                        (call-process "curl" nil t nil
+                                       "-s" "-m" "10"
+                                       "-X" "POST"
+                                       "-H" "Content-Type: application/json"
+                                       "-d" payload
+                                       url)
+                        (buffer-string))))
+          (if (string-match-p "\"ok\":true" result)
+              (message "[darwin] Telegram notification sent successfully")
+            (message "[darwin] Telegram notification FAILED: %s" result)))))))
+
+(defun darwin--notify-on-exit ()
+  "Send Telegram notification if `darwin-cycle-result-message' is set.
+This is added to `kill-emacs-hook' so it fires automatically on exit."
+  (when darwin-cycle-result-message
+    (darwin--notify-telegram darwin-cycle-result-message)))
+
+(add-hook 'kill-emacs-hook #'darwin--notify-on-exit)
 
 ;;; --- Cycle execution ---
 
@@ -119,8 +182,8 @@ Keywords args:
   :prompt STRING   -- override darwin-cycle-prompt
 
 Creates a gptel buffer with darwin's profile, sends the cycle prompt,
-and waits for completion. Exits Emacs when the cycle is done or on
-timeout.
+and waits for completion.  Sends a Telegram notification and exits Emacs
+when the cycle is done or on timeout.
 
 The cycle uses a continuation mechanism: when the model produces a
 text-only response (no tool calls), it is re-prompted to continue
@@ -183,6 +246,9 @@ until it either completes all steps or reaches the turn limit."
                      (progn
                        (setq completed t)
                        (message "[darwin] Reached max turns (%d), ending cycle" darwin-cycle-max-turns)
+                       (setq darwin-cycle-result-message
+                             (format "*Darwin Cycle: Max Turns Reached*\nTurns: %d (limit %d)\nTool calls: %d\nThe cycle hit the turn limit without completing."
+                                     turn-count darwin-cycle-max-turns tool-call-count))
                        (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
 
                    ;; Check if the cycle is truly complete
@@ -190,10 +256,13 @@ until it either completes all steps or reaches the turn limit."
                        (progn
                          (setq completed t)
                          (let ((elapsed (float-time (time-subtract (current-time) cycle-start))))
-                           (message "[darwin] Cycle completed in %.1fs" elapsed))
+                           (message "[darwin] Cycle completed in %.1fs" elapsed)
+                           (setq darwin-cycle-result-message
+                                 (format "*Darwin Cycle Complete*\nElapsed: %.1fs\nTool calls: %d\nTurns: %d\nExit code: %d"
+                                         elapsed tool-call-count turn-count exit-code)))
                          (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
 
-                     ;; Not complete yet — re-prompt to continue
+                     ;; Not complete yet -- re-prompt to continue
                      (message "[darwin] Re-prompting darwin to continue cycle...")
                      (setq continuation-pending t)
                      (run-with-timer
@@ -220,8 +289,11 @@ until it either completes all steps or reaches the turn limit."
                (with-current-buffer cycle-buf
                  (let ((partial (buffer-substring-no-properties (point-min) (point-max))))
                    (message "[darwin] Partial response: %.500s" partial))))
+             (setq darwin-cycle-result-message
+                   (format "*Darwin Cycle: Timed Out*\nTimeout: %ds\nTool calls: %d\nTurns: %d\nThe cycle exceeded its time limit."
+                           timeout tool-call-count turn-count))
              (gptel-abort cycle-buf)
-             (run-with-timer 3 nil (lambda () (kill-emacs 1))))))
+             (run-with-timer 3 nil (lambda () (kill-emacs 1)))))
 
         ;; Insert prompt and send
         (insert prompt)
@@ -235,7 +307,7 @@ until it either completes all steps or reaches the turn limit."
           (accept-process-output nil 1)
           ;; Check for dead timers / processes
           (unless (or completed (get-buffer-process cycle-buf) continuation-pending)
-            ;; No active process in cycle-buf — but there might be delegate
+            ;; No active process in cycle-buf -- but there might be delegate
             ;; subprocesses still running. Check for any active gptel requests.
             (let ((active-requests nil))
               (dolist (entry gptel--request-alist)
@@ -246,18 +318,24 @@ until it either completes all steps or reaches the turn limit."
                     (setq active-requests t))))
               (if active-requests
                   (cl-incf idle-count)
-                ;; No active requests at all — check if the FSM is done
+                ;; No active requests at all -- check if the FSM is done
                 (let ((fsm (buffer-local-value 'gptel--fsm-last cycle-buf)))
                   (when (and fsm (gptel-fsm-p fsm)
                              (memq (gptel-fsm-state fsm) '(DONE ERRS ABRT)))
                     (setq completed t)
                     (message "[darwin] FSM reached terminal state: %s"
                              (gptel-fsm-state fsm))
+                    (setq darwin-cycle-result-message
+                          (format "*Darwin Cycle: FSM Terminal*\nState: %s\nTool calls: %d\nTurns: %d\nThe FSM reached a terminal state without explicit completion."
+                                  (gptel-fsm-state fsm) tool-call-count turn-count))
                     (run-with-timer 1 nil (lambda () (kill-emacs exit-code)))))
                 ;; Safety: if idle for too long with no requests, bail out
                 (when (> idle-count 1800)
                   (setq completed t)
                   (message "[darwin] No active requests for 1800s, exiting")
-                  (run-with-timer 1 nil (lambda () (kill-emacs exit-code))))))))))))
+                  (setq darwin-cycle-result-message
+                        (format "*Darwin Cycle: Idle Exit*\nTool calls: %d\nTurns: %d\nNo active requests for 1800s, bailing out."
+                                tool-call-count turn-count))
+                  (run-with-timer 1 nil (lambda () (kill-emacs exit-code)))))))))))))
 
 (provide 'darwin_cycle)
