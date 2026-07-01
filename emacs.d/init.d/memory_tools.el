@@ -151,11 +151,11 @@ CONVERSATION is the conversation text to summarize."
 
 (defun my-gptel--memory-call-ollama (payload timeout)
   "Send PAYLOAD (JSON string) to the Ollama /api/chat endpoint.
-Uses make-process + accept-process-output for responsive waiting.
+Uses `make-process' + `accept-process-output' for responsive waiting.
 TIMEOUT in seconds. Returns the response content string, or
-an error string starting with 'Error:'.
+an error string starting with \"Error:\".
 
-Writes the payload to a temp file and uses 'curl -d @file' to avoid
+Writes the payload to a temp file and uses `curl -d @file' to avoid
 the Linux MAX_ARG_STRLEN limit (128KB per single argument). Long
 conversations with tool I/O can easily produce payloads exceeding
 this limit, causing execve to fail with E2BIG."
@@ -166,6 +166,7 @@ this limit, causing execve to fail with E2BIG."
          (deadline (time-add start-time (seconds-to-time timeout)))
          (done nil)
          (exit-code nil)
+         (proc nil)
          ;; Write payload to temp file to avoid ARG_MAX / MAX_ARG_STRLEN limits
          (payload-file (make-temp-file "gptel-payload-")))
     ;; Write payload to temp file
@@ -179,7 +180,7 @@ this limit, causing execve to fail with E2BIG."
                           "-H" "Content-Type: application/json"
                           "-d" (format "@%s" payload-file))
            :sentinel
-           (lambda (p event)
+           (lambda (p _event)
              (when (memq (process-status p) '(exit signal))
                (setq exit-code (process-exit-status p))
                (setq done t)))))
