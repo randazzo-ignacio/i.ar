@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
 ;; Emacboros --- Darwin Continuous Agent Cycle
-;; Copyright (C) 2026 Ignacio Agustin Randizzo
+;; Copyright (C) 2026 Ignacio Agustin Randazzo
 ;;
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the Free Software Foundation, version 3.
@@ -36,6 +36,13 @@
   :type 'integer
   :group 'darwin)
 
+(defcustom darwin-cycle-max-turns 40
+  "Maximum number of LLM response turns before forcing cycle end.
+Each turn is one model response (with or without tool calls).
+This prevents infinite loops."
+  :type 'integer
+  :group 'darwin)
+
 (defconst darwin-cycle-prompt
   "You are waking up for a new cycle. Follow your cycle protocol:
 
@@ -63,6 +70,11 @@ your work is lost and the cycle is wasted. Always complete all steps.
 Go."
   "The prompt sent to darwin at the start of each cycle.")
 
+(defconst darwin-cycle-continue-prompt
+  "Continue your cycle. You are not done yet. Pick up where you left off and complete all remaining steps. Remember: delegation to reviewer, commit, history log, and memories update are MANDATORY. Do not stop until all steps are complete."
+  "Prompt sent to darwin when it produces a text-only response (no tool calls)
+to nudge it to continue the cycle.")
+
 ;;; --- Cycle execution ---
 
 (defun darwin--load-profile ()
@@ -83,6 +95,23 @@ Go."
         (org-export-expand-include-keyword)
         (buffer-string)))))
 
+(defun darwin--cycle-complete-p (buf)
+  "Check if the cycle is truly complete by scanning BUF for completion markers.
+Looks for evidence that darwin has written to HISTORY.log and MEMORIES.md,
+which are the final mandatory steps."
+  (with-current-buffer buf
+    (save-excursion
+      (goto-char (point-min))
+      ;; The model has completed if the buffer contains evidence of
+      ;; the final steps: a history log entry and a memories update.
+      ;; We look for the continuation prompt being answered with
+      ;; a summary that mentions 'done' or 'complete'.
+      (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+        ;; Check for explicit completion signals in the last response
+        (and (string-match-p "\\(cycle complete\\|all steps\\|cycle summary\\|done for this cycle\\|finished.*cycle\\)" text)
+             ;; Must have evidence of history logging
+             (string-match-p "HISTORY\\|history" text))))))
+
 (defun darwin-run-cycle (&rest args)
   "Run one darwin cycle in batch mode.
 Keywords args:
@@ -91,7 +120,11 @@ Keywords args:
 
 Creates a gptel buffer with darwin's profile, sends the cycle prompt,
 and waits for completion. Exits Emacs when the cycle is done or on
-timeout."
+timeout.
+
+The cycle uses a continuation mechanism: when the model produces a
+text-only response (no tool calls), it is re-prompted to continue
+until it either completes all steps or reaches the turn limit."
   (interactive)
   (let* ((timeout (or (plist-get args :timeout) darwin-cycle-timeout))
          (prompt (or (plist-get args :prompt) darwin-cycle-prompt))
@@ -100,7 +133,9 @@ timeout."
          (completed nil)
          (exit-code 0)
          (cycle-start (current-time))
-         (tool-call-count 0))
+         (tool-call-count 0)
+         (turn-count 0)
+         (continuation-pending nil))
     (message "[darwin] Starting cycle with %ds timeout" timeout)
     (with-current-buffer cycle-buf
       (text-mode)
@@ -127,19 +162,51 @@ timeout."
                              (if (stringp result) result (prin1-to-string result)))))
                 nil t)
 
-      ;; Completion hook: set completed flag and schedule Emacs exit
-      (let ((done-hook
+      ;; Continuation hook: fires on every DONE/ERRS/ABRT state.
+      ;; Instead of immediately killing Emacs, this hook checks if
+      ;; the cycle is truly complete. If not, it re-prompts the model
+      ;; to continue. This handles the case where the model produces
+      ;; a text-only response between tool calls (e.g., "Let me look
+      ;; at the codebase now") which would normally end the turn.
+      (let ((cont-hook
              (lambda (start end)
                (unless completed
-                 (setq completed t)
-                 (let ((elapsed (float-time (time-subtract (current-time) cycle-start))))
-                   (message "[darwin] Cycle completed in %.1fs" elapsed)
-                   (when (and start end (< start end))
-                     (let ((response (buffer-substring-no-properties start end)))
-                       (message "[darwin] Response: %.500s" response)))
-                   ;; Exit Emacs after a short delay to allow any final output
-                   (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))))))
-        (add-hook 'gptel-post-response-functions done-hook nil t)
+                 (cl-incf turn-count)
+                 (message "[darwin] Turn #%d completed (tool calls so far: %d)"
+                          turn-count tool-call-count)
+                 (when (and start end (< start end))
+                   (let ((response (buffer-substring-no-properties start end)))
+                     (message "[darwin] Response: %.300s" response)))
+
+                 ;; Check if we've hit the turn limit
+                 (if (>= turn-count darwin-cycle-max-turns)
+                     (progn
+                       (setq completed t)
+                       (message "[darwin] Reached max turns (%d), ending cycle" darwin-cycle-max-turns)
+                       (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
+
+                   ;; Check if the cycle is truly complete
+                   (if (darwin--cycle-complete-p cycle-buf)
+                       (progn
+                         (setq completed t)
+                         (let ((elapsed (float-time (time-subtract (current-time) cycle-start))))
+                           (message "[darwin] Cycle completed in %.1fs" elapsed))
+                         (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
+
+                     ;; Not complete yet — re-prompt to continue
+                     (message "[darwin] Re-prompting darwin to continue cycle...")
+                     (setq continuation-pending t)
+                     (run-with-timer
+                      1 nil
+                      (lambda ()
+                        (when (and (not completed) (buffer-live-p cycle-buf))
+                          (with-current-buffer cycle-buf
+                            (goto-char (point-max))
+                            (insert darwin-cycle-continue-prompt)
+                            (setq continuation-pending nil)
+                            (gptel-send)))))))))))
+        (add-hook 'gptel-post-response-functions cont-hook nil t)
+
         ;; Timeout handler
         (run-with-timer
          timeout nil
@@ -155,17 +222,19 @@ timeout."
                    (message "[darwin] Partial response: %.500s" partial))))
              (gptel-abort cycle-buf)
              (run-with-timer 3 nil (lambda () (kill-emacs 1))))))
+
         ;; Insert prompt and send
         (insert prompt)
         (message "[darwin] Sending cycle prompt to darwin agent...")
         (gptel-send)))
+
     ;; In batch mode, we need to process events until completion
     (when noninteractive
       (let ((idle-count 0))
         (while (not completed)
           (accept-process-output nil 1)
           ;; Check for dead timers / processes
-          (unless (or completed (get-buffer-process cycle-buf))
+          (unless (or completed (get-buffer-process cycle-buf) continuation-pending)
             ;; No active process in cycle-buf — but there might be delegate
             ;; subprocesses still running. Check for any active gptel requests.
             (let ((active-requests nil))
