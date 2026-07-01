@@ -19,13 +19,24 @@ LOCAL_OLLAMA_HOST="localhost:11434"
 # =============================================================================
 usage() {
     cat <<EOF
-Usage: emacboros.sh [--local] [--help]
+Usage: emacboros.sh [OPTIONS]
 
 Options:
-  --local   Use a local Ollama instance (localhost:11434) instead of the
-            remote server. Enables host networking so the container can
-            reach Ollama on the host loopback interface.
-  --help    Show this message and exit.
+  --local          Use a local Ollama instance (localhost:11434) instead of
+                   the remote server. Enables host networking so the container
+                   can reach Ollama on the host loopback interface.
+  --mount PATH     Mount a host directory read-write inside the container at
+                   the same absolute path. Can be specified multiple times.
+                   The path must exist on the host.
+  --mount-ro PATH  Mount a host directory read-only inside the container at
+                   the same absolute path. Can be specified multiple times.
+                   The path must exist on the host.
+  --help, -h       Show this message and exit.
+
+Examples:
+  emacboros.sh --mount /home/nacho/projects/myapp
+  emacboros.sh --mount-ro /etc/ansible --mount /home/nacho/infra
+  emacboros.sh --local --mount /home/nacho/dev/scratch
 EOF
 }
 
@@ -33,12 +44,28 @@ EOF
 # Parse arguments
 # =============================================================================
 USE_LOCAL=false
+MOUNT_ARGS=()
+MOUNT_RO_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
         --local)
             USE_LOCAL=true
             shift
+            ;;
+        --mount)
+            [[ $# -lt 2 ]] && error "--mount requires a path argument" && exit 1
+            MOUNT_PATH="$(realpath "$2")"
+            [[ ! -d "${MOUNT_PATH}" ]] && error "--mount: directory does not exist: ${MOUNT_PATH}" && exit 1
+            MOUNT_ARGS+=("${MOUNT_PATH}")
+            shift 2
+            ;;
+        --mount-ro)
+            [[ $# -lt 2 ]] && error "--mount-ro requires a path argument" && exit 1
+            MOUNT_PATH="$(realpath "$2")"
+            [[ ! -d "${MOUNT_PATH}" ]] && error "--mount-ro: directory does not exist: ${MOUNT_PATH}" && exit 1
+            MOUNT_RO_ARGS+=("${MOUNT_PATH}")
+            shift 2
             ;;
         --help|-h)
             usage
@@ -66,6 +93,23 @@ else
 fi
 
 # =============================================================================
+# Build dynamic mount arguments
+# =============================================================================
+DYNAMIC_MOUNT_OPTS=()
+
+for path in "${MOUNT_ARGS[@]:-}"; do
+    [[ -z "${path}" ]] && continue
+    DYNAMIC_MOUNT_OPTS+=("-v" "${path}:${path}:Z")
+    info "Mounting read-write: ${path}"
+done
+
+for path in "${MOUNT_RO_ARGS[@]:-}"; do
+    [[ -z "${path}" ]] && continue
+    DYNAMIC_MOUNT_OPTS+=("-v" "${path}:${path}:ro,Z")
+    info "Mounting read-only:  ${path}"
+done
+
+# =============================================================================
 # Run the container with .emacs.d mounted
 # =============================================================================
 run() {
@@ -86,7 +130,7 @@ run() {
         -v "${REPO_DIR}/emacs.d:/root/.emacs.d:Z" \
         -v "${REPO_DIR}/metaconfig:/root/.emacs.d/metaconfig:Z" \
         -v "${REPO_DIR}/knowledge/prompts:/root/.emacs.d/agents.d:Z" \
-	\
+        \
         -v "${REPO_DIR}/emacs.d:/root/i.ar/emacs.d:Z" \
         -v "${REPO_DIR}/metaconfig:/root/i.ar/metaconfig:Z" \
         -v "${REPO_DIR}/knowledge:/root/i.ar/knowledge:Z" \
@@ -94,9 +138,10 @@ run() {
         -v "${REPO_DIR}/infra:/root/i.ar/infra:Z" \
         -v "${REPO_DIR}/utils:/root/i.ar/utils:Z" \
         -v "${REPO_DIR}/README.org:/root/i.ar/README.org:Z" \
+        "${DYNAMIC_MOUNT_OPTS[@]:-}" \
         "${IMAGE_NAME}" && \
-	info "Container started" || \
-	error "Container failed to start"
+        info "Container started" || \
+        error "Container failed to start"
 }
 
 run
