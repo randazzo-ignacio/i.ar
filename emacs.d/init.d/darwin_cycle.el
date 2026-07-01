@@ -47,9 +47,9 @@
    You MUST delegate to the reviewer. Use the delegate tool with agent='reviewer',
    a description of your change as the task, and include the context.
 6. Run the test suite: execute_code_local with command 'cd /root/.emacs.d && UNDERCOVER_FORCE=1 emacs --batch -l test/run-tests.el 2>&1 | tail -20'
-7. If tests fail, revert your change with git: execute_code_local with 'cd /root/.emacs.d && git checkout -- .'
-8. If tests pass, commit: execute_code_local with 'cd /root/.emacs.d && git add -A && git commit -m \"darwin: <description>\"'
-   You MUST commit. Do not skip this step. If git fails, debug it.
+7. If tests fail, revert your change with git: execute_code_local with 'cd /root/i.ar && git checkout -- .'
+8. If tests pass, commit: execute_code_local with 'cd /root/i.ar && git add -A && git commit -m \"darwin: <description>\"'
+   You MUST commit. Do not skip this step. If git fails with \"not a git repository\", run: cd /root/i.ar && git init first, then retry.
 9. Log to your HISTORY.log using append_file on /root/.emacs.d/agents.d/darwin/HISTORY.log.
    You MUST write to your history. Format: [TIMESTAMP] cycle: <what you did and why>
 10. Update your MEMORIES.md with what you learned (use write_file or replace_in_file).

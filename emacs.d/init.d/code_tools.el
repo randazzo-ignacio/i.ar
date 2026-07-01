@@ -43,7 +43,10 @@ Legacy sync convention (for backward compatibility):
   (my-gptel--async-shell-command COMMAND &optional TIMEOUT)
   Blocks via accept-process-output and returns the result string.
 
-TIMEOUT in seconds (default 3600) kills the process on true hangs."
+TIMEOUT in seconds (default 3600) kills the process on true hangs.
+
+All commands run with GIT_PAGER=cat and TERM=dumb in their environment
+to prevent interactive pagers (less/more) from hanging in batch mode."
   (if (functionp callback-or-command)
       ;; New async convention: (callback command &optional timeout)
       (let* ((cb callback-or-command)
@@ -56,7 +59,8 @@ TIMEOUT in seconds (default 3600) kills the process on true hangs."
               (make-process
                :name "gptel-async-cmd"
                :buffer buf
-               :command (list shell-file-name "-c" cmd)
+               :command (list shell-file-name "-c"
+                              (format "GIT_PAGER=cat TERM=dumb %s" cmd))
                :sentinel
                (lambda (proc _event)
                  (when (memq (process-status proc) '(exit signal))

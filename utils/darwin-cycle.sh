@@ -60,7 +60,7 @@ podman run \
     -v "${REPO_DIR}/emacs.d:/root/.emacs.d:Z" \
     -v "${REPO_DIR}/metaconfig:/root/.emacs.d/metaconfig:Z" \
     -v "${REPO_DIR}/knowledge/prompts:/root/.emacs.d/agents.d:Z" \
-    -v "${REPO_DIR}.git:/root/i.ar/.git:Z" \
+    -v "${REPO_DIR}/.git:/root/i.ar/.git:Z" \
     -v "${REPO_DIR}/emacs.d:/root/i.ar/emacs.d:Z" \
     -v "${REPO_DIR}/metaconfig:/root/i.ar/metaconfig:Z" \
     -v "${REPO_DIR}/knowledge:/root/i.ar/knowledge:Z" \
@@ -75,6 +75,8 @@ podman run \
     -e "GIT_AUTHOR_EMAIL=darwin@emacboros.local" \
     -e "GIT_COMMITTER_NAME=Darwin Agent" \
     -e "GIT_COMMITTER_EMAIL=darwin@emacboros.local" \
+    -e "GIT_PAGER=cat" \
+    -e "TERM=dumb" \
     --entrypoint /bin/bash \
     "${IMAGE_NAME}" \
     -c "preflight.sh && emacs --batch -l /root/.emacs.d/init.el --eval '(darwin-run-cycle :timeout ${TIMEOUT})'" 2>&1
