@@ -43,3 +43,11 @@
   hosts: rammstein
   roles:
     - portfolio-page
+
+- name: Frigate NVR (NVIDIA GPU hosts)
+  hosts: frigate_hosts
+  roles:
+    - role: podman
+      when: podman_enabled | default(false) | bool
+    - role: frigate
+      when: frigate_enabled | default(false) | bool

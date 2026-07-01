@@ -1,0 +1,121 @@
+---
+# roles/frigate/tasks/main.yml
+# Deploys Frigate NVR with NVIDIA TensorRT on Podman.
+# Target: sophon (local, Fedora Server, NVIDIA GPU).
+# Requires: podman role already applied, NVIDIA drivers installed.
+
+# ── Verify prerequisites ───────────────────────────────────
+- name: Verify NVIDIA GPU is present
+  command: nvidia-smi --query-gpu=name --format=csv,noheader
+  register: nvidia_check
+  changed_when: false
+  failed_when: false
+
+- name: Fail if no NVIDIA GPU detected
+  fail:
+    msg: |
+      Frigate with TensorRT requires an NVIDIA GPU.
+      nvidia-smi did not detect a GPU on this host.
+      Install NVIDIA drivers or use a non-TensorRT Frigate image.
+  when:
+    - frigate_enabled | bool
+    - "'stable-tensorrt' in frigate_image"
+    - nvidia_check.rc != 0
+
+# ── Install NVIDIA container toolkit ───────────────────────
+- name: Install NVIDIA container toolkit
+  dnf:
+    name: nvidia-container-toolkit
+    state: present
+  when: frigate_enabled | bool
+
+- name: Configure Podman for NVIDIA runtime
+  command: nvidia-ctk runtime configure --runtime=podman
+  changed_when: false
+  when: frigate_enabled | bool
+  notify: restart podman
+
+# ── Create directory structure ─────────────────────────────
+- name: Create Frigate directories
+  file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner | default(local_ssh_user) }}"
+    group: "{{ item.group | default(local_ssh_user) }}"
+    mode: "{{ item.mode | default('0755') }}"
+  loop:
+    - path: "{{ frigate_base_dir }}"
+    - path: "{{ frigate_config_dir }}"
+    - path: "{{ frigate_storage_dir }}"
+  when: frigate_enabled | bool
+
+- name: Ensure external media mount directory exists
+  file:
+    path: "{{ frigate_media_dir }}"
+    state: directory
+    owner: "{{ local_ssh_user }}"
+    group: "{{ local_ssh_user }}"
+    mode: '0755'
+  when: frigate_enabled | bool
+
+# ── Deploy configuration files ─────────────────────────────
+- name: Deploy Frigate config.yaml
+  template:
+    src: config.yaml.j2
+    dest: "{{ frigate_config_dir }}/config.yaml"
+    owner: "{{ local_ssh_user }}"
+    group: "{{ local_ssh_user }}"
+    mode: '0644'
+  when: frigate_enabled | bool
+  notify: restart frigate
+
+- name: Deploy docker-compose.yml
+  template:
+    src: docker-compose.yml.j2
+    dest: "{{ frigate_base_dir }}/docker-compose.yml"
+    owner: "{{ local_ssh_user }}"
+    group: "{{ local_ssh_user }}"
+    mode: '0644'
+  when: frigate_enabled | bool
+  notify: restart frigate
+
+# ── Create systemd service for Frigate ─────────────────────
+- name: Create Frigate systemd service
+  copy:
+    dest: "/etc/systemd/system/{{ frigate_container_name }}.service"
+    content: |
+      # {{ ansible_managed }}
+      [Unit]
+      Description=Frigate NVR (Podman Compose)
+      After=network-online.target podman.service
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User={{ local_ssh_user }}
+      WorkingDirectory={{ frigate_base_dir }}
+      ExecStart=/usr/bin/podman-compose up
+      ExecStop=/usr/bin/podman-compose down
+      Restart=always
+      RestartSec=10
+      TimeoutStopSec=45
+
+      [Install]
+      WantedBy=multi-user.target
+    owner: root
+    group: root
+    mode: '0644'
+  when: frigate_enabled | bool
+  notify: restart frigate
+
+- name: Reload systemd
+  systemd:
+    daemon_reload: true
+  when: frigate_enabled | bool
+
+- name: Enable and start Frigate
+  service:
+    name: "{{ frigate_container_name }}"
+    state: started
+    enabled: true
+  when: frigate_enabled | bool

@@ -1,0 +1,65 @@
+---
+# roles/frigate/defaults/main.yml
+# Frigate NVR — defaults.
+# Target: sophon (local, NVIDIA GPU, Fedora Server).
+
+frigate_enabled: false
+
+# ── Installation ───────────────────────────────────────────
+frigate_image: "ghcr.io/blakeblackshear/frigate:stable-tensorrt"
+frigate_container_name: frigate
+
+# ── Paths ──────────────────────────────────────────────────
+frigate_base_dir: "/home/{{ local_ssh_user }}/containers/frigate"
+frigate_config_dir: "{{ frigate_base_dir }}/config"
+frigate_storage_dir: "{{ frigate_base_dir }}/storage"
+
+# External media mount (where recordings are persisted)
+frigate_media_mount: "/run/media/{{ local_ssh_user }}/DATA"
+frigate_media_dir: "{{ frigate_media_mount }}/containers/frigate/storage"
+
+# ── Runtime ────────────────────────────────────────────────
+frigate_shm_size: "2048mb"
+frigate_tmpfs_cache_size: "1000000000"  # 1GB
+frigate_stop_grace_period: "30s"
+frigate_gpu_count: 1
+
+# ── Network ────────────────────────────────────────────────
+frigate_web_port: 8971
+frigate_rtsp_port: 8554
+frigate_webrtc_tcp_port: 8555
+frigate_webrtc_udp_port: 8555
+
+# ── Retention policy ───────────────────────────────────────
+frigate_record_continuous_days: 3
+frigate_record_motion_days: 7
+frigate_record_alerts_days: 30
+frigate_record_alerts_mode: all
+frigate_record_detections_days: 30
+frigate_record_detections_mode: all
+
+# ── Detection defaults ─────────────────────────────────────
+frigate_detect_width: 1280
+frigate_detect_height: 720
+
+# ── MQTT ───────────────────────────────────────────────────
+frigate_mqtt_enabled: false
+
+# ── TLS ────────────────────────────────────────────────────
+frigate_tls_enabled: false
+
+# ── Cameras (override in host_vars or group_vars) ──────────
+# Each camera is a dict with:
+#   name (key), friendly_name, rtsp_url, roles (list), audio (bool)
+# Example:
+#   frigate_cameras:
+#     exterior_1:
+#       friendly_name: "Exterior 1"
+#       rtsp_url: "rtsp://user:pass@192.168.2.101/ch0"
+#       roles: [detect, record, audio]
+#       width: 1280
+#       height: 720
+frigate_cameras: {}
+
+# ── Secrets (override in vault) ────────────────────────────
+frigate_rtsp_password: ""

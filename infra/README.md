@@ -46,7 +46,7 @@ ansible-playbook playbooks/cloudflare.yml    --vault-password-file .vault_pass
 | greenday      | 0b.ar          | 10.66.0.2   | AI playground, Docker          |
 | daftpunk      | i.ar           | 10.66.0.3   | Ollama, emacboros static page |
 | yoga          | (local)        | 10.66.0.4   | Future NPU agent              |
-| sophon        | (local)        | 10.66.0.5   | GPU Ollama, local services     |
+| sophon        | (local)        | 10.66.0.5   | GPU Ollama, Frigate NVR        |
 
 ## Variable Hierarchy (DRY)
 
@@ -72,6 +72,7 @@ The inventory uses functional groups so playbooks target by *role*, not hostname
 - `proxy` — hosts running Caddy + CF Tunnel (randazzo-ar)
 - `ai_playground` — hosts running Docker + AI agent (ob-ar)
 - `ollama_hosts` — hosts running Ollama (i-ar, server-pc)
+- `frigate_hosts` — hosts running Frigate NVR (sophon)
 
 Hosts can belong to multiple groups. Adding a new host to a group
 automatically includes it in the relevant playbooks.
