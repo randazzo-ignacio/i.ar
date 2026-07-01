@@ -68,6 +68,13 @@ podman run \
     -v "${REPO_DIR}/infra:/root/i.ar/infra:Z" \
     -v "${REPO_DIR}/utils:/root/i.ar/utils:Z" \
     -v "${REPO_DIR}/README.org:/root/i.ar/README.org:Z" \
+    -v "${SSH_KEY_DIR:-${HOME}/.ssh}/darwin_ed25519:/root/.ssh/id_ed25519:ro,Z" \
+    -v "${SSH_KEY_DIR:-${HOME}/.ssh}/darwin_ed25519.pub:/root/.ssh/id_ed25519.pub:ro,Z" \
+    -v "${SSH_KEY_DIR:-${HOME}/.ssh}/known_hosts:/root/.ssh/known_hosts:ro,Z" \
+    -e "GIT_AUTHOR_NAME=Darwin Agent" \
+    -e "GIT_AUTHOR_EMAIL=darwin@emacboros.local" \
+    -e "GIT_COMMITTER_NAME=Darwin Agent" \
+    -e "GIT_COMMITTER_EMAIL=darwin@emacboros.local" \
     --entrypoint /bin/bash \
     "${IMAGE_NAME}" \
     -c "preflight.sh && emacs --batch -l /root/.emacs.d/init.el --eval '(darwin-run-cycle :timeout ${TIMEOUT})'" 2>&1
