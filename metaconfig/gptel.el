@@ -45,4 +45,4 @@
                                         ))))
 
 
-(setq emacboros-gptel-default-model 'glm-5.2:cloud)
+(setq emacboros-gptel-default-model 'nemotron-3-ultra:cloud)

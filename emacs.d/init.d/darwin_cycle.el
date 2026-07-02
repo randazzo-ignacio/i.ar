@@ -35,6 +35,9 @@
 (require 'subr-x)
 (require 'json)
 
+;; Silence byte-compiler warning for function from 'ox' library
+(declare-function org-export-expand-include-keyword "ox" ())
+
 ;;; --- Configuration ---
 
 (defcustom darwin-cycle-timeout 7200

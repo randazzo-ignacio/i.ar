@@ -33,6 +33,8 @@ Set buffer-local by `my-gptel-load-agent' and `my-gptel-tool-reload-agent'.")
 
 ;;; --- Profile reading ---
 
+(declare-function org-export-expand-include-keyword "ox" ())
+
 (defun my-gptel-read-agent-profile (filepath)
   "Read an Org file and seamlessly expand all #+INCLUDE directives."
   (require 'ox)
