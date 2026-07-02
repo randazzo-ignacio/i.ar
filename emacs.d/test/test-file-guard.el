@@ -444,6 +444,27 @@
           (should (stringp (my-gptel--guard-check-replace link)))
         (delete-file link)))))
 
+;;; --- HISTORY.log in protected directories ---
+
+(ert-deftest test-fg-append-blocks-history-log-in-git-hooks ()
+  "append_file should be blocked for HISTORY.log inside .git/hooks/.
+The HISTORY.log append exception only relaxes the HISTORY.log pattern
+itself -- other protections (like git hooks) still apply."
+  (with-fg-fixture
+    (should (stringp (my-gptel--guard-check-append
+                      "/root/i.ar/.git/hooks/HISTORY.log")))))
+
+(ert-deftest test-fg-append-blocks-history-log-in-init-d ()
+  "append_file should be blocked for HISTORY.log inside init.d/ if it
+also matches another protected pattern.  (In practice .log != .el so
+this won't match, but the test documents the intended behavior.)"
+  (with-fg-fixture
+    ;; HISTORY.log in init.d/ does NOT match init.d/*.el pattern (.log != .el)
+    ;; so this is allowed -- the test confirms the exception works correctly
+    ;; for files that only match the HISTORY.log pattern
+    (should-not (my-gptel--guard-check-append
+                 "/root/.emacs.d/init.d/HISTORY.log"))))
+
 ;;; --- Relative path handling ---
 
 (ert-deftest test-fg-write-blocks-relative-init-el ()

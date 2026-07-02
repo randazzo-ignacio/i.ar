@@ -56,6 +56,12 @@ untrusted-content sessions."
   :type 'boolean
   :group 'gptel)
 
+(defconst my-gptel--guard-history-pred
+  (lambda (path) (string-match-p "/HISTORY\\.log$" path))
+  "Predicate matching HISTORY.log files anywhere in the filesystem.
+Used both in the protected patterns list and by the append exception
+to ensure single-source-of-truth for the HISTORY.log regex.")
+
 (defconst my-gptel--guard-protected-patterns
   (list
    ;; --- Always protected ---
@@ -68,8 +74,7 @@ untrusted-content sessions."
            (string-match-p "/agents\\.d/base_context\\.org$" path))
          "Shared context file (base_context.org) is protected. Agents cannot modify the shared context.")
    ;; HISTORY.log files -- append is allowed but overwrite/replace is not
-   (cons (lambda (path)
-           (string-match-p "/HISTORY\\.log$" path))
+   (cons my-gptel--guard-history-pred
          "HISTORY.log files can only be appended to, not overwritten or modified via replace.")
    ;; --- Conditionally protected (active unless self-modification mode) ---
    ;; Emacs Lisp source files
@@ -130,17 +135,24 @@ Same restrictions as write, plus HISTORY.log is also blocked."
 (defun my-gptel--guard-check-append (filepath)
   "Check if FILEPATH is protected against append_file operations.
 Append is allowed for HISTORY.log (that's the intended use), but
-all other protected paths are blocked."
+all other protected paths are blocked.
+
+The HISTORY.log pattern is removed from the active patterns list
+before checking, so only the HISTORY.log protection is relaxed --
+other protections (init.el, git hooks, etc.) still apply even if
+the file happens to be named HISTORY.log."
   (let* ((expanded (expand-file-name filepath))
-         (truename (condition-case nil (file-truename expanded) (error expanded))))
+         (truename (condition-case nil (file-truename expanded) (error expanded)))
+         (patterns (cl-remove-if
+                    (lambda (cell)
+                      (eq (car cell) my-gptel--guard-history-pred))
+                    (my-gptel--guard--active-patterns))))
     (cl-some (lambda (cell)
                (let ((pred (car cell))
                      (reason (cdr cell)))
-                 ;; Skip the HISTORY.log check for append (append is the intended operation)
-                 (when (and (not (string-match-p "HISTORY" reason))
-                            (or (funcall pred expanded)
-                                (funcall pred truename)))
+                 (when (or (funcall pred expanded)
+                           (funcall pred truename))
                    reason)))
-             (my-gptel--guard--active-patterns))))
+             patterns)))
 
 (provide 'file_guard)
