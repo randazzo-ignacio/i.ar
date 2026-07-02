@@ -151,9 +151,17 @@ variables are restored."
   (interactive)
   (unless (file-directory-p my-gptel-sessions-dir)
     (user-error "No sessions directory found: %s" my-gptel-sessions-dir))
-  (let* ((files (directory-files my-gptel-sessions-dir nil "\\.gptel$"))
-         (_ (unless files
+  (let* ((all-files (directory-files my-gptel-sessions-dir t "\\.gptel$"))
+         (_ (unless all-files
               (user-error "No saved sessions found in %s" my-gptel-sessions-dir)))
+         ;; Sort by modification time, newest first (consistent with
+         ;; my-gptel-list-sessions which also shows newest first)
+         (sorted-files (sort all-files
+                             (lambda (a b)
+                               (time-less-p
+                                (file-attribute-modification-time (file-attributes b))
+                                (file-attribute-modification-time (file-attributes a))))))
+         (files (mapcar #'file-name-nondirectory sorted-files))
          (chosen (completing-read "Open session: " files nil t))
          (session-path (expand-file-name chosen my-gptel-sessions-dir)))
     ;; Open the session file in a new buffer
