@@ -25,8 +25,9 @@
 ;; Approach:
 ;; 1. Read the file into a temp buffer and run `check-parens' to catch
 ;;    unbalanced parentheses.
-;; 2. Run `byte-compile-file' with load=nil and a temp .elc destination
-;;    to catch syntax errors and warnings. Capture *Compile-Log* buffer.
+;; 2. Run `byte-compile-file' (which defaults to not loading) with a
+;;    temp .elc destination to catch syntax errors and warnings.
+;;    Capture *Compile-Log* buffer.
 ;; 3. Clean up temp .elc. Source file is never touched.
 
 (require 'gptel)
@@ -46,9 +47,9 @@ Returns nil if parentheses are balanced."
 
 (defun my-gptel--byte-compile-check (filepath)
   "Byte-compile FILEPATH and return warnings/errors string, or nil if clean.
-Uses `byte-compile-file' with load=nil and a temp .elc destination to avoid
-modifying the source or leaving .elc artifacts. Captures the *Compile-Log*
-buffer content."
+Uses `byte-compile-file' (which defaults to not loading) with a temp .elc
+destination to avoid modifying the source or leaving .elc artifacts.
+Captures the *Compile-Log* buffer content."
   (let ((dest-file (concat (make-temp-file "elc-check-") ".elc"))
         (log-buf-name "*Compile-Log*")
         (result nil))
@@ -61,8 +62,8 @@ buffer content."
             (with-current-buffer log-buf-name
               (let ((inhibit-read-only t))
                 (erase-buffer))))
-          ;; Compile without loading the result
-          (byte-compile-file filepath nil)
+          ;; Compile without loading the result (LOAD defaults to nil)
+          (byte-compile-file filepath)
           ;; Capture log content
           (when (get-buffer log-buf-name)
             (with-current-buffer log-buf-name

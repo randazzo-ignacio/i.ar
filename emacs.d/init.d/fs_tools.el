@@ -36,7 +36,7 @@
   "List the contents of directory PATH.
 Returns newline-separated file names, including hidden files (dotfiles).
 Excludes only the . and .. directory entries.
-On error, returns a string starting with 'Error:'."
+On error, returns a string starting with \\='Error:\\='."
   (condition-case nil
       (mapconcat #'identity
                  (sort (cl-remove-if (lambda (f) (member f '("." "..")))
@@ -56,7 +56,7 @@ On error, returns a string starting with 'Error:'."
 
 (defun my-gptel--fs-read-file (filepath)
   "Read the text contents of FILEPATH into a string.
-On error, returns a string starting with 'Error:'."
+On error, returns a string starting with \\='Error:\\='."
   (condition-case nil
       (with-temp-buffer
         (insert-file-contents filepath)
@@ -76,7 +76,7 @@ On error, returns a string starting with 'Error:'."
   "Write CONTENT to FILEPATH, creating parent dirs if needed.
 If the file is open in an Emacs buffer, writes to that buffer and saves.
 Otherwise, uses atomic write (temp file + rename).
-Returns a string starting with 'Success:' or 'Error:'."
+Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
   (let* ((expanded-path (expand-file-name filepath))
          (guard-reason (my-gptel--guard-check-write expanded-path)))
     (if guard-reason
@@ -113,7 +113,7 @@ Returns a string starting with 'Success:' or 'Error:'."
   "Append CONTENT to the end of FILEPATH.
 If the file exists and does not end with a newline, one is prepended.
 If the file does not exist, it is created.
-Returns a string starting with 'Success:' or 'Error:'."
+Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
   (let* ((expanded-path (expand-file-name filepath))
          (guard-reason (my-gptel--guard-check-append expanded-path)))
     (if guard-reason

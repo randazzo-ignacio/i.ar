@@ -89,7 +89,8 @@ untrusted-content sessions."
          "Git hooks are protected. Agents cannot create or modify git hooks.")
    )
   "List of (predicate . reason) cons cells defining protected paths.
-Each predicate takes an expanded file path and returns non-nil if the path is protected.
+Each predicate takes an expanded file path and returns non-nil
+if the path is protected.
 
 The first three entries are always active.  The remaining entries are
 skipped when `my-gptel--guard-allow-self-modification' is non-nil.")
