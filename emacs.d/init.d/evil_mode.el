@@ -17,12 +17,17 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
+(defvar evil-want-integration)
+(defvar evil-want-keybinding)
+
+(declare-function evil-mode "evil" (&optional arg))
+(declare-function evil-collection-init "evil-collection" ())
+
 (setq evil-want-integration t)
 (setq evil-want-keybinding nil)
 
 (use-package evil
   :ensure t
-  :init (setq evil-want-integration t)
   :config (evil-mode 1))
 
 (use-package evil-collection

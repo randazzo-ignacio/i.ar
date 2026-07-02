@@ -17,6 +17,9 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
+(defvar emacboros-gptel-backend)
+(defvar emacboros-gptel-default-model)
+
 (use-package gptel
   :ensure t
   :config

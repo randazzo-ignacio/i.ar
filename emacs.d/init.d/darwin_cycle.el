@@ -35,6 +35,8 @@
 (require 'subr-x)
 (require 'json)
 
+(defvar my-gptel--guard-allow-self-modification)
+
 ;; Silence byte-compiler warning for function from 'ox' library
 (declare-function org-export-expand-include-keyword "ox" ())
 

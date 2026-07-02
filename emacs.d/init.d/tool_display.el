@@ -3,6 +3,10 @@
 ;; Display tool calls (name + arguments) in the chat buffer BEFORE they execute,
 ;; so the user can see what's happening while waiting for long-running tools.
 
+(require 'cl-lib)
+(require 'subr-x)
+(require 'gptel-request)
+
 (defun my-gptel--display-tool-call-pre (fsm)
   "Insert tool call info into the buffer before the tool runs.
 FSM is the gptel state machine."

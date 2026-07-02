@@ -21,6 +21,11 @@
 ;; Discovers agent directories under agents.d/<name>/prompt.org
 ;; and loads them with #+INCLUDE expansion.
 
+(require 'cl-lib)
+
+(declare-function gptel-mode "gptel" (&optional arg))
+(defvar gptel-mode-map)
+
 ;;; --- Agent state variables ---
 
 (defvar my-gptel--current-agent-name nil

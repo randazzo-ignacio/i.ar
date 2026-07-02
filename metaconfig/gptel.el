@@ -20,6 +20,12 @@
 (defvar emacboros-ollama-host nil
   "Ollama API host. Set from EMACBOROS_OLLAMA_HOST env var or defaults to remote.")
 
+(defvar emacboros-gptel-backend nil
+  "Ollama backend instance for gptel, configured at load time.")
+
+(defvar emacboros-gptel-default-model nil
+  "Default model symbol for gptel, configured at load time.")
+
 ;; Determine Ollama host: check environment variable first, fall back to remote default.
 (setq emacboros-ollama-host
       (or (getenv "EMACBOROS_OLLAMA_HOST")
@@ -39,10 +45,10 @@
                                    "glm-5.2:cloud")
                          :request-params '(:options (
                                           :temperature 0.7
-                                          :top_p 0.95
+                                          :top_p 0.90
                                           :num_ctx 1048576
                                           :num_predict 65536
                                         ))))
 
 
-(setq emacboros-gptel-default-model 'nemotron-3-ultra:cloud)
+(setq emacboros-gptel-default-model 'glm-5.2:cloud)
