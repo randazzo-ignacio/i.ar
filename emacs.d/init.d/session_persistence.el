@@ -97,11 +97,26 @@ Called from `gptel-mode-hook' when a session file is opened."
 
 ;;; --- Save session ---
 
+(defun my-gptel--validate-session-name (name)
+  "Validate that session NAME is safe for use as a filename.
+Returns NAME if valid, signals `user-error' if it contains path
+traversal characters or other unsafe patterns.
+Allows alphanumeric characters, hyphens, underscores, and dots.
+Rejects empty strings and strings containing slashes, spaces,
+or other shell/file-unsafe characters."
+  (unless (and (stringp name)
+               (string-match-p "\\`[a-zA-Z0-9._-]+\\'" name))
+    (user-error "Invalid session name: %S. Only letters, digits, dots, hyphens, and underscores are allowed." name))
+  name)
+
 (defun my-gptel-save-session (&optional name)
   "Save the current gptel buffer as a session file.
 Prompts for a session name. The buffer is saved to
 `my-gptel-sessions-dir'/<name>.gptel. gptel's built-in state save
-runs via file-local variables, plus our custom agent variables."
+runs via file-local variables, plus our custom agent variables.
+
+The session name is validated to prevent path traversal -- only
+alphanumeric characters, dots, hyphens, and underscores are allowed."
   (interactive)
   (unless (bound-and-true-p gptel-mode)
     (user-error "Not in a gptel buffer"))
@@ -111,10 +126,11 @@ runs via file-local variables, plus our custom agent variables."
                     (format "%s-%s" my-gptel--current-agent-name
                             (format-time-string "%Y%m%d-%H%M%S")))
                (format "session-%s" (format-time-string "%Y%m%d-%H%M%S"))))
-         (session-name (or name
-                          (read-string (format "Save session as (default: %s): "
-                                               default-name)
-                                       nil nil default-name)))
+         (session-name (my-gptel--validate-session-name
+                        (or name
+                            (read-string (format "Save session as (default: %s): "
+                                                 default-name)
+                                         nil nil default-name))))
          (session-path (expand-file-name
                         (format "%s.gptel" session-name)
                         my-gptel-sessions-dir)))

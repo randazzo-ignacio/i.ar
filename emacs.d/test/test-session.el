@@ -8,6 +8,8 @@
 (require 'subr-x)
 (require 'session_persistence)
 
+(declare-function my-gptel--validate-session-name "session_persistence" (name))
+
 ;;; --- Test fixtures ---
 
 (defvar test-session--tmpdir nil
@@ -446,5 +448,52 @@
   (let ((entry (assoc "\\.gptel\\'" auto-mode-alist)))
     (should entry)
     (should (equal (cdr entry) 'text-mode))))
+
+
+;;; --- Session name validation tests ---
+
+(ert-deftest test-session-validate-name-valid ()
+  "my-gptel--validate-session-name should accept valid names."
+  (should (string= (my-gptel--validate-session-name "test-session") "test-session"))
+  (should (string= (my-gptel--validate-session-name "darwin-20260703") "darwin-20260703"))
+  (should (string= (my-gptel--validate-session-name "session_1") "session_1"))
+  (should (string= (my-gptel--validate-session-name "my.session") "my.session"))
+  (should (string= (my-gptel--validate-session-name "ABC123") "ABC123")))
+
+(ert-deftest test-session-validate-name-rejects-path-traversal ()
+  "my-gptel--validate-session-name should reject path traversal characters.
+Note: \"..\" and \"/absolute/path\" are valid per the regex (only
+alphanumeric, dots, hyphens, underscores).  Slashes are the primary
+traversal vector, and \"../../etc/passwd\" is rejected because of the slashes."
+  (should-error (my-gptel--validate-session-name "../../etc/passwd") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "foo/bar") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "foo\\bar") :type 'user-error))
+
+(ert-deftest test-session-validate-name-rejects-empty ()
+  "my-gptel--validate-session-name should reject empty strings."
+  (should-error (my-gptel--validate-session-name "") :type 'user-error)
+  (should-error (my-gptel--validate-session-name nil) :type 'user-error))
+
+(ert-deftest test-session-validate-name-rejects-spaces ()
+  "my-gptel--validate-session-name should reject names with spaces."
+  (should-error (my-gptel--validate-session-name "my session") :type 'user-error)
+  (should-error (my-gptel--validate-session-name " session") :type 'user-error))
+
+(ert-deftest test-session-validate-name-rejects-special-chars ()
+  "my-gptel--validate-session-name should reject shell-unsafe characters."
+  (should-error (my-gptel--validate-session-name "session;rm") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "session$HOME") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "session`id`") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "session|cat") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "session\n") :type 'user-error))
+
+(ert-deftest test-session-save-rejects-traversal-name ()
+  "my-gptel-save-session should reject path traversal in session name."
+  (with-session-fixture
+    (with-temp-buffer
+      (text-mode)
+      (gptel-mode 1)
+      (insert "User: hello\n")
+      (should-error (my-gptel-save-session "../../etc/passwd")))))
 
 (provide 'test-session)
