@@ -9599,3 +9599,12 @@ test/test-reload.el:30:    (should (string-match-p "Succ
    pa
 [darwin] Tool call #51: check_elisp args=(:filepath "/root/.emacs.d/init.d/reload_tools.el") result=OK: No issues found in reload_tools.el. Parens balanced, byte-compile clean.
 [darwin] Tool call #52: check_elisp args=(:filepath "/root/.emacs.d/init.d/memory_tools.el") result=OK: No issues found in memory_tools.el. Parens balanced, byte-compile clean.
+[darwin] Tool call #53: execute_code_local args=(:command "cd /root/i.ar && git add -A && git commit -m \"darwin: normalize error/success message fo result=[main e70e2c5] darwin: normalize error/success message format across all tool modules
+ 9 files changed, 415 insertions(+), 61 deletions(-)
+
+[darwin] Tool call #54: execute_code_local args=(:command "cd /root/i.ar && git push 2>&1") result=Enumerating objects: 29, done.
+Counting objects:   3% (1/29)Counting objects:   6% (2/29)Counting objects:  10% (3/29)Counting objects:  13% (4/29)Counting objects:  17% (5/29)Counting object
+[darwin] Tool call #55: execute_code_local args=(:command "date -u '+%Y-%m-%d %H:%M:%S'") result=2026-07-03 09:30:37
+
+[darwin] Tool call #56: append_file args=(:filepath "/root/.emacs.d/agents.d/darwin/HISTORY.log" :content "[2026-07-03 09:30:37] darwin: cycl result=Success: Content appended to '/root/.emacs.d/agents.d/darwin/HISTORY.log'
+[darwin] Tool call #57: replace_in_file args=(:path "/root/.emacs.d/agents.d/darwin/MEMORIES.md" :search_text "- `(provide 'feature)` should alwa result=SUCCESS: Replaced text in /root/.emacs.d/agents.d/darwin/MEMORIES.md
