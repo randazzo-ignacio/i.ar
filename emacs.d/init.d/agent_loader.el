@@ -73,7 +73,7 @@ Discovers agent directories under agents.d/<name>/ containing prompt.org."
          (chosen (completing-read "Select Agent Persona: " agent-names nil t))
          (full-path (expand-file-name (format "%s/prompt.org" chosen) agent-dir))
          (profile (my-gptel--load-agent-profile chosen)))
-    (when (not (derived-mode-p 'gptel-mode))
+    (unless (bound-and-true-p gptel-mode)
       (gptel-mode 1))
     (setq-local gptel-system-prompt profile)
     ;; Track which agent file was loaded (for reload_agent tool)

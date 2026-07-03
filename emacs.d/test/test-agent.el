@@ -215,7 +215,7 @@ Uses text-mode because gptel-mode requires a text-derived major mode."
 
 (ert-deftest test-agent-load-agent-preserves-existing-gptel-mode ()
   "my-gptel-load-agent should not error when gptel-mode is already active.
-The (when (not (derived-mode-p 'gptel-mode)) ...) guard should skip
+The (unless (bound-and-true-p gptel-mode) ...) guard should skip
 re-enabling gptel-mode when it's already active."
   (with-agent-fixture
     (cl-letf (((symbol-function 'completing-read)
