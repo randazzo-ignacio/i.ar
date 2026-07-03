@@ -265,6 +265,200 @@ Binds `test-fs--tmpdir' to the temp dir path."
     ;; Error SHOULD contain the expanded (absolute) path
     (should (string-match-p (regexp-quote (expand-file-name "nonexistent-dir-xyz/sub/file.txt")) result))))
 
+;;; --- append_file buffer-aware tests ---
+
+(ert-deftest test-fs-append-file-to-open-buffer ()
+  "append_file to a file open in a buffer should update the buffer and save."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "buffered-append.txt" test-fs--tmpdir)))
+      ;; Create initial file
+      (my-gptel--fs-write-file target "original\n")
+      ;; Open it in a buffer
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (let ((result (my-gptel--fs-append-file target "appended\n")))
+              (should (string-match-p "Success" result))
+              ;; Buffer content should include appended text
+              (with-current-buffer buf
+                (should (string= (buffer-string) "original\nappended\n")))
+              ;; File on disk should be updated
+              (should (string= (with-temp-buffer
+                                 (insert-file-contents target)
+                                 (buffer-string))
+                               "original\nappended\n")))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-to-open-buffer-prepends-newline ()
+  "append_file to a buffer whose file lacks trailing newline should prepend one.
+Note: save-buffer enforces require-final-newline, so the saved file will
+have a trailing newline even though the appended content did not include one."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "no-newline-buf.txt" test-fs--tmpdir)))
+      ;; Create file without trailing newline
+      (my-gptel--fs-write-file target "no newline")
+      ;; Open it in a buffer
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (let ((result (my-gptel--fs-append-file target "appended")))
+              (should (string-match-p "Success" result))
+              ;; Buffer should have newline inserted before appended content.
+              ;; save-buffer may add a trailing newline (require-final-newline).
+              (with-current-buffer buf
+                (should (string-match-p "no newline\nappended" (buffer-string))))
+              ;; File on disk should match buffer content
+              (should (string= (with-temp-buffer
+                                 (insert-file-contents target)
+                                 (buffer-string))
+                               (with-current-buffer buf
+                                 (buffer-string)))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-to-open-buffer-no-double-newline ()
+  "append_file to a buffer whose file ends with newline should not add extra."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "has-newline-buf.txt" test-fs--tmpdir)))
+      ;; Create file with trailing newline
+      (my-gptel--fs-write-file target "has newline\n")
+      ;; Open it in a buffer
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (let ((result (my-gptel--fs-append-file target "appended\n")))
+              (should (string-match-p "Success" result))
+              ;; Buffer should NOT have double newline
+              (with-current-buffer buf
+                (should (string= (buffer-string) "has newline\nappended\n"))
+                (should-not (string-match-p "\n\nappended" (buffer-string)))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-dirty-buffer-rejected ()
+  "append_file to a buffer with unsaved modifications should return error."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "dirty-append.txt" test-fs--tmpdir)))
+      ;; Create initial file
+      (my-gptel--fs-write-file target "original\n")
+      ;; Open it in a buffer and make unsaved changes
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (goto-char (point-max))
+                (insert "unsaved change\n")
+                (should (buffer-modified-p)))
+              ;; Attempt to append_file -- should be rejected
+              (let ((result (my-gptel--fs-append-file target "appended\n")))
+                (should (string-match-p "Error" result))
+                (should (string-match-p "unsaved" result))
+                ;; File on disk should still be original
+                (should (string= (with-temp-buffer
+                                   (insert-file-contents target)
+                                   (buffer-string))
+                                 "original\n"))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-read-only-buffer-rejected ()
+  "append_file to a read-only buffer should return error."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "readonly-append.txt" test-fs--tmpdir)))
+      ;; Create initial file
+      (my-gptel--fs-write-file target "original\n")
+      ;; Open it in a buffer and make it read-only
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (setq buffer-read-only t))
+              ;; Attempt to append_file -- should be rejected
+              (let ((result (my-gptel--fs-append-file target "appended\n")))
+                (should (string-match-p "Error" result))
+                (should (string-match-p "read-only" result))
+                ;; File on disk should still be original
+                (should (string= (with-temp-buffer
+                                   (insert-file-contents target)
+                                   (buffer-string))
+                                 "original\n"))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-narrowed-buffer-widens ()
+  "append_file to a narrowed buffer should widen before appending."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "narrowed-append.txt" test-fs--tmpdir)))
+      ;; Create file with multiple lines
+      (my-gptel--fs-write-file target "line1\nline2\nline3\n")
+      ;; Open it in a buffer and narrow to line2
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (goto-char (point-min))
+                (forward-line 1)
+                (narrow-to-region (point) (progn (forward-line 1) (point))))
+              ;; Append should widen and add at the true end
+              (let ((result (my-gptel--fs-append-file target "line4\n")))
+                (should (string-match-p "Success" result))
+                ;; File on disk should have all 4 lines
+                (should (string= (with-temp-buffer
+                                   (insert-file-contents target)
+                                   (buffer-string))
+                                 "line1\nline2\nline3\nline4\n"))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-to-empty-buffer ()
+  "append_file to a buffer visiting an empty file should write without prefix."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "empty-buf-append.txt" test-fs--tmpdir)))
+      ;; Create empty file
+      (my-gptel--fs-write-file target "")
+      ;; Open it in a buffer
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (let ((result (my-gptel--fs-append-file target "first line\n")))
+              (should (string-match-p "Success" result))
+              ;; Buffer should contain only the appended content (no leading newline)
+              (with-current-buffer buf
+                (should (string= (buffer-string) "first line\n")))
+              ;; File on disk should match
+              (should (string= (with-temp-buffer
+                                 (insert-file-contents target)
+                                 (buffer-string))
+                               "first line\n")))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-via-symlink-finds-buffer ()
+  "append_file via a symlink path should find the buffer visiting the real file."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "real-append.txt" test-fs--tmpdir))
+           (link (expand-file-name "link-append.txt" test-fs--tmpdir)))
+      ;; Create the real file
+      (my-gptel--fs-write-file target "original\n")
+      ;; Create a symlink to it
+      (make-symbolic-link target link)
+      ;; Open the real file in a buffer
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              ;; Append via the symlink path -- should find the buffer
+              (let ((result (my-gptel--fs-append-file link "appended\n")))
+                (should (string-match-p "Success" result))
+                ;; Buffer content should include appended text
+                (with-current-buffer buf
+                  (should (string= (buffer-string) "original\nappended\n")))
+                ;; File on disk should be updated
+                (should (string= (with-temp-buffer
+                                   (insert-file-contents target)
+                                   (buffer-string))
+                                 "original\nappended\n"))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf))
+          (when (file-exists-p link)
+            (delete-file link)))))))
+
 ;;; --- Round-trip integrity tests ---
 
 (ert-deftest test-fs-roundtrip-write-read ()
