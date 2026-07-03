@@ -25,6 +25,7 @@
 
 (declare-function gptel-mode "gptel" (&optional arg))
 (defvar gptel-mode-map)
+(declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
 
 ;;; --- Agent state variables ---
 
@@ -71,7 +72,7 @@ Discovers agent directories under agents.d/<name>/ containing prompt.org."
               (user-error "No agent profiles found in %s" agent-dir)))
          (chosen (completing-read "Select Agent Persona: " agent-names nil t))
          (full-path (expand-file-name (format "%s/prompt.org" chosen) agent-dir))
-         (profile (my-gptel-read-agent-profile full-path)))
+         (profile (my-gptel--load-agent-profile chosen)))
     (when (not (derived-mode-p 'gptel-mode))
       (gptel-mode 1))
     (setq-local gptel-system-prompt profile)

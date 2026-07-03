@@ -193,25 +193,33 @@ this limit, causing execve to fail with E2BIG."
            ((and exit-code (/= exit-code 0))
             (format "Error: curl exited with code %d. Output:\n%s" exit-code raw-output))
            (t
-            (condition-case err
-                (let ((json-object-type 'plist)
-                      (json-array-type 'vector))
-                  (with-temp-buffer
-                    (insert raw-output)
-                    (goto-char (point-min))
-                    (let* ((parsed (json-read))
-                           (message-obj (plist-get parsed :message)))
-                      (if message-obj
-                          (or (plist-get message-obj :content)
-                              (format "Error: Empty message content. Raw:\n%s" raw-output))
-                        (format "Error: No message in response. Raw:\n%s" raw-output)))))
-              (error
-               (format "Error parsing JSON: %s\nRaw output:\n%s"
-                       (error-message-string err) raw-output))))))
+            (my-gptel--memory-parse-ollama-response raw-output))))
       (when (buffer-live-p buf)
         (kill-buffer buf))
       (when (file-exists-p payload-file)
         (delete-file payload-file)))))
+
+(defun my-gptel--memory-parse-ollama-response (raw-output)
+  "Parse RAW-OUTPUT (JSON string from Ollama /api/chat).
+Returns the response content string, or an error string starting
+with \"Error:\" if the response is malformed."
+  (condition-case err
+      (let ((json-object-type 'plist)
+            (json-array-type 'vector))
+        (with-temp-buffer
+          (insert raw-output)
+          (goto-char (point-min))
+          (let* ((parsed (json-read))
+                 (message-obj (plist-get parsed :message)))
+            (if message-obj
+                (let ((content (plist-get message-obj :content)))
+                  (if (and (stringp content) (not (string-empty-p content)))
+                      content
+                    (format "Error: Empty or non-string message content. Raw:\n%s" raw-output)))
+              (format "Error: No message in response. Raw:\n%s" raw-output)))))
+    (error
+     (format "Error: parsing JSON: %s\nRaw output:\n%s"
+             (error-message-string err) raw-output))))
 
 (defun my-gptel--memory-write-memories (agent-dir new-memories)
   "Write NEW-MEMORIES to MEMORIES.md in AGENT-DIR.

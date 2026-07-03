@@ -47,8 +47,7 @@ Temporarily rebinds `my-gptel--memory-get-agent-dir' to return the temp dir."
 (ert-deftest test-memory-extract-from-existing-file ()
   "my-gptel--memory-extract-memories should read MEMORIES.md content."
   (with-memory-fixture
-    (let ((dir (expand-file-name "testagent" test-memory--tmpdir))
-          (result (my-gptel--memory-extract-memories
+    (let ((result (my-gptel--memory-extract-memories
                    (expand-file-name "testagent" test-memory--tmpdir))))
       (should (stringp result))
       (should (string-match-p "First memory entry" result))
@@ -251,5 +250,90 @@ Temporarily rebinds `my-gptel--memory-get-agent-dir' to return the temp dir."
              (ert-fail "Expected error when no agent loaded"))))
       (setq my-gptel--current-agent-name old-name)
       (setq my-gptel--current-agent-file old-file))))
+
+;;; --- Ollama response parsing tests ---
+
+(ert-deftest test-memory-parse-valid-response ()
+  "my-gptel--memory-parse-ollama-response should extract content from valid JSON."
+  (let* ((content "Updated memory entries here")
+         (raw (json-encode `(("message" . (("content" . ,content)))
+                             ("done" . t))))
+         (result (my-gptel--memory-parse-ollama-response raw)))
+    (should (stringp result))
+    (should (string= result content))))
+
+(ert-deftest test-memory-parse-empty-content ()
+  "my-gptel--memory-parse-ollama-response should error on empty message content."
+  (let* ((raw (json-encode `(("message" . (("content" . "")))
+                             ("done" . t))))
+         (result (my-gptel--memory-parse-ollama-response raw)))
+    (should (stringp result))
+    (should (string-prefix-p "Error:" result))
+    (should (string-match-p "non-string" result))))
+
+(ert-deftest test-memory-parse-no-message-key ()
+  "my-gptel--memory-parse-ollama-response should error when :message key is missing."
+  (let* ((raw (json-encode `(("done" . t))))
+         (result (my-gptel--memory-parse-ollama-response raw)))
+    (should (stringp result))
+    (should (string-prefix-p "Error:" result))
+    (should (string-match-p "No message in response" result))))
+
+(ert-deftest test-memory-parse-invalid-json ()
+  "my-gptel--memory-parse-ollama-response should handle invalid JSON gracefully."
+  (let ((result (my-gptel--memory-parse-ollama-response "not valid json at all")))
+    (should (stringp result))
+    (should (string-prefix-p "Error:" result))
+    (should (string-match-p "parsing JSON" result))))
+
+(ert-deftest test-memory-parse-empty-string ()
+  "my-gptel--memory-parse-ollama-response should handle empty input."
+  (let ((result (my-gptel--memory-parse-ollama-response "")))
+    (should (stringp result))
+    (should (string-prefix-p "Error:" result))))
+
+(ert-deftest test-memory-parse-nil-content ()
+  "my-gptel--memory-parse-ollama-response should handle nil content in message."
+  (let* ((raw (json-encode `(("message" . (("role" . "assistant")))
+                             ("done" . t))))
+         (result (my-gptel--memory-parse-ollama-response raw)))
+    (should (stringp result))
+    (should (string-prefix-p "Error:" result))
+    (should (string-match-p "non-string" result))))
+
+(ert-deftest test-memory-parse-multiline-content ()
+  "my-gptel--memory-parse-ollama-response should preserve multiline content."
+  (let* ((content "- Memory 1\n- Memory 2\n- Memory 3")
+         (raw (json-encode `(("message" . (("content" . ,content)))
+                             ("done" . t))))
+         (result (my-gptel--memory-parse-ollama-response raw)))
+    (should (stringp result))
+    (should (string= result content))
+    (should (string-match-p "Memory 1" result))
+    (should (string-match-p "Memory 3" result))))
+
+(ert-deftest test-memory-parse-false-content ()
+  "my-gptel--memory-parse-ollama-response should handle JSON false as content."
+  (let* ((raw "{\"message\":{\"content\":false},\"done\":true}")
+         (result (my-gptel--memory-parse-ollama-response raw)))
+    (should (stringp result))
+    (should (string-prefix-p "Error:" result))
+    (should (string-match-p "non-string" result))))
+
+(ert-deftest test-memory-parse-numeric-content ()
+  "my-gptel--memory-parse-ollama-response should handle numeric content."
+  (let* ((raw "{\"message\":{\"content\":42},\"done\":true}")
+         (result (my-gptel--memory-parse-ollama-response raw)))
+    (should (stringp result))
+    (should (string-prefix-p "Error:" result))
+    (should (string-match-p "non-string" result))))
+
+(ert-deftest test-memory-parse-null-content ()
+  "my-gptel--memory-parse-ollama-response should handle JSON null as content."
+  (let* ((raw "{\"message\":{\"content\":null},\"done\":true}")
+         (result (my-gptel--memory-parse-ollama-response raw)))
+    (should (stringp result))
+    (should (string-prefix-p "Error:" result))
+    (should (string-match-p "non-string" result))))
 
 (provide 'test-memory)

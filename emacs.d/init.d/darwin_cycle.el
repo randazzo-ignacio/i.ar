@@ -37,8 +37,7 @@
 
 (defvar my-gptel--guard-allow-self-modification)
 
-;; Silence byte-compiler warning for function from 'ox' library
-(declare-function org-export-expand-include-keyword "ox" ())
+(declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
 
 ;;; --- Configuration ---
 
@@ -146,22 +145,12 @@ This is added to `kill-emacs-hook' so it fires automatically on exit."
 ;;; --- Cycle execution ---
 
 (defun darwin--load-profile ()
-  "Load darwin's agent profile from agents.d/darwin/prompt.org."
-  (let* ((agent-dir (expand-file-name "agents.d" user-emacs-directory))
-         (prompt-path (expand-file-name "darwin/prompt.org" agent-dir)))
-    (unless (file-exists-p prompt-path)
-      (error "Darwin profile not found at %s" prompt-path))
-    ;; Reuse the same profile reading function from agent_loader.el
-    (if (fboundp 'my-gptel-read-agent-profile)
-        (my-gptel-read-agent-profile prompt-path)
-      ;; Fallback: manual org-mode expansion
-      (require 'ox)
-      (with-temp-buffer
-        (setq default-directory (file-name-directory prompt-path))
-        (insert-file-contents prompt-path)
-        (org-mode)
-        (org-export-expand-include-keyword)
-        (buffer-string)))))
+  "Load darwin's agent profile from agents.d/darwin/prompt.org.
+Uses the shared `my-gptel--load-agent-profile' from delegate_tool.el,
+which validates the agent name, checks for path traversal, and
+expands #+INCLUDE directives."
+  (or (my-gptel--load-agent-profile "darwin")
+      (error "Darwin profile not found in agents.d/darwin/prompt.org")))
 
 (defun darwin--cycle-complete-p (buf &optional start end)
   "Check if the cycle is truly complete by scanning BUF for completion markers.

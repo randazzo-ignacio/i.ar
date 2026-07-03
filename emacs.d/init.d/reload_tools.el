@@ -27,6 +27,8 @@
 
 (require 'gptel)
 
+(declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
+
 ;;; --- reload_os ---
 
 (defun my-gptel-tool-reload-os ()
@@ -81,16 +83,18 @@ instead of the currently loaded one."
              ;; Extra safety: ensure filepath stays within agent-dir
              (_ (unless (string-prefix-p agent-dir (file-truename target-file))
                   (error "Path traversal blocked for agent reload")))
-             ;; Read the profile (expands #+INCLUDE directives)
-             (profile (my-gptel-read-agent-profile target-file))
-             (agent-basename (file-name-nondirectory target-file)))
+             ;; Read the profile via the shared loader (validates name,
+             ;; checks path traversal, expands #+INCLUDE directives)
+             (profile (my-gptel--load-agent-profile target-name)))
+        (unless profile
+          (error "Agent profile '%s' not found in agents.d/" target-name))
         ;; Update system prompt in current buffer
         (setq-local gptel-system-prompt profile)
         ;; Track the loaded agent file and name
         (setq-local my-gptel--current-agent-file target-file)
         (setq-local my-gptel--current-agent-name target-name)
         (format "SUCCESS: Reloaded agent profile '%s'. System message updated in current buffer (%d chars)."
-                agent-basename (length profile)))
+                target-name (length profile)))
     (error
      (format "ERROR reloading agent: %s" (error-message-string err)))))
 
