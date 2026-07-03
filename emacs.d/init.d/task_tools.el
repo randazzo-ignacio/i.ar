@@ -45,7 +45,7 @@
                 (file-name-directory my-gptel--current-agent-file)))))))
     (if agent-name
         (expand-file-name agent-name agent-dir)
-      (error "No agent loaded."))))
+      (error "No agent loaded. Load one with C-c a first."))))
 
 (defun my-gptel-tool-read-tasks ()
   "Read TODO.md and IDEAS.md from the current agent's directory.

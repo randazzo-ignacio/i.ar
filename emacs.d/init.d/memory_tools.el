@@ -35,6 +35,7 @@
 (require 'json)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'task_tools)  ; my-gptel--get-agent-dir (canonical agent dir resolver)
 
 ;;; --- Configuration ---
 
@@ -83,23 +84,15 @@ a concise rolling summary of the agent's memory.")
 
 ;;; --- Internal functions ---
 
-(defun my-gptel--memory-get-agent-dir ()
+;; Alias to the canonical implementation in task_tools.el.
+;; Both modules need to resolve the current agent's directory from
+;; buffer-local state (my-gptel--current-agent-name or
+;; my-gptel--current-agent-file). The logic is identical, so we
+;; delegate to the single source of truth.
+(defalias 'my-gptel--memory-get-agent-dir 'my-gptel--get-agent-dir
   "Return the directory path for the currently loaded agent.
-Based on my-gptel--current-agent-name or derived from the agent file path."
-  (let* ((agent-dir (expand-file-name "agents.d" user-emacs-directory))
-         (agent-name
-          (if (and (boundp 'my-gptel--current-agent-name)
-                   my-gptel--current-agent-name)
-              my-gptel--current-agent-name
-            ;; Fall back: derive from the prompt.org file path
-            (when (and (boundp 'my-gptel--current-agent-file)
-                       my-gptel--current-agent-file)
-              (file-name-nondirectory
-               (directory-file-name
-                (file-name-directory my-gptel--current-agent-file)))))))
-    (if agent-name
-        (expand-file-name agent-name agent-dir)
-      (error "No agent loaded. Load one with C-c a first."))))
+Based on my-gptel--current-agent-name or derived from the agent file path.
+This is an alias for `my-gptel--get-agent-dir' defined in task_tools.el.")
 
 (defun my-gptel--memory-extract-memories (agent-dir)
   "Read MEMORIES.md from AGENT-DIR. Returns the content string."

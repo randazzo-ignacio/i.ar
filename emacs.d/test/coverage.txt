@@ -1,11 +1,11 @@
 == Code coverage text report ==
 tool_display : Percent 96% [Relevant: 32 Covered: 31 Missed: 1]
-task_tools : Percent 91% [Relevant: 68 Covered: 62 Missed: 6]
+task_tools : Percent 100% [Relevant: 68 Covered: 68 Missed: 0]
 session_persistence : Percent 57% [Relevant: 99 Covered: 57 Missed: 42]
 replacement_tool : Percent 94% [Relevant: 39 Covered: 37 Missed: 2]
 reload_tools : Percent 62% [Relevant: 32 Covered: 20 Missed: 12]
 output_sanitizer : Percent 100% [Relevant: 25 Covered: 25 Missed: 0]
-memory_tools : Percent 39% [Relevant: 127 Covered: 50 Missed: 77]
+memory_tools : Percent 33% [Relevant: 115 Covered: 38 Missed: 77]
 loop_guard : Percent 100% [Relevant: 38 Covered: 38 Missed: 0]
 fs_tools : Percent 93% [Relevant: 59 Covered: 55 Missed: 4]
 file_guard : Percent 92% [Relevant: 25 Covered: 23 Missed: 2]
