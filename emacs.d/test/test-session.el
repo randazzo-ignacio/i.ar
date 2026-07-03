@@ -577,4 +577,54 @@ log a warning instead of crashing."
         ;; A warning should have been logged for the vanished file
         (should (cl-some (lambda (w) (string-match-p "vanished" w)) warnings))))))
 
+;;; --- List sessions TOCTOU robustness test ---
+
+(ert-deftest test-session-list-handles-vanished-file-after-sort ()
+  "my-gptel-list-sessions should not crash if a session file is deleted
+between my-gptel--sort-sessions-by-mtime and the mapcar that formats
+entries. The sort function filters vanished files, but a second TOCTOU
+race is possible if the file vanishes after sort but before
+file-attributes in the display mapcar. The display mapcar should
+handle nil attrs gracefully (skip with warning, not crash)."
+  (with-session-fixture
+    ;; Create a real session file
+    (with-temp-buffer
+      (text-mode)
+      (gptel-mode 1)
+      (insert "Session content")
+      (cl-letf (((symbol-function 'gptel--save-state) #'test-session--mock-gptel-save-state))
+        (my-gptel-save-session "session-existing")))
+    ;; Create a second file that will "vanish" after sort
+    (let ((ghost-path (expand-file-name "ghost-after-sort.gptel" my-gptel-sessions-dir)))
+      (with-temp-file ghost-path (insert "ghost"))
+      ;; Mock sort to return both files (bypass real sort filtering),
+      ;; then mock file-attributes to return nil for ghost in the
+      ;; display mapcar (simulating post-sort TOCTOU race).
+      (let (warnings)
+        (cl-letf* (((symbol-function 'my-gptel--sort-sessions-by-mtime)
+                    (lambda (files) files))
+                   ((symbol-function 'file-attributes)
+                    (lambda (f &rest _)
+                      (if (string-match-p "ghost-after-sort" f)
+                          nil
+                        ;; Return minimal attrs for real files
+                        (list nil 1 0 0 (current-time) nil nil nil 0))))
+                   ((symbol-function 'message)
+                    (lambda (fmt &rest args)
+                      (push (apply #'format fmt args) warnings))))
+          (my-gptel-list-sessions)
+          ;; Should not crash
+          (should (buffer-live-p (get-buffer "*gptel-sessions*")))
+          (with-current-buffer (get-buffer "*gptel-sessions*")
+            (let ((content (buffer-string)))
+              ;; session-existing should be displayed
+              (should (string-match-p "session-existing" content))
+              ;; ghost should NOT be displayed (nil attrs filtered)
+              (should-not (string-match-p "ghost-after-sort" content))))
+          ;; A warning should have been logged
+          (should (cl-some (lambda (w) (string-match-p "vanished" w)) warnings))))
+      ;; Clean up ghost file
+      (when (file-exists-p ghost-path)
+        (delete-file ghost-path)))))
+
 (provide 'test-session)

@@ -587,4 +587,81 @@ Tests that the \\(\n\\|\\'\\) anchor correctly matches at end of string."
     (insert "Summary done.\nCYCLE_COMPLETE")
     (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
 
+;;; --- Telegram success detection robustness tests ---
+
+(ert-deftest test-darwin-notify-telegram-detects-success-with-whitespace ()
+  "darwin--notify-telegram should detect success even with whitespace in JSON.
+The old substring check \"\\\"ok\\\":true\" would fail on \"\\\"ok\": true\"
+(with space after colon).  The new JSON parse handles this correctly."
+  (let ((darwin-telegram-bot-token "test-token")
+        (darwin-telegram-chat-id "123")
+        (logged-messages nil))
+    (cl-letf (((symbol-function 'call-process)
+               (test-darwin--mock-call-process
+                "{\"ok\": true, \"result\": {\"message_id\": 1}}"))
+              ((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) logged-messages))))
+      (darwin--notify-telegram "test"))
+    (should (cl-some (lambda (msg) (string-match-p "sent successfully" msg))
+                     logged-messages))
+    (should-not (cl-some (lambda (msg) (string-match-p "FAILED" msg))
+                         logged-messages))))
+
+(ert-deftest test-darwin-notify-telegram-no-false-positive-on-error-with-ok-substring ()
+  "darwin--notify-telegram should NOT detect success when error message contains ok.
+The old substring check \"\\\"ok\\\":true\" could false-positive if an
+error response contained the literal substring.  The new JSON parse
+checks the actual :ok field value, not a substring."
+  (let ((darwin-telegram-bot-token "test-token")
+        (darwin-telegram-chat-id "123")
+        (logged-messages nil))
+    (cl-letf (((symbol-function 'call-process)
+               (test-darwin--mock-call-process
+                "{\"ok\":false,\"error_code\":400,\"description\":\"\\\"ok\\\":true is not a valid request\"}"))
+              ((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) logged-messages))))
+      (darwin--notify-telegram "test"))
+    ;; Should detect failure despite the error description containing "\"ok\":true"
+    (should (cl-some (lambda (msg) (string-match-p "FAILED" msg))
+                     logged-messages))
+    (should-not (cl-some (lambda (msg) (string-match-p "sent successfully" msg))
+                         logged-messages))))
+
+(ert-deftest test-darwin-notify-telegram-detects-success-boolean-true ()
+  "darwin--notify-telegram should detect success when :ok is JSON true (not string).
+The new code checks (eq (plist-get parsed :ok) t).  JSON true maps to
+t in Emacs Lisp with default json-read, so this should work."
+  (let ((darwin-telegram-bot-token "test-token")
+        (darwin-telegram-chat-id "123")
+        (logged-messages nil))
+    (cl-letf (((symbol-function 'call-process)
+               (test-darwin--mock-call-process
+                "{\"ok\":true,\"result\":{\"message_id\":99}}"))
+              ((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) logged-messages))))
+      (darwin--notify-telegram "test"))
+    (should (cl-some (lambda (msg) (string-match-p "sent successfully" msg))
+                     logged-messages))))
+
+(ert-deftest test-darwin-notify-telegram-detects-failure-on-ok-false ()
+  "darwin--notify-telegram should detect failure when :ok is JSON false.
+JSON false maps to :json-false in Emacs Lisp, which is NOT eq to t.
+The check (eq (plist-get parsed :ok) t) should return nil, triggering
+the FAILED path."
+  (let ((darwin-telegram-bot-token "test-token")
+        (darwin-telegram-chat-id "123")
+        (logged-messages nil))
+    (cl-letf (((symbol-function 'call-process)
+               (test-darwin--mock-call-process
+                "{\"ok\":false,\"error_code\":403,\"description\":\"Forbidden\"}"))
+              ((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) logged-messages))))
+      (darwin--notify-telegram "test"))
+    (should (cl-some (lambda (msg) (string-match-p "FAILED" msg))
+                     logged-messages))))
+
 (provide 'test-darwin-cycle)

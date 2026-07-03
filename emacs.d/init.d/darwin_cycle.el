@@ -134,9 +134,23 @@ Silently skips if either is empty.  Logs success or failure."
                                        "-d" payload
                                        url)
                         (buffer-string))))
-          (if (string-match-p "\"ok\":true" result)
-              (message "[darwin] Telegram notification sent successfully")
-            (message "[darwin] Telegram notification FAILED: %s" result)))))))
+          ;; Parse the JSON response to check the :ok field rather than
+          ;; using substring matching.  This is more robust: a substring
+          ;; check like "\"ok\":true" could false-positive if the literal
+          ;; string appears inside an error message, and would false-negative
+          ;; if the API returns whitespace like "\"ok\": true".
+          (let ((ok nil))
+            (condition-case nil
+                (let ((parsed (with-temp-buffer
+                                (insert result)
+                                (goto-char (point-min))
+                                (let ((json-object-type 'plist))
+                                  (json-read)))))
+                  (setq ok (eq (plist-get parsed :ok) t)))
+              (error nil))
+            (if ok
+                (message "[darwin] Telegram notification sent successfully")
+              (message "[darwin] Telegram notification FAILED: %s" result))))))))
 
 (defun darwin--notify-on-exit ()
   "Send Telegram notification if `darwin-cycle-result-message' is set.
