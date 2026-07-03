@@ -8,6 +8,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'audit_log)
 
 ;;; --- Test fixtures ---
 
@@ -188,4 +189,64 @@ Temporarily rebinds `my-gptel--audit-log-path' to a temp file."
     ;; This should not signal an error
     (should (eq (my-gptel--audit-log "write_file" "/test.txt") nil))))
 
+;;; --- Log injection prevention tests ---
+
+(ert-deftest test-audit-sanitize-detail-newlines ()
+  "my-gptel--audit-sanitize-detail should replace newlines with visible \\n."
+  (should (string= (my-gptel--audit-sanitize-detail "line1\nline2")
+                   "line1\\nline2")))
+
+(ert-deftest test-audit-sanitize-detail-carriage-return ()
+  "my-gptel--audit-sanitize-detail should replace carriage returns with visible \\r."
+  (should (string= (my-gptel--audit-sanitize-detail "line1\rline2")
+                   "line1\\rline2")))
+
+(ert-deftest test-audit-sanitize-detail-mixed ()
+  "my-gptel--audit-sanitize-detail should handle mixed newlines and carriage returns."
+  (should (string= (my-gptel--audit-sanitize-detail "a\nb\rc\rd\n")
+                   "a\\nb\\rc\\rd\\n")))
+
+(ert-deftest test-audit-sanitize-detail-no-newlines ()
+  "my-gptel--audit-sanitize-detail should pass through strings without newlines."
+  (should (string= (my-gptel--audit-sanitize-detail "/some/path/file.txt")
+                   "/some/path/file.txt")))
+
+(ert-deftest test-audit-sanitize-detail-non-string ()
+  "my-gptel--audit-sanitize-detail should handle non-string input via prin1-to-string."
+  (should (string= (my-gptel--audit-sanitize-detail 42) "42")))
+
+(ert-deftest test-audit-sanitize-detail-empty-string ()
+  "my-gptel--audit-sanitize-detail should return empty string for empty input."
+  (should (string= (my-gptel--audit-sanitize-detail "") "")))
+
+(ert-deftest test-audit-sanitize-detail-only-newlines ()
+  "my-gptel--audit-sanitize-detail should handle string of only newlines."
+  (should (string= (my-gptel--audit-sanitize-detail "\n\n\n")
+                   "\\n\\n\\n")))
+
+(ert-deftest test-audit-log-prevents-newline-injection ()
+  "my-gptel--audit-log should not allow newlines in detail to inject fake entries.
+A filepath containing a newline should be sanitized to a single line,
+not split into two log entries."
+  (with-audit-fixture
+    (my-gptel--audit-log "write_file" "/safe\n[2099-01-01 00:00:00] fake | delete | /etc/passwd")
+    (let ((content (test-audit--read-log)))
+      ;; The injected fake entry should NOT appear as a separate line
+      (let ((lines (split-string content "\n" t)))
+        (should (= (length lines) 1))
+        ;; The newline should be escaped, not literal
+        (should (string-match-p "\\\\n" (car lines)))))))
+
+(ert-deftest test-audit-log-exec-prevents-newline-injection ()
+  "my-gptel--audit-log-exec should sanitize commands with embedded newlines.
+A command containing a newline should not inject a fake audit entry."
+  (with-audit-fixture
+    (my-gptel--audit-log-exec "echo hello\n[2099-01-01 00:00:00] fake | delete | /etc" 0)
+    (let ((content (test-audit--read-log)))
+      (let ((lines (split-string content "\n" t)))
+        (should (= (length lines) 1))
+        ;; The newline should be escaped
+        (should (string-match-p "\\\\n" (car lines)))))))
+
 (provide 'test-audit)
+;;; test-audit.el ends here

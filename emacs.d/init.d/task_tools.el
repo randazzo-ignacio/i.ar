@@ -31,8 +31,33 @@
 
 ;;; --- read_tasks ---
 
+(defun my-gptel--valid-agent-name-p (name)
+  "Return non-nil if NAME is a valid agent name.
+Valid names consist only of alphanumeric characters, hyphens, and
+underscores, with at least one character.  Uses string anchors
+to prevent multi-line bypass (line anchors match at each newline
+boundary, so a string like \"valid\\n../../etc\" would pass
+^...$ but is correctly rejected by \\`...\\')."
+  (and (stringp name)
+       (string-match-p "\\`[a-zA-Z0-9_-]+\\'" name)))
+
+(defun my-gptel--validate-agent-name (name)
+  "Validate that NAME is a safe agent name, or signal an error.
+Returns NAME if valid."
+  (unless (my-gptel--valid-agent-name-p name)
+    (error "Invalid agent name: '%s'. Only letters, digits, hyphens, and underscores are allowed." name))
+  name)
+
 (defun my-gptel--get-agent-dir ()
-  "Return the directory path for the currently loaded agent."
+  "Return the directory path for the currently loaded agent.
+Validates the agent name against path traversal before constructing
+the path.  This is defense-in-depth: the name is typically set by
+`my-gptel-load-agent' which already validates, and the variable is
+declared `safe-local-variable' with a validating predicate
+(`my-gptel--safe-agent-name-p' in session_persistence.el), so
+tampered session files are filtered at the source.  This function
+provides defense-in-depth in case the predicate is bypassed or
+the variable is set by other means."
   (let* ((agent-dir (expand-file-name "agents.d" user-emacs-directory))
          (agent-name
           (if (and (boundp 'my-gptel--current-agent-name)
@@ -44,8 +69,18 @@
                (directory-file-name
                 (file-name-directory my-gptel--current-agent-file)))))))
     (if agent-name
-        (expand-file-name agent-name agent-dir)
-      (error "No agent loaded."))))
+        (progn
+          (my-gptel--validate-agent-name agent-name)
+          (let ((resolved (expand-file-name agent-name agent-dir)))
+            ;; Defense-in-depth: verify the resolved path hasn't escaped
+            ;; agents.d via symlinks.  The regex blocks direct traversal
+            ;; characters, but a symlink at agents.d/<name> -> /etc would
+            ;; bypass the regex.  This matches the containment check in
+            ;; my-gptel--load-agent-profile (delegate_tool.el).
+            (unless (string-prefix-p agent-dir (file-truename resolved))
+              (error "Path traversal attempt blocked for agent: '%s'" agent-name))
+            resolved))
+      (error "No agent loaded. Load one with C-c a first."))))
 
 (defun my-gptel-tool-read-tasks ()
   "Read TODO.md and IDEAS.md from the current agent's directory.
@@ -91,8 +126,7 @@ If omitted, merges all per-agent HISTORY.log files sorted by timestamp."
         (if (and agent-name (stringp agent-name) (string-match-p "\\S-" agent-name))
             ;; Single agent history
             (progn
-              (unless (string-match-p "^[a-zA-Z0-9_-]+$" agent-name)
-                (error "Invalid agent name: '%s'" agent-name))
+              (my-gptel--validate-agent-name agent-name)
               (let ((log-file (expand-file-name (format "%s/HISTORY.log" agent-name) agents-dir)))
                 (if (file-exists-p log-file)
                     (with-temp-buffer
@@ -105,7 +139,7 @@ If omitted, merges all per-agent HISTORY.log files sorted by timestamp."
                    (lambda (name)
                      (let ((log-path (expand-file-name (format "%s/HISTORY.log" name) agents-dir)))
                        (file-exists-p log-path)))
-                   (directory-files agents-dir nil "^[a-zA-Z0-9_-]+$" t)))
+                   (directory-files agents-dir nil "\\`[a-zA-Z0-9_-]+\\'" t)))
                  (all-entries nil))
             (dolist (agent-dir agent-dirs)
               (let ((log-file (expand-file-name (format "%s/HISTORY.log" agent-dir) agents-dir)))

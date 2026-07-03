@@ -50,34 +50,35 @@ Returns nil if parentheses are balanced."
 Uses `byte-compile-file' (which defaults to not loading) with a temp .elc
 destination to avoid modifying the source or leaving .elc artifacts.
 Captures the *Compile-Log* buffer content."
-  (let ((dest-file (concat (make-temp-file "elc-check-") ".elc"))
+  (let ((dest-file (make-temp-file "elc-check-" nil ".elc"))
         (log-buf-name "*Compile-Log*")
         (result nil))
-    (condition-case err
-        (let ((byte-compile-verbose nil)
-              (byte-compile-warnings t)
-              (byte-compile-dest-file-function (lambda (_f) dest-file)))
-          ;; Clear the compile log
-          (when (get-buffer log-buf-name)
-            (with-current-buffer log-buf-name
-              (let ((inhibit-read-only t))
-                (erase-buffer))))
-          ;; Compile without loading the result (LOAD defaults to nil)
-          (byte-compile-file filepath)
-          ;; Capture log content
-          (when (get-buffer log-buf-name)
-            (with-current-buffer log-buf-name
-              (let ((content (buffer-string)))
-                (when (string-match-p "\\S-" content)
-                  (setq result (string-trim content))))
-              ;; Clean up for next invocation
-              (let ((inhibit-read-only t))
-                (erase-buffer)))))
-      (error
-       (setq result (format "Byte-compile error: %s" (error-message-string err)))))
-    ;; Clean up temp .elc
-    (when (file-exists-p dest-file)
-      (delete-file dest-file))
+    (unwind-protect
+        (condition-case err
+            (let ((byte-compile-verbose nil)
+                  (byte-compile-warnings t)
+                  (byte-compile-dest-file-function (lambda (_f) dest-file)))
+              ;; Clear the compile log
+              (when (get-buffer log-buf-name)
+                (with-current-buffer log-buf-name
+                  (let ((inhibit-read-only t))
+                    (erase-buffer))))
+              ;; Compile without loading the result (LOAD defaults to nil)
+              (byte-compile-file filepath)
+              ;; Capture log content
+              (when (get-buffer log-buf-name)
+                (with-current-buffer log-buf-name
+                  (let ((content (buffer-string)))
+                    (when (string-match-p "\\S-" content)
+                      (setq result (string-trim content))))
+                  ;; Clean up for next invocation
+                  (let ((inhibit-read-only t))
+                    (erase-buffer)))))
+          (error
+           (setq result (format "Byte-compile error: %s" (error-message-string err)))))
+      ;; Clean up temp .elc (unwind-protect guarantees cleanup on non-local exits)
+      (when (file-exists-p dest-file)
+        (delete-file dest-file)))
     result))
 
 (defun my-gptel-tool-check-elisp (filepath)

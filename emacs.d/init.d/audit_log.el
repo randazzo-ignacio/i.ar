@@ -40,18 +40,38 @@
       my-gptel--current-agent-name
     "unknown"))
 
+(defun my-gptel--audit-sanitize-detail (detail)
+  "Sanitize DETAIL for single-line audit log entry.
+Replaces newlines and carriage returns with their visible escaped
+representation to prevent log injection -- without this, a filepath
+or command containing newlines could inject fake audit log entries."
+  (let ((s (if (stringp detail) detail (prin1-to-string detail))))
+    (setq s (replace-regexp-in-string "\n" "\\\\n" s))
+    (setq s (replace-regexp-in-string "\r" "\\\\r" s))
+    s))
+
 (defun my-gptel--audit-log (tool detail)
   "Append an audit entry for TOOL with DETAIL to the audit log.
 Does not signal errors -- audit logging is best-effort and must
-never break the operation it is auditing."
+never break the operation it is auditing.
+DETAIL is sanitized to prevent log injection via embedded newlines.
+TOOL is expected to be a hardcoded string literal (e.g. \"write_file\")
+and AGENT comes from `my-gptel--current-agent-name' which is validated
+by `my-gptel--safe-agent-name-p' -- neither is user-controlled, so
+neither is sanitized.  If this invariant changes, sanitize them too."
   (condition-case nil
       (let ((timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
-            (agent (my-gptel--audit-get-agent-name)))
-        ;; Ensure the workspace directory exists before writing
-        (make-directory (file-name-directory my-gptel--audit-log-path) t)
-        (with-temp-buffer
-          (insert (format "[%s] %s | %s | %s\n" timestamp agent tool detail))
-          (write-region (buffer-string) nil my-gptel--audit-log-path t 'silent)))
+            (agent (my-gptel--audit-get-agent-name))
+            (safe-detail (my-gptel--audit-sanitize-detail detail)))
+        ;; Ensure the workspace directory exists before writing.
+        ;; Check file-exists-p first to avoid a stat syscall on every call
+        ;; after the directory has been created.
+        (let ((log-dir (file-name-directory my-gptel--audit-log-path)))
+          (unless (file-exists-p log-dir)
+            (make-directory log-dir t)))
+        ;; write-region accepts a string directly -- no temp buffer needed.
+        (write-region (format "[%s] %s | %s | %s\n" timestamp agent tool safe-detail)
+                      nil my-gptel--audit-log-path t 'silent))
     (error nil)))
 
 (defun my-gptel--audit-log-write (filepath)

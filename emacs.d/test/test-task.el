@@ -128,4 +128,77 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
       (should (stringp result))
       (should (string-match-p "Invalid agent name" result)))))
 
+;;; --- get-agent-dir validation tests ---
+
+(ert-deftest test-task-get-agent-dir-valid-name ()
+  "my-gptel--get-agent-dir should return the agent directory path."
+  (with-task-fixture
+    (let ((result (my-gptel--get-agent-dir)))
+      (should (stringp result))
+      (should (string-match-p "testagent" result)))))
+
+(ert-deftest test-task-get-agent-dir-no-agent-loaded ()
+  "my-gptel--get-agent-dir should error when no agent is loaded."
+  (with-task-fixture
+    (let (my-gptel--current-agent-name
+          my-gptel--current-agent-file)
+      (should-error (my-gptel--get-agent-dir)))))
+
+(ert-deftest test-task-get-agent-dir-rejects-path-traversal ()
+  "my-gptel--get-agent-dir should reject agent names with path traversal."
+  (with-task-fixture
+    (let ((my-gptel--current-agent-name "../../etc/passwd"))
+      (should-error (my-gptel--get-agent-dir)))))
+
+(ert-deftest test-task-get-agent-dir-rejects-slashes ()
+  "my-gptel--get-agent-dir should reject agent names with slashes."
+  (with-task-fixture
+    (let ((my-gptel--current-agent-name "foo/bar"))
+      (should-error (my-gptel--get-agent-dir)))))
+
+(ert-deftest test-task-get-agent-dir-rejects-dots ()
+  "my-gptel--get-agent-dir should reject agent names with dots."
+  (with-task-fixture
+    (let ((my-gptel--current-agent-name "foo.bar"))
+      (should-error (my-gptel--get-agent-dir)))))
+
+(ert-deftest test-task-get-agent-dir-rejects-spaces ()
+  "my-gptel--get-agent-dir should reject agent names with spaces."
+  (with-task-fixture
+    (let ((my-gptel--current-agent-name "foo bar"))
+      (should-error (my-gptel--get-agent-dir)))))
+
+(ert-deftest test-task-get-agent-dir-falls-back-to-agent-file ()
+  "my-gptel--get-agent-dir should derive agent name from agent file path."
+  (with-task-fixture
+    (let (my-gptel--current-agent-name
+          (my-gptel--current-agent-file
+           (expand-file-name "agents.d/testagent/prompt.org" test-task--tmpdir)))
+      (let ((result (my-gptel--get-agent-dir)))
+        (should (stringp result))
+        (should (string-match-p "testagent" result))))))
+
+(ert-deftest test-task-get-agent-dir-fallback-traversal-file ()
+  "my-gptel--get-agent-dir should safely handle traversal in agent-file path.
+The derived name from a traversal path like ../../etc/passwd/prompt.org
+is 'passwd' (last directory component), which passes the regex but
+resolves to agents.d/passwd -- not a traversal.  Verify no '..' in result."
+  (with-task-fixture
+    (let (my-gptel--current-agent-name
+          (my-gptel--current-agent-file "../../etc/passwd/prompt.org"))
+      (let ((result (my-gptel--get-agent-dir)))
+        (should (stringp result))
+        (should (string-match-p "agents\\.d" result))
+        (should-not (string-match-p "\\.\\." result))))))
+
+(ert-deftest test-task-get-agent-dir-empty-name-errors ()
+  "my-gptel--get-agent-dir should error when agent name is empty string.
+Empty string is truthy in Elisp, so it enters the validation branch
+where the regex (requires at least one char) rejects it."
+  (with-task-fixture
+    (let ((my-gptel--current-agent-name "")
+          (my-gptel--current-agent-file
+           (expand-file-name "agents.d/testagent/prompt.org" test-task--tmpdir)))
+      (should-error (my-gptel--get-agent-dir)))))
+
 (provide 'test-task)

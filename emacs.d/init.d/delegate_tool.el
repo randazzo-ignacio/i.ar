@@ -31,8 +31,10 @@
 (require 'gptel)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'task_tools)
 
 (declare-function my-gptel-read-agent-profile "agent_loader" (file))
+(declare-function my-gptel--validate-agent-name "task_tools" (name))
 
 ;;; Buffer-local state for tracking delegation depth
 
@@ -57,8 +59,7 @@ actually calling them from terminating prematurely.")
 (defun my-gptel--load-agent-profile (agent-name)
   "Load an agent profile by name from agents.d/<name>/prompt.org.
 Returns the profile string or nil if not found."
-  (unless (string-match-p "^[a-zA-Z0-9_-]+$" agent-name)
-    (error "Invalid agent name: '%s'" agent-name))
+  (my-gptel--validate-agent-name agent-name)
   (let* ((agent-dir (expand-file-name "agents.d" user-emacs-directory))
          (prompt-path (expand-file-name (format "%s/prompt.org" agent-name) agent-dir)))
     (unless (string-prefix-p agent-dir (file-truename prompt-path))
@@ -68,26 +69,38 @@ Returns the profile string or nil if not found."
 
 ;;; Timeout handler (extracted to reduce nesting depth)
 
-(defun my-gptel--delegate-timeout-handler (buf callback agent completed
+(defun my-gptel--delegate-timeout-handler (buf callback agent completed-sym
                                                resp-start timeout-secs)
   "Handle a delegate timeout.
 This function is called by a timer when the sub-agent hasn't completed
 within TIMEOUT-SECS.  It aborts the gptel request and calls CALLBACK
-with a timeout message or partial response."
+with a timeout message or partial response.
+
+COMPLETED-SYM is a symbol whose value is checked dynamically (not a
+static boolean).  This is critical: gptel-abort may trigger the
+completion hook which sets the symbol to t before the fallback lambda
+runs.  Using a symbol ensures the fallback sees the updated value
+and avoids a double-callback race."
   (cond
    ((not (buffer-live-p buf))
-    (unless completed
+    (unless (symbol-value completed-sym)
+      (set completed-sym t)
       (funcall callback
                (format "Delegate '%s' buffer was killed before completion." agent))))
-   (completed)  ; Already done, nothing to do
+   ((symbol-value completed-sym))  ; Already done, nothing to do
    (t
     (gptel-abort buf)
     ;; Fallback: if gptel-abort doesn't trigger the post-response hook,
-    ;; force completion after a brief delay.
+    ;; force completion after a brief delay.  Check the symbol's current
+    ;; value (not a captured snapshot) so that if the completion hook
+    ;; fired between gptel-abort and this fallback, we skip the callback.
+    ;; Set completed-sym to t before calling the callback to prevent a
+    ;; double-callback if the completion hook fires after the fallback.
     (run-with-timer
      1 nil
      (lambda ()
-       (unless completed
+       (unless (symbol-value completed-sym)
+         (set completed-sym t)
          (let ((partial
                 (when (buffer-live-p buf)
                   (with-current-buffer buf
@@ -203,8 +216,10 @@ in text from terminating prematurely with a non-result."
           (when (symbol-value timer-sym)
             (cancel-timer (symbol-value timer-sym)))
           (let ((response
-                 (if (and (numberp start) (numberp end) (< start end))
-                     (buffer-substring-no-properties start end)
+                 (if (and (integerp start) (integerp end) (< start end))
+                     (buffer-substring-no-properties
+                      (min (max start (point-min)) (point-max))
+                      (min (max end (point-min)) (point-max)))
                    "")))
             (run-with-timer
              5 nil
@@ -238,8 +253,10 @@ in text from terminating prematurely with a non-result."
           (when (symbol-value timer-sym)
             (cancel-timer (symbol-value timer-sym)))
           (let ((response
-                 (if (and (numberp start) (numberp end) (< start end))
-                     (buffer-substring-no-properties start end)
+                 (if (and (integerp start) (integerp end) (< start end))
+                     (buffer-substring-no-properties
+                      (min (max start (point-min)) (point-max))
+                      (min (max end (point-min)) (point-max)))
                    "")))
             (message "[delegate] %s reached max text-only turns (%d), returning last response."
                      agent max-turns)
@@ -351,7 +368,7 @@ so the user can watch progress in real time."
                 timeout-secs nil
                 (lambda ()
                   (my-gptel--delegate-timeout-handler
-                   buf callback agent (symbol-value completed-sym)
+                   buf callback agent completed-sym
                    resp-start timeout-secs))))
 
           ;; Insert the prompt text into the buffer and send.
@@ -360,7 +377,8 @@ so the user can watch progress in real time."
           ;; Initialize stream position tracker at end of prompt text.
           ;; Streaming response will be inserted after this point by gptel.
           (set stream-pos-sym (point-marker))
-          (gptel-send))))))
+          (gptel-send))))
+    buf))
 
 ;; Register the delegate tool (async)
 (add-to-list 'gptel-tools

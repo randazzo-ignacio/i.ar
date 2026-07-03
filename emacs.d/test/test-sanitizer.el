@@ -41,6 +41,71 @@
   (let ((result (my-gptel--strip-control-chars "Clean text with no control chars.")))
     (should (string= result "Clean text with no control chars."))))
 
+(ert-deftest test-sanitizer-strip-zero-width-space ()
+  "my-gptel--strip-control-chars should remove zero-width space (U+200B)."
+  (let ((result (my-gptel--strip-control-chars (concat "hello" "\u200b" "world"))))
+    (should (string= result "helloworld"))))
+
+(ert-deftest test-sanitizer-strip-zero-width-joiner ()
+  "my-gptel--strip-control-chars should remove zero-width joiner (U+200D)."
+  (let ((result (my-gptel--strip-control-chars (concat "hello" "\u200d" "world"))))
+    (should (string= result "helloworld"))))
+
+(ert-deftest test-sanitizer-strip-bom ()
+  "my-gptel--strip-control-chars should remove BOM (U+FEFF)."
+  (let ((result (my-gptel--strip-control-chars (concat "\ufeff" "hello"))))
+    (should (string= result "hello"))))
+
+(ert-deftest test-sanitizer-strip-rtl-override ()
+  "my-gptel--strip-control-chars should remove RTL override (U+202E)."
+  (let ((result (my-gptel--strip-control-chars (concat "hello" "\u202e" "world"))))
+    (should (string= result "helloworld"))))
+
+(ert-deftest test-sanitizer-strip-ltr-override ()
+  "my-gptel--strip-control-chars should remove LTR override (U+202D)."
+  (let ((result (my-gptel--strip-control-chars (concat "hello" "\u202d" "world"))))
+    (should (string= result "helloworld"))))
+
+(ert-deftest test-sanitizer-strip-bidi-embedding ()
+  "my-gptel--strip-control-chars should remove bidi embedding (U+202A, U+202B)."
+  (let ((result (my-gptel--strip-control-chars
+                 (concat "a" "\u202a" "b" "\u202b" "c"))))
+    (should (string= result "abc"))))
+
+(ert-deftest test-sanitizer-strip-bidi-isolate ()
+  "my-gptel--strip-control-chars should remove bidi isolate (U+2066, U+2067)."
+  (let ((result (my-gptel--strip-control-chars
+                 (concat "a" "\u2066" "b" "\u2067" "c"))))
+    (should (string= result "abc"))))
+
+(ert-deftest test-sanitizer-strip-lrm-rlm ()
+  "my-gptel--strip-control-chars should remove LRM (U+200E) and RLM (U+200F)."
+  (let ((result (my-gptel--strip-control-chars
+                 (concat "a" "\u200e" "b" "\u200f" "c"))))
+    (should (string= result "abc"))))
+
+(ert-deftest test-sanitizer-strip-word-joiner ()
+  "my-gptel--strip-control-chars should remove word joiner (U+2060)."
+  (let ((result (my-gptel--strip-control-chars (concat "hello" "\u2060" "world"))))
+    (should (string= result "helloworld"))))
+
+(ert-deftest test-sanitizer-strip-mixed-zero-width ()
+  "my-gptel--strip-control-chars should remove multiple different zero-width chars."
+  (let ((result (my-gptel--strip-control-chars
+                 (concat "a" "\u200b" "b" "\u200c" "c" "\u200d" "d" "\ufeff" "e"))))
+    (should (string= result "abcde"))))
+
+(ert-deftest test-sanitizer-strip-mixed-zero-width-and-bidi ()
+  "my-gptel--strip-control-chars should strip both zero-width and bidi chars together."
+  (let ((result (my-gptel--strip-control-chars
+                 (concat "a" "\u200b" "b" "\u202e" "c" "\u200d" "d" "\u202d" "e"))))
+    (should (string= result "abcde"))))
+
+(ert-deftest test-sanitizer-preserves-normal-unicode ()
+  "my-gptel--strip-control-chars should not strip legitimate Unicode text."
+  (let ((result (my-gptel--strip-control-chars "Japanese \u65e5\u672c\u8a9e cafe \u00e9")))
+    (should (string= result "Japanese \u65e5\u672c\u8a9e cafe \u00e9"))))
+
 ;;; --- Wrapper tag neutralization tests ---
 
 (ert-deftest test-sanitizer-neutralize-system-tags ()
@@ -158,6 +223,14 @@
     (should (string-match-p "normal data" result))
     ;; Envelope present
     (should (string-match-p "SANITIZED EXTERNAL DATA" result))))
+
+(ert-deftest test-sanitize-external-output-strips-zero-width ()
+  "my-gptel--sanitize-external-output should strip zero-width and bidi chars."
+  (let ((result (my-gptel--sanitize-external-output
+                 (concat "hello" "\u200b" "\u202e" "world"))))
+    (should-not (string-match-p "\u200b" result))
+    (should-not (string-match-p "\u202e" result))
+    (should (string-match-p "helloworld" result))))
 
 ;;; --- Conditional exec output wrapper tests ---
 

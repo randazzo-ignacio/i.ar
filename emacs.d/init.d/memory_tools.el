@@ -35,6 +35,8 @@
 (require 'json)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'task_tools)  ; my-gptel--get-agent-dir (canonical agent dir resolver)
+(declare-function my-gptel-tool-reload-agent "reload_tools" (&optional agent-name))
 
 ;;; --- Configuration ---
 
@@ -83,23 +85,15 @@ a concise rolling summary of the agent's memory.")
 
 ;;; --- Internal functions ---
 
-(defun my-gptel--memory-get-agent-dir ()
+;; Alias to the canonical implementation in task_tools.el.
+;; Both modules need to resolve the current agent's directory from
+;; buffer-local state (my-gptel--current-agent-name or
+;; my-gptel--current-agent-file). The logic is identical, so we
+;; delegate to the single source of truth.
+(defalias 'my-gptel--memory-get-agent-dir 'my-gptel--get-agent-dir
   "Return the directory path for the currently loaded agent.
-Based on my-gptel--current-agent-name or derived from the agent file path."
-  (let* ((agent-dir (expand-file-name "agents.d" user-emacs-directory))
-         (agent-name
-          (if (and (boundp 'my-gptel--current-agent-name)
-                   my-gptel--current-agent-name)
-              my-gptel--current-agent-name
-            ;; Fall back: derive from the prompt.org file path
-            (when (and (boundp 'my-gptel--current-agent-file)
-                       my-gptel--current-agent-file)
-              (file-name-nondirectory
-               (directory-file-name
-                (file-name-directory my-gptel--current-agent-file)))))))
-    (if agent-name
-        (expand-file-name agent-name agent-dir)
-      (error "No agent loaded. Load one with C-c a first."))))
+Based on my-gptel--current-agent-name or derived from the agent file path.
+This is an alias for `my-gptel--get-agent-dir' defined in task_tools.el.")
 
 (defun my-gptel--memory-extract-memories (agent-dir)
   "Read MEMORIES.md from AGENT-DIR. Returns the content string."
@@ -115,14 +109,19 @@ Based on my-gptel--current-agent-name or derived from the agent file path."
 Returns the plain text of the buffer up to point-max, with gptel
 text properties stripped. If the conversation exceeds
 `my-gptel-memory-max-conversation-chars', only the most recent portion
-is retained (truncated from the beginning)."
-  (let ((text (buffer-substring-no-properties (point-min) (point-max))))
-    (if (> (length text) my-gptel-memory-max-conversation-chars)
-        (let ((truncated
-               (substring text (- (length text) my-gptel-memory-max-conversation-chars))))
-          (format "[...conversation truncated to last %d chars...]\n%s"
-                  my-gptel-memory-max-conversation-chars truncated))
-      text)))
+is retained (truncated from the beginning).
+
+Uses `save-restriction' + `widen' to ensure the full buffer content
+is extracted even when the buffer is narrowed."
+  (save-restriction
+    (widen)
+    (let ((text (buffer-substring-no-properties (point-min) (point-max))))
+      (if (> (length text) my-gptel-memory-max-conversation-chars)
+          (let ((truncated
+                 (substring text (- (length text) my-gptel-memory-max-conversation-chars))))
+            (format "[...conversation truncated to last %d chars...]\n%s"
+                    my-gptel-memory-max-conversation-chars truncated))
+        text))))
 
 (defun my-gptel--memory-build-payload (current-memories conversation)
   "Build the JSON payload string for the Ollama /api/chat endpoint.
@@ -161,75 +160,106 @@ conversations with tool I/O can easily produce payloads exceeding
 this limit, causing execve to fail with E2BIG."
   (let* ((host (gptel-backend-host gptel-backend))
          (url (format "http://%s/api/chat" host))
-         (buf (generate-new-buffer " *gptel-memory-summary*"))
+         (buf nil)
          (start-time (current-time))
          (deadline (time-add start-time (seconds-to-time timeout)))
          (done nil)
          (exit-code nil)
          (proc nil)
-         ;; Write payload to temp file to avoid ARG_MAX / MAX_ARG_STRLEN limits
-         (payload-file (make-temp-file "gptel-payload-")))
-    ;; Write payload to temp file
-    (with-temp-file payload-file
-      (insert payload))
-    (setq proc
-          (make-process
-           :name "gptel-memory-curl"
-           :buffer buf
-           :command (list "curl" "-s" "-X" "POST" url
-                          "-H" "Content-Type: application/json"
-                          "-d" (format "@%s" payload-file))
-           :sentinel
-           (lambda (p _event)
-             (when (memq (process-status p) '(exit signal))
-               (setq exit-code (process-exit-status p))
-               (setq done t)))))
-    (while (and (not done)
-                (process-live-p proc)
-                (time-less-p (current-time) deadline))
-      (accept-process-output nil 0.1))
+         (payload-file nil))
     (unwind-protect
-        (let ((raw-output (with-current-buffer buf (buffer-string))))
-          (cond
-           ((not done)
-            (delete-process proc)
-            (let ((partial (with-current-buffer buf (buffer-string))))
-              (if (string-match-p "\\S-" partial)
-                  (format "Error: Timeout after %ds. Partial output:\n%s" timeout partial)
-                (format "Error: Timeout after %ds. No output received." timeout))))
-           ((and exit-code (/= exit-code 0))
-            (format "Error: curl exited with code %d. Output:\n%s" exit-code raw-output))
-           (t
-            (condition-case err
-                (let ((json-object-type 'plist)
-                      (json-array-type 'vector))
-                  (with-temp-buffer
-                    (insert raw-output)
-                    (goto-char (point-min))
-                    (let* ((parsed (json-read))
-                           (message-obj (plist-get parsed :message)))
-                      (if message-obj
-                          (or (plist-get message-obj :content)
-                              (format "Error: Empty message content. Raw:\n%s" raw-output))
-                        (format "Error: No message in response. Raw:\n%s" raw-output)))))
-              (error
-               (format "Error parsing JSON: %s\nRaw output:\n%s"
-                       (error-message-string err) raw-output))))))
-      (when (buffer-live-p buf)
+        (progn
+          ;; Create resources inside unwind-protect so cleanup always runs,
+          ;; even if generate-new-buffer or make-temp-file fails.
+          (setq buf (generate-new-buffer " *gptel-memory-summary*"))
+          (setq payload-file (make-temp-file "gptel-payload-"))
+          ;; Write payload to temp file to avoid ARG_MAX / MAX_ARG_STRLEN limits
+          (with-temp-file payload-file
+            (insert payload))
+          (setq proc
+                (make-process
+                 :name "gptel-memory-curl"
+                 :buffer buf
+                 :command (list "curl" "-s" "-X" "POST" url
+                                "-H" "Content-Type: application/json"
+                                "-d" (concat "@" payload-file))
+                 :sentinel
+                 (lambda (p _event)
+                   (when (memq (process-status p) '(exit signal))
+                     (setq exit-code (process-exit-status p))
+                     (setq done t)))))
+          (while (and (not done)
+                      (process-live-p proc)
+                      (time-less-p (current-time) deadline))
+            (accept-process-output nil 0.1))
+          (let ((raw-output (with-current-buffer buf (buffer-string))))
+            (cond
+             ((not done)
+              (delete-process proc)
+              (let ((partial (with-current-buffer buf (buffer-string))))
+                (if (string-match-p "\\S-" partial)
+                    (format "Error: Timeout after %ds. Partial output:\n%s" timeout partial)
+                  (format "Error: Timeout after %ds. No output received." timeout))))
+             ((and exit-code (/= exit-code 0))
+              (format "Error: curl exited with code %d. Output:\n%s" exit-code raw-output))
+             (t
+              (my-gptel--memory-parse-ollama-response raw-output)))))
+      ;; Cleanup: always kill process, buffer, and temp file, even if
+      ;; make-process or with-temp-file signals an error.
+      (when (and proc (process-live-p proc))
+        (delete-process proc))
+      (when (and buf (buffer-live-p buf))
         (kill-buffer buf))
-      (when (file-exists-p payload-file)
+      (when (and payload-file (file-exists-p payload-file))
         (delete-file payload-file)))))
+
+(defun my-gptel--memory-parse-ollama-response (raw-output)
+  "Parse RAW-OUTPUT (JSON string from Ollama /api/chat).
+Returns the response content string, or an error string starting
+with \"Error:\" if the response is malformed."
+  (condition-case err
+      (let ((json-object-type 'plist)
+            (json-array-type 'vector))
+        (with-temp-buffer
+          (insert raw-output)
+          (goto-char (point-min))
+          (let* ((parsed (json-read))
+                 (message-obj (plist-get parsed :message)))
+            (if message-obj
+                (let ((content (plist-get message-obj :content)))
+                  (if (and (stringp content) (not (string-empty-p content)))
+                      content
+                    (format "Error: Empty or non-string message content. Raw:\n%s" raw-output)))
+              (format "Error: No message in response. Raw:\n%s" raw-output)))))
+    (error
+     (format "Error: parsing JSON: %s\nRaw output:\n%s"
+             (error-message-string err) raw-output))))
 
 (defun my-gptel--memory-write-memories (agent-dir new-memories)
   "Write NEW-MEMORIES to MEMORIES.md in AGENT-DIR.
-Uses atomic write (temp file + rename) for safety."
+Uses atomic write (temp file + rename) for safety.
+Returns a string starting with \"Success:\" or \"Error:\".
+The temp file is cleaned up on failure via unwind-protect."
   (let* ((memories-file (expand-file-name "MEMORIES.md" agent-dir))
-         (tmp-file (make-temp-file "gptel-memory-")))
-    (with-temp-file tmp-file
-      (insert new-memories)
-      (insert "\n"))
-    (rename-file tmp-file memories-file t)
-    (format "SUCCESS: Updated MEMORIES.md in %s" agent-dir)))
+         (tmp-file nil))
+    (unwind-protect
+        (condition-case err
+            (progn
+              (setq tmp-file (make-temp-file "gptel-memory-"))
+              (with-temp-file tmp-file
+                (insert new-memories)
+                (insert "\n"))
+              (rename-file tmp-file memories-file t)
+              ;; Rename succeeded -- mark nil so cleanup skips it.
+              (setq tmp-file nil)
+              (format "Success: Updated MEMORIES.md in '%s'" agent-dir))
+          (error
+           (format "Error: Failed to write MEMORIES.md: %s"
+                   (error-message-string err))))
+      ;; Cleanup: delete temp file if it still exists (rename failed,
+      ;; with-temp-file failed, or make-temp-file failed after creating it).
+      (when (and tmp-file (file-exists-p tmp-file))
+        (ignore-errors (delete-file tmp-file))))))
 
 (defun my-gptel--memory-count-entries (memories-text)
   "Count the number of bullet-point entries in MEMORIES-TEXT."
@@ -269,12 +299,16 @@ memories take effect immediately."
             (let* ((new-memories (string-trim result))
                    (entry-count (my-gptel--memory-count-entries new-memories))
                    (update-result (my-gptel--memory-write-memories agent-dir new-memories)))
-              (my-gptel-tool-reload-agent)
-              (message "[Memories updated: %d entries written to %s/MEMORIES.md]"
-                        entry-count
-                        (file-name-nondirectory
-                         (directory-file-name agent-dir)))
-              (format "%s. %d entries written." update-result entry-count)))))
+              (if (string-prefix-p "Error:" update-result)
+                  (progn
+                    (message "%s" update-result)
+                    (user-error "%s" update-result))
+                (my-gptel-tool-reload-agent)
+                (message "[Memories updated: %d entries written to %s/MEMORIES.md]"
+                          entry-count
+                          (file-name-nondirectory
+                           (directory-file-name agent-dir)))
+                (format "%s. %d entries written." update-result entry-count))))))
     (error
      (message "Memory summarization failed: %s" (error-message-string err))
      (user-error "Memory summarization failed: %s" (error-message-string err)))))

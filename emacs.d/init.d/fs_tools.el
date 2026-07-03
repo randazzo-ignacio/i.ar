@@ -26,6 +26,7 @@
 ;; Security: write_file and append_file check the file_guard before
 ;; writing. All write operations are logged to the audit log.
 
+(require 'gptel)
 (require 'cl-lib)
 (require 'file_guard)
 (require 'audit_log)
@@ -37,13 +38,14 @@
 Returns newline-separated file names, including hidden files (dotfiles).
 Excludes only the . and .. directory entries.
 On error, returns a string starting with \\='Error:\\='."
-  (condition-case nil
-      (mapconcat #'identity
-                 (sort (cl-remove-if (lambda (f) (member f '("." "..")))
-                                     (directory-files (expand-file-name path) nil))
-                       #'string-lessp)
-                 "\n")
-    (error (format "Error: Directory '%s' not found or permission denied." path))))
+  (let ((expanded-path (expand-file-name path)))
+    (condition-case nil
+        (mapconcat #'identity
+                   (sort (cl-remove-if (lambda (f) (member f '("." "..")))
+                                       (directory-files expanded-path nil))
+                         #'string-lessp)
+                   "\n")
+      (error (format "Error: Directory '%s' not found or permission denied." expanded-path)))))
 
 (add-to-list 'gptel-tools
  (gptel-make-tool
@@ -57,11 +59,12 @@ On error, returns a string starting with \\='Error:\\='."
 (defun my-gptel--fs-read-file (filepath)
   "Read the text contents of FILEPATH into a string.
 On error, returns a string starting with \\='Error:\\='."
-  (condition-case nil
-      (with-temp-buffer
-        (insert-file-contents filepath)
-        (buffer-string))
-    (error (format "Error: File '%s' not found or cannot be read." filepath))))
+  (let ((expanded-path (expand-file-name filepath)))
+    (condition-case nil
+        (with-temp-buffer
+          (insert-file-contents expanded-path)
+          (buffer-string))
+      (error (format "Error: File '%s' not found or cannot be read." expanded-path)))))
 
 (add-to-list 'gptel-tools
  (gptel-make-tool
@@ -69,6 +72,27 @@ On error, returns a string starting with \\='Error:\\='."
   :description "Read the text contents of a local file into context."
   :args (list '(:name "filepath" :type "string" :description "Absolute path to the file."))
   :function #'my-gptel--fs-read-file))
+
+;;; --- Save hook suppression ---
+;; When saving buffers programmatically, user-configured save hooks
+;; (format-on-save, lint-on-save, trailing-whitespace cleanup, etc.)
+;; can mutate content in ways the caller did not request.  This macro
+;; binds all save-related hooks to nil so the caller's content is
+;; preserved.  Note: require-final-newline may still add a trailing
+;; newline — that is Emacs behavior outside hook control.
+
+(defmacro my-gptel--with-suppressed-save-hooks (&rest body)
+  "Execute BODY with all save-related hooks bound to nil.
+This prevents user-configured hooks (format-on-save, lint-on-save,
+trailing-whitespace cleanup, VC annotations, etc.) from mutating
+content during programmatic saves."
+  (declare (indent 0))
+  `(let ((before-save-hook nil)
+         (after-save-hook nil)
+         (write-file-functions nil)
+         (write-contents-functions nil)
+         (write-region-annotate-functions nil))
+     ,@body))
 
 ;;; --- write_file ---
 
@@ -81,21 +105,31 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
          (guard-reason (my-gptel--guard-check-write expanded-path)))
     (if guard-reason
         (format "Error: %s" guard-reason)
-      (let ((buf (get-file-buffer expanded-path)))
+      (let ((buf (find-buffer-visiting expanded-path)))
         (condition-case err
             (progn
               (make-directory (file-name-directory expanded-path) t)
               (if buf
                   (with-current-buffer buf
-                    (erase-buffer)
-                    (insert content)
-                    (save-buffer))
+                    (cond
+                     (buffer-read-only
+                      (format "Error: Buffer for '%s' is read-only" expanded-path))
+                     ((buffer-modified-p)
+                      (format "Error: Buffer for '%s' has unsaved modifications. Save or revert the buffer first."
+                              expanded-path))
+                     (t
+                      (erase-buffer)
+                      (insert content)
+                      (my-gptel--with-suppressed-save-hooks
+                        (save-buffer))
+                      (my-gptel--audit-log-write expanded-path)
+                      (format "Success: File written to '%s'" expanded-path))))
                 (let ((tmp-file (make-temp-file "gptel-write-")))
                   (with-temp-file tmp-file
                     (insert content))
-                  (rename-file tmp-file expanded-path t)))
-              (my-gptel--audit-log-write expanded-path)
-              (format "Success: File written to '%s'" expanded-path))
+                  (rename-file tmp-file expanded-path t)
+                  (my-gptel--audit-log-write expanded-path)
+                  (format "Success: File written to '%s'" expanded-path))))
           (error (format "Error: Failed to write file to '%s'. Emacs says: %s"
                          expanded-path (error-message-string err))))))))
 
@@ -111,6 +145,8 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
 
 (defun my-gptel--fs-append-file (filepath content)
   "Append CONTENT to the end of FILEPATH.
+If the file is open in an Emacs buffer, appends to that buffer and saves.
+Otherwise, appends directly to the file on disk.
 If the file exists and does not end with a newline, one is prepended.
 If the file does not exist, it is created.
 Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
@@ -118,21 +154,47 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
          (guard-reason (my-gptel--guard-check-append expanded-path)))
     (if guard-reason
         (format "Error: %s" guard-reason)
-      (condition-case err
-          (let* ((prefix
-                  (if (and (file-exists-p expanded-path)
-                           (> (file-attribute-size (file-attributes expanded-path)) 0))
-                      (with-temp-buffer
-                        (insert-file-contents expanded-path)
-                        (if (string-suffix-p "\n" (buffer-string))
-                            ""
-                          "\n"))
-                    "")))
-            (write-region (concat prefix content) nil expanded-path t 'silent)
-            (my-gptel--audit-log-append expanded-path)
-            (format "Success: Content appended to '%s'" expanded-path))
-        (error (format "Error: Failed to append to '%s'. Emacs says: %s"
-                       filepath (error-message-string err)))))))
+      (let ((buf (find-buffer-visiting expanded-path)))
+        (condition-case err
+            (if buf
+                ;; Buffer-aware path: append in-buffer and save
+                (with-current-buffer buf
+                  (cond
+                   (buffer-read-only
+                    (format "Error: Buffer for '%s' is read-only" expanded-path))
+                   ((buffer-modified-p)
+                    (format "Error: Buffer for '%s' has unsaved modifications. Save or revert the buffer first."
+                            expanded-path))
+                   (t
+                    (save-restriction
+                      (widen)
+                      (goto-char (point-max))
+                      ;; Determine if a newline prefix is needed
+                      (unless (or (= (point-min) (point-max))
+                                  (string-suffix-p "\n" (buffer-substring-no-properties
+                                                         (max (point-min) (1- (point-max)))
+                                                         (point-max))))
+                        (insert "\n"))
+                      (insert content))
+                    (my-gptel--with-suppressed-save-hooks
+                      (save-buffer))
+                    (my-gptel--audit-log-append expanded-path)
+                    (format "Success: Content appended to '%s'" expanded-path))))
+              ;; Direct-to-disk path: no buffer visiting this file
+              (let* ((prefix
+                      (if (and (file-exists-p expanded-path)
+                               (> (file-attribute-size (file-attributes expanded-path)) 0))
+                          (with-temp-buffer
+                            (insert-file-contents expanded-path)
+                            (if (string-suffix-p "\n" (buffer-string))
+                                ""
+                              "\n"))
+                        "")))
+                (write-region (concat prefix content) nil expanded-path t 'silent)
+                (my-gptel--audit-log-append expanded-path)
+                (format "Success: Content appended to '%s'" expanded-path)))
+          (error (format "Error: Failed to append to '%s'. Emacs says: %s"
+                         expanded-path (error-message-string err))))))))
 
 (add-to-list 'gptel-tools
  (gptel-make-tool

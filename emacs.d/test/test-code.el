@@ -102,4 +102,72 @@ TIMEOUT defaults to 10 seconds."
       (should (stringp result))
       (should (string-match-p "expected_value_42" result)))))
 
+;;; --- Legacy sync convention tests ---
+
+(ert-deftest test-code-legacy-sync-echo ()
+  "Legacy sync convention should return command output."
+  :tags '(integration)
+  (let ((result (my-gptel--async-shell-command "echo hello" 10)))
+    (should (stringp result))
+    (should (string-match-p "hello" result))))
+
+(ert-deftest test-code-legacy-sync-exit-code ()
+  "Legacy sync convention should report non-zero exit code."
+  :tags '(integration)
+  (let ((result (my-gptel--async-shell-command "exit 42" 10)))
+    (should (stringp result))
+    (should (string-match-p "exited with code 42" result))))
+
+(ert-deftest test-code-legacy-sync-timeout ()
+  "Legacy sync convention should timeout on long-running commands.
+This is a regression test for the deadline computation bug where the
+while loop recomputed (current-time) inside the condition, making the
+deadline always now+timeout and the loop infinite."
+  :tags '(integration)
+  (let ((result (my-gptel--async-shell-command "sleep 10" 2)))
+    (should (stringp result))
+    (should (string-match-p "TIMEOUT" result))))
+
+(ert-deftest test-code-legacy-sync-default-timeout ()
+  "Legacy sync convention without timeout should default to 3600s.
+Verifies that nil timeout is handled via (or command 3600)."
+  :tags '(integration)
+  ;; Use a fast command so the test doesn't wait long
+  (let ((result (my-gptel--async-shell-command "echo fast")))
+    (should (stringp result))
+    (should (string-match-p "fast" result))))
+
+;;; --- Buffer cleanup on process creation failure tests ---
+
+(ert-deftest test-code-async-shell-cleans-up-buffer-on-process-failure ()
+  "my-gptel--async-shell-command should kill the buffer if make-process fails.
+When make-process signals an error (e.g., shell-file-name is a directory),
+the buffer created by generate-new-buffer should be cleaned up, not
+leaked. The error should propagate to the caller's condition-case.
+
+Note: /tmp is used because make-process signals a synchronous error
+when the program is a directory. A nonexistent path does NOT trigger
+an error -- make-process succeeds and the process exits with code 127
+asynchronously via the sentinel."
+  :tags '(integration)
+  (let ((old-shell-file-name shell-file-name)
+        (error-signal nil))
+    (unwind-protect
+        (progn
+          (setq shell-file-name "/tmp")
+          (condition-case err
+              (my-gptel--async-shell-command
+               (lambda (_r))
+               "echo hello" 10)
+            (error (setq error-signal err)))
+          ;; Error must be re-signaled by the condition-case handler
+          (should error-signal)
+          ;; No new *gptel-async-shell* buffers should remain
+          (let ((async-buffers (cl-remove-if-not
+                                (lambda (name)
+                                  (string-match-p "gptel-async-shell" name))
+                                (mapcar #'buffer-name (buffer-list)))))
+            (should (null async-buffers))))
+      (setq shell-file-name old-shell-file-name))))
+
 (provide 'test-code)

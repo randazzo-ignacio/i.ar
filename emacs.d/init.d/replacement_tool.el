@@ -17,30 +17,68 @@
 ;; along with this program.  If not, see <https://www.gnu.org/licenses/>.
 
 
+(require 'gptel)
 (require 'file_guard)
 (require 'audit_log)
+(require 'fs_tools)  ; my-gptel--with-suppressed-save-hooks macro
+
+(declare-function my-gptel--with-suppressed-save-hooks "fs_tools" (&rest body))
 
 (defun my-gptel--fs-replace (path search-text replace-text)
   "Find SEARCH-TEXT in PATH and replace it with REPLACE-TEXT.
-SEARCH-TEXT is matched exactly as provided -- whitespace is significant."
-  (let ((guard-reason (my-gptel--guard-check-replace path)))
+SEARCH-TEXT is matched exactly as provided -- whitespace is significant.
+If the file is open in an Emacs buffer, performs the replacement in
+that buffer and saves.  Otherwise, uses atomic write (temp file + rename)
+to avoid leaving open buffers with stale content that would overwrite
+the replacement on next save.
+
+If the buffer is read-only or has unsaved modifications, returns an
+error rather than silently persisting unrelated changes or failing
+with a misleading message."
+  (let* ((expanded-path (expand-file-name path))
+         (guard-reason (my-gptel--guard-check-replace expanded-path)))
     (if guard-reason
-        (format "ERROR: %s" guard-reason)
+        (format "Error: %s" guard-reason)
       (condition-case err
-          (with-temp-buffer
-            (insert-file-contents path)
-            (goto-char (point-min))
-            (if (search-forward search-text nil t)
-                (progn
-                  (replace-match replace-text t t)
-                  (let ((tmp-file (concat path ".tmp")))
-                    (write-region (point-min) (point-max) tmp-file nil 'silent)
-                    (rename-file tmp-file path t))
-                  (my-gptel--audit-log-replace path)
-                  (format "SUCCESS: Replaced text in %s" path))
-              (format "ERROR: Target string not found in %s" path)))
+          (let ((buf (find-buffer-visiting expanded-path)))
+            (if buf
+                ;; File is open in a buffer -- replace in buffer and save.
+                ;; Guard against read-only and dirty buffers to avoid
+                ;; misleading errors and silent data persistence.
+                (with-current-buffer buf
+                  (cond
+                   (buffer-read-only
+                    (format "Error: Buffer for '%s' is read-only" expanded-path))
+                   ((buffer-modified-p)
+                    (format "Error: Buffer for '%s' has unsaved modifications. Save or revert the buffer first."
+                            expanded-path))
+                   (t
+                    (save-restriction
+                      (widen)
+                      (goto-char (point-min))
+                      (if (search-forward search-text nil t)
+                          (progn
+                            (replace-match replace-text t t)
+                            (my-gptel--with-suppressed-save-hooks
+                              (save-buffer))
+                            (my-gptel--audit-log-replace expanded-path)
+                            (format "Success: Replaced text in '%s'" expanded-path))
+                        (format "Error: Target string not found in '%s'" expanded-path))))))
+              ;; File not open -- use temp file + rename for atomicity
+              (with-temp-buffer
+                (insert-file-contents expanded-path)
+                (goto-char (point-min))
+                (if (search-forward search-text nil t)
+                    (progn
+                      (replace-match replace-text t t)
+                      (let ((tmp-file (make-temp-file "gptel-replace-")))
+                        (write-region (point-min) (point-max) tmp-file nil 'silent)
+                        (rename-file tmp-file expanded-path t))
+                      (my-gptel--audit-log-replace expanded-path)
+                      (format "Success: Replaced text in '%s'" expanded-path))
+                  (format "Error: Target string not found in '%s'" expanded-path)))))
         (error (format "Error: Could not modify file '%s'. Reason: %s"
-                       path (error-message-string err)))))))
+                       expanded-path (error-message-string err)))))))
 
 (defun ouroboros-replace-in-file (path search-text replace-text)
   "Backward-compatible alias for `my-gptel--fs-replace'."

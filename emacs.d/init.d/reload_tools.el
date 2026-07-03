@@ -26,6 +26,10 @@
 ;;               the gptel system message in the current chat buffer.
 
 (require 'gptel)
+(require 'task_tools)
+
+(declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
+(declare-function my-gptel--validate-agent-name "task_tools" (name))
 
 ;;; --- reload_os ---
 
@@ -44,11 +48,11 @@ in the current buffer so it inherits the fresh defaults."
           (kill-local-variable 'gptel-tools))
         ;; Re-load init.el (suppress errors visually, capture in condition-case)
         (load init-path nil t)
-        (format "SUCCESS: Reloaded init.el (%s). All .el files re-evaluated. gptel-tools rebuilt with %d tools."
+        (format "Success: Reloaded init.el (%s). All .el files re-evaluated. gptel-tools rebuilt with %d tools."
                 init-path
                 (length (default-value 'gptel-tools))))
     (error
-     (format "ERROR reloading init.el: %s" (error-message-string err)))))
+     (format "Error: Failed to reload init.el: %s" (error-message-string err)))))
 
 (add-to-list 'gptel-tools
  (gptel-make-tool
@@ -70,9 +74,10 @@ instead of the currently loaded one."
              (target-name
               (if (and agent-name (stringp agent-name) (string-match-p "\\S-" agent-name))
                   (progn
-                    (unless (string-match-p "^[a-zA-Z0-9_-]+$" agent-name)
-                      (error "Invalid agent name: '%s'" agent-name))
+                    (my-gptel--validate-agent-name agent-name)
                     agent-name)
+                 ;; Note: my-gptel--load-agent-profile also validates,
+                 ;; so this is defense-in-depth, not the primary check.
                 (if (and (boundp 'my-gptel--current-agent-name)
                          my-gptel--current-agent-name)
                     my-gptel--current-agent-name
@@ -81,18 +86,20 @@ instead of the currently loaded one."
              ;; Extra safety: ensure filepath stays within agent-dir
              (_ (unless (string-prefix-p agent-dir (file-truename target-file))
                   (error "Path traversal blocked for agent reload")))
-             ;; Read the profile (expands #+INCLUDE directives)
-             (profile (my-gptel-read-agent-profile target-file))
-             (agent-basename (file-name-nondirectory target-file)))
+             ;; Read the profile via the shared loader (validates name,
+             ;; checks path traversal, expands #+INCLUDE directives)
+             (profile (my-gptel--load-agent-profile target-name)))
+        (unless profile
+          (error "Agent profile '%s' not found in agents.d/" target-name))
         ;; Update system prompt in current buffer
         (setq-local gptel-system-prompt profile)
         ;; Track the loaded agent file and name
         (setq-local my-gptel--current-agent-file target-file)
         (setq-local my-gptel--current-agent-name target-name)
-        (format "SUCCESS: Reloaded agent profile '%s'. System message updated in current buffer (%d chars)."
-                agent-basename (length profile)))
+        (format "Success: Reloaded agent profile '%s'. System message updated in current buffer (%d chars)."
+                target-name (length profile)))
     (error
-     (format "ERROR reloading agent: %s" (error-message-string err)))))
+     (format "Error: Failed to reload agent: %s" (error-message-string err)))))
 
 (add-to-list 'gptel-tools
  (gptel-make-tool

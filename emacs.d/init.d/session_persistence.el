@@ -50,9 +50,38 @@
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.gptel\\'" . text-mode))
 
-;; Declare safe local variables so Emacs doesn't prompt on session restore
-(put 'my-gptel--current-agent-name 'safe-local-variable #'stringp)
-(put 'my-gptel--current-agent-file 'safe-local-variable #'stringp)
+;; Declare safe local variables so Emacs doesn't prompt on session restore.
+;; Use validating predicates (not bare #'stringp) to prevent tampered session
+;; files from setting agent name/file to path traversal strings.  This is
+;; defense at the source: malicious values are rejected before any consumer
+;; sees them.  Consumers (my-gptel--get-agent-dir, my-gptel--load-agent-profile)
+;; also validate independently -- defense-in-depth.
+
+(defun my-gptel--safe-agent-name-p (val)
+  "Safe-local-variable predicate for `my-gptel--current-agent-name'.
+Returns non-nil if VAL is a valid agent name (alphanumeric, hyphens,
+underscores only, at least one character).  Rejects path traversal
+strings, empty strings, and non-strings."
+  (and (stringp val)
+       (string-match-p "\\`[a-zA-Z0-9_-]+\\'" val)))
+
+(defun my-gptel--safe-agent-file-p (val)
+  "Safe-local-variable predicate for `my-gptel--current-agent-file'.
+Returns non-nil if VAL is a string ending in prompt.org that does not
+contain path traversal sequences (..).  This prevents tampered session
+files from setting the agent file to arbitrary filesystem paths.
+
+Note: This rejects any path containing '..' anywhere, not just
+path traversal components.  This is intentionally conservative for
+a safe-local-variable predicate.  Downstream consumers
+\(`my-gptel--get-agent-dir', `my-gptel--load-agent-profile'\) also
+validate via truename containment checks."
+  (and (stringp val)
+       (string-suffix-p "prompt.org" val)
+       (not (string-match-p "\\.\\." val))))
+
+(put 'my-gptel--current-agent-name 'safe-local-variable #'my-gptel--safe-agent-name-p)
+(put 'my-gptel--current-agent-file 'safe-local-variable #'my-gptel--safe-agent-file-p)
 (put 'my-gptel--delegate-depth 'safe-local-variable #'integerp)
 
 ;;; --- Custom variable save/restore ---
@@ -97,11 +126,26 @@ Called from `gptel-mode-hook' when a session file is opened."
 
 ;;; --- Save session ---
 
+(defun my-gptel--validate-session-name (name)
+  "Validate that session NAME is safe for use as a filename.
+Returns NAME if valid, signals `user-error' if it contains path
+traversal characters or other unsafe patterns.
+Allows alphanumeric characters, hyphens, underscores, and dots.
+Rejects empty strings and strings containing slashes, spaces,
+or other shell/file-unsafe characters."
+  (unless (and (stringp name)
+               (string-match-p "\\`[a-zA-Z0-9._-]+\\'" name))
+    (user-error "Invalid session name: %S. Only letters, digits, dots, hyphens, and underscores are allowed." name))
+  name)
+
 (defun my-gptel-save-session (&optional name)
   "Save the current gptel buffer as a session file.
 Prompts for a session name. The buffer is saved to
 `my-gptel-sessions-dir'/<name>.gptel. gptel's built-in state save
-runs via file-local variables, plus our custom agent variables."
+runs via file-local variables, plus our custom agent variables.
+
+The session name is validated to prevent path traversal -- only
+alphanumeric characters, dots, hyphens, and underscores are allowed."
   (interactive)
   (unless (bound-and-true-p gptel-mode)
     (user-error "Not in a gptel buffer"))
@@ -111,10 +155,11 @@ runs via file-local variables, plus our custom agent variables."
                     (format "%s-%s" my-gptel--current-agent-name
                             (format-time-string "%Y%m%d-%H%M%S")))
                (format "session-%s" (format-time-string "%Y%m%d-%H%M%S"))))
-         (session-name (or name
-                          (read-string (format "Save session as (default: %s): "
-                                               default-name)
-                                       nil nil default-name)))
+         (session-name (my-gptel--validate-session-name
+                        (or name
+                            (read-string (format "Save session as (default: %s): "
+                                                 default-name)
+                                         nil nil default-name))))
          (session-path (expand-file-name
                         (format "%s.gptel" session-name)
                         my-gptel-sessions-dir)))
@@ -146,13 +191,25 @@ runs via file-local variables, plus our custom agent variables."
 (defun my-gptel--sort-sessions-by-mtime (files)
   "Sort FILES by modification time, newest first.
 FILES is a list of absolute file paths.
-Returns a list of absolute file paths sorted newest first."
+Returns a list of absolute file paths sorted newest first.
+
+Files that vanish between directory-files and file-attributes
+(race condition) are filtered out with a warning.  This protects
+both callers (my-gptel-list-sessions and my-gptel-open-session)
+from processing non-existent files."
   ;; Use decorate-sort-undecorate (Schwartzian transform) to call
   ;; file-attributes only once per file instead of O(N log N) times.
+  ;; Filter out vanished files (nil attrs) before sorting so they
+  ;; don't pollute the sort order or appear in completion lists.
   (mapcar #'car
-          (sort (mapcar (lambda (f)
-                          (cons f (file-attribute-modification-time (file-attributes f))))
-                        files)
+          (sort (delq nil
+                      (mapcar (lambda (f)
+                                (let ((attrs (file-attributes f)))
+                                  (if attrs
+                                      (cons f (file-attribute-modification-time attrs))
+                                    (message "Warning: session file vanished: %s" f)
+                                    nil)))
+                              files))
                 (lambda (a b)
                   (time-less-p (cdr b) (cdr a))))))
 
@@ -166,7 +223,7 @@ variables are restored."
   (interactive)
   (unless (file-directory-p my-gptel-sessions-dir)
     (user-error "No sessions directory found: %s" my-gptel-sessions-dir))
-  (let* ((all-files (directory-files my-gptel-sessions-dir t "\\.gptel$"))
+  (let* ((all-files (directory-files my-gptel-sessions-dir t "\\.gptel\\'"))
          (_ (unless all-files
               (user-error "No saved sessions found in %s" my-gptel-sessions-dir)))
          (sorted-files (my-gptel--sort-sessions-by-mtime all-files))
@@ -195,7 +252,7 @@ Shows session name, size, and last modified time."
   (interactive)
   (unless (file-directory-p my-gptel-sessions-dir)
     (user-error "No sessions directory found: %s" my-gptel-sessions-dir))
-  (let* ((files (directory-files my-gptel-sessions-dir t "\\.gptel$"))
+  (let* ((files (directory-files my-gptel-sessions-dir t "\\.gptel\\'"))
          (_ (unless files
               (user-error "No saved sessions found")))
          (sorted-files (my-gptel--sort-sessions-by-mtime files))
@@ -207,7 +264,7 @@ Shows session name, size, and last modified time."
                            (name (file-name-nondirectory f)))
                       (format "%-40s %8d bytes  %s"
                               name
-                              size
+                              (or size 0)
                               (format-time-string "%Y-%m-%d %H:%M" mtime))))
                   sorted-files)))
     (with-current-buffer (get-buffer-create "*gptel-sessions*")

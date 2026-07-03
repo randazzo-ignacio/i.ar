@@ -41,6 +41,7 @@
 ;; for categories 4-6, but this guard provides protection even when mounts
 ;; are writable (e.g., during development).
 
+(require 'cl-lib)
 (require 'subr-x)
 
 ;;; --- Configuration ---
@@ -57,58 +58,68 @@ untrusted-content sessions."
   :group 'gptel)
 
 (defconst my-gptel--guard-history-pred
-  (lambda (path) (string-match-p "/HISTORY\\.log$" path))
+  (lambda (path) (string-match-p "/HISTORY\\.log\\'" path))
   "Predicate matching HISTORY.log files anywhere in the filesystem.
 Used both in the protected patterns list and by the append exception
 to ensure single-source-of-truth for the HISTORY.log regex.")
 
-(defconst my-gptel--guard-protected-patterns
+(defconst my-gptel--guard-always-protected
   (list
-   ;; --- Always protected ---
    ;; Agent prompt files -- no agent may modify any prompt.org
    (cons (lambda (path)
-           (string-match-p "/agents\\.d/[^/]+/prompt\\.org$" path))
+           (string-match-p "/agents\\.d/[^/]+/prompt\\.org\\'" path))
          "Agent prompt files are protected. Agents cannot modify their own or other agents' prompts.")
    ;; Shared context file
    (cons (lambda (path)
-           (string-match-p "/agents\\.d/base_context\\.org$" path))
+           (string-match-p "/agents\\.d/base_context\\.org\\'" path))
          "Shared context file (base_context.org) is protected. Agents cannot modify the shared context.")
    ;; HISTORY.log files -- append is allowed but overwrite/replace is not
    (cons my-gptel--guard-history-pred
-         "HISTORY.log files can only be appended to, not overwritten or modified via replace.")
-   ;; --- Conditionally protected (active unless self-modification mode) ---
+         "HISTORY.log files can only be appended to, not overwritten or modified via replace."))
+  "List of (predicate . reason) cons cells for always-active protections.
+These protections remain active regardless of self-modification mode.
+Each predicate takes an expanded file path and returns non-nil
+if the path is protected.")
+
+(defconst my-gptel--guard-conditional-protected
+  (list
    ;; Emacs Lisp source files
    (cons (lambda (path)
-           (or (string-match-p "/init\\.el$" path)
-               (string-match-p "/init\\.d/.*\\.el$" path)))
+           (or (string-match-p "/init\\.el\\'" path)
+               (string-match-p "/init\\.d/.*\\.el\\'" path)))
          "Emacs Lisp source files (init.el, init.d/*.el) are protected. Agents cannot modify tool definitions or Emacs configuration.")
    ;; Container configuration
    (cons (lambda (path)
-           (or (string-match-p "/Containerfile$" path)
-               (string-match-p "/emacboros\\.sh$" path)
+           (or (string-match-p "/Containerfile\\'" path)
+               (string-match-p "/emacboros\\.sh\\'" path)
                (string-match-p "/containers/" path)))
          "Container configuration files are protected. Agents cannot modify Containerfile or emacboros.sh.")
    ;; Git hooks
    (cons (lambda (path)
            (string-match-p "/\\.git/hooks/" path))
-         "Git hooks are protected. Agents cannot create or modify git hooks.")
-   )
-  "List of (predicate . reason) cons cells defining protected paths.
-Each predicate takes an expanded file path and returns non-nil
-if the path is protected.
+         "Git hooks are protected. Agents cannot create or modify git hooks."))
+  "List of (predicate . reason) cons cells for conditionally-active protections.
+These protections are skipped when `my-gptel--guard-allow-self-modification'
+is non-nil.  Each predicate takes an expanded file path and returns non-nil
+if the path is protected.")
 
-The first three entries are always active.  The remaining entries are
-skipped when `my-gptel--guard-allow-self-modification' is non-nil.")
+(defconst my-gptel--guard-protected-patterns
+  (append my-gptel--guard-always-protected
+          my-gptel--guard-conditional-protected)
+  "Complete list of (predicate . reason) cons cells defining protected paths.
+Computed by concatenating `my-gptel--guard-always-protected' and
+`my-gptel--guard-conditional-protected'.  Maintained for backward
+compatibility with code that references the full list.")
 
 ;;; --- Internal ---
 
 (defun my-gptel--guard--active-patterns ()
   "Return the list of protected patterns active in the current mode.
 When `my-gptel--guard-allow-self-modification' is non-nil, returns
-only the always-protected patterns (prompts, context, history).
-Otherwise returns all patterns."
+only `my-gptel--guard-always-protected' (prompts, context, history).
+Otherwise returns the full list (always + conditional)."
   (if my-gptel--guard-allow-self-modification
-      (cl-subseq my-gptel--guard-protected-patterns 0 3)
+      my-gptel--guard-always-protected
     my-gptel--guard-protected-patterns))
 
 ;;; --- Public API ---
@@ -129,7 +140,8 @@ why the path is protected if it is not safe."
 
 (defun my-gptel--guard-check-replace (filepath)
   "Check if FILEPATH is protected against replace_in_file operations.
-Same restrictions as write, plus HISTORY.log is also blocked."
+Same restrictions as write -- HISTORY.log is blocked for replace
+just as it is for write (only append is allowed for HISTORY.log)."
   (my-gptel--guard-check-write filepath))
 
 (defun my-gptel--guard-check-append (filepath)

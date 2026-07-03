@@ -45,7 +45,10 @@ correction message is sent to the LLM instead of executing."
   "Number of identical consecutive tool calls before hard-stopping.
 After this many repetitions, the entire request is stopped.
 Should be >= 2x the soft threshold to give the model a chance to
-self-correct after the first warning."
+self-correct after the first warning.
+If set <= `my-gptel-loop-soft-threshold', the effective hard
+threshold is automatically raised to soft+1 to ensure at least
+one soft warning before hard-stopping."
   :type 'integer
   :group 'gptel)
 
@@ -108,14 +111,19 @@ Stop and reconsider your approach:
 DO NOT call %s with the same arguments again. Change something."
    name repeat-count name))
 
-(defun my-gptel--loop-hard-message (name repeat-count)
+(defun my-gptel--loop-hard-message (name repeat-count block-count)
   "Build the stop reason for a hard stop.
-NAME is the tool name.  REPEAT-COUNT is total identical calls so far."
+NAME is the tool name.  REPEAT-COUNT is total identical calls so far.
+BLOCK-COUNT is the actual number of soft blocks that occurred,
+from `my-gptel--loop-block-count'.  This is more accurate than
+computing an estimate from thresholds, especially if the block
+count was affected by intervening different calls or threshold
+reconfiguration."
   (format
    "Request stopped: agent called %s with identical arguments %d times.
-The loop guard has blocked %d attempts and the model has not self-corrected.
+The loop guard has blocked %d attempt%s and the model has not self-corrected.
 Stopping to prevent resource waste."
-   name repeat-count (- repeat-count my-gptel-loop-soft-threshold)))
+   name repeat-count block-count (if (= block-count 1) "" "s")))
 
 ;;; --- Hook function ---
 
@@ -136,11 +144,20 @@ Returns:
     (my-gptel--loop-push sig)
 
     ;; Total identical calls including this one
-    (let ((total (1+ repeat-count)))
+    (let ((total (1+ repeat-count))
+          ;; Ensure hard threshold is always > soft threshold.  If
+          ;; misconfigured (hard <= soft), use soft + 1 as the effective
+          ;; hard threshold so the model always gets at least one soft
+          ;; warning before being hard-stopped (for positive threshold
+          ;; values).  Without this, the cond checks hard first and
+          ;; the soft block is never reached, denying the model a
+          ;; chance to self-correct.
+          (effective-hard (max my-gptel-loop-hard-threshold
+                               (1+ my-gptel-loop-soft-threshold))))
       (cond
        ;; Hard stop: model didn't self-correct after soft blocks
-       ((>= total my-gptel-loop-hard-threshold)
-        (let ((reason (my-gptel--loop-hard-message name total)))
+       ((>= total effective-hard)
+        (let ((reason (my-gptel--loop-hard-message name total my-gptel--loop-block-count)))
           (message "[loop-guard] HARD STOP: %s called %d times identically" name total)
           (list :stop t :stop-reason reason)))
 

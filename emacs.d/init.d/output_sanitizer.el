@@ -40,10 +40,17 @@
     "\x1b\\[[0-9;]*[a-zA-Z]"
     ;; Other control characters (except newline, tab)
     "[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]"
-    ;; Unicode zero-width characters (can hide instructions)
-    "\x200b\x200c\x200d\xfeff"
-    ;; Unicode right-to-left override (can reverse text display)
-    "\x202e"
+    ;; Unicode zero-width and invisible characters (can hide instructions)
+    ;; Character class matches ANY ONE of these, not all in sequence.
+    ;; Without the bracket class, the pattern matched the literal
+    ;; multi-character sequence, which never appears in real text --
+    ;; so zero-width chars were never actually stripped.
+    ;; Includes: ZWSP, ZWNJ, ZWJ, LRM, RLM, WJ, invisible math operators, BOM
+    "[\u200b\u200c\u200d\u200e\u200f\u2060\u2061\u2062\u2063\u2064\ufeff]"
+    ;; Unicode bidi control characters (can reverse/reorder text display)
+    ;; Includes all bidi controls: LRE, RLE, PDF, LRO, RLO, LRI, RLI, FSI, PDI
+    ;; These can be used for Trojan Source attacks to hide instructions.
+    "[\u202a\u202b\u202c\u202d\u202e\u2066\u2067\u2068\u2069]"
     )
   "Regex patterns for control sequences and invisible characters to strip.")
 
@@ -57,8 +64,8 @@
     "^\\* TOOL CALLING PROTOCOL"
     "^\\* PROMPT INJECTION RESISTANCE"
     ;; Fake tool call blocks
-    "^```tool$"
-    "^```json$"
+    "^```tool\\'"
+    "^```json\\'"
     ;; Role-play injection patterns
     "^You are "
     "^Ignore \\(all \\)?\\(previous \\|prior \\)?instructions"

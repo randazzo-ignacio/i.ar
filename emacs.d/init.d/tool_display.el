@@ -11,45 +11,52 @@
   "Insert tool call info into the buffer before the tool runs.
 FSM is the gptel state machine."
   (condition-case err
-      (when-let* ((info (gptel-fsm-info fsm))
-                  (buffer (plist-get info :buffer))
-                  (tool-use (cl-remove-if (lambda (tc) (plist-get tc :result))
-                                          (plist-get info :tool-use))))
-        (with-current-buffer buffer
-          (let ((tracking-marker (or (plist-get info :tracking-marker)
-                                     (plist-get info :position))))
-            (when (markerp tracking-marker)
-              (save-excursion
-                (goto-char tracking-marker)
-                (dolist (tool-call tool-use)
-                  (let* ((name (plist-get tool-call :name))
-                         (args (plist-get tool-call :args))
-                         (arg-str (string-trim (prin1-to-string args))))
-                    ;; Truncate very long arguments for display
-                    (when (> (length arg-str) 500)
-                      (setq arg-str (concat (substring arg-str 0 500) " ...)")))
-                    (let ((text (format "\n%s %s\n"
-                                        (propertize (format "Calling %s:" name)
-                                                    'face 'font-lock-keyword-face)
-                                        (propertize arg-str 'face 'font-lock-string-face))))
-                      ;; Mark as 'ignore so gptel does NOT include this display-only
-                      ;; text in the conversation history sent to the LLM.
-                      ;; Using 'response here caused the "Calling..." text to be
-                      ;; sent as assistant content, polluting the conversation
-                      ;; and confusing the model on subsequent turns.
-                      (add-text-properties 0 (length text)
-                                           '(gptel ignore front-sticky (gptel))
-                                           text)
-                      (insert text))
-                    ;; Move tracking marker past inserted text so tool results
-                    ;; appear below the "Calling..." line.
-                    ;; NOTE: plist-put returns a NEW plist if the key doesn't
-                    ;; exist yet. We must capture the return value and store it
-                    ;; back in the fsm, otherwise the update is lost.
-                    (let ((new-marker (point-marker)))
-                      (set-marker-insertion-type new-marker t)
-                      (setq info (plist-put info :tracking-marker new-marker))
-                      (setf (gptel-fsm-info fsm) info)))))))))
+      (when (gptel-fsm-p fsm)
+        (when-let* ((info (gptel-fsm-info fsm))
+                    (buffer (plist-get info :buffer))
+                    ((buffer-live-p buffer))
+                    ;; Convert to list: cl-remove-if on a vector returns a
+                    ;; vector, but dolist only iterates over lists.  Without
+                    ;; this conversion, the display function silently does
+                    ;; nothing -- a real bug that went unnoticed because the
+                    ;; module had no test coverage.
+                    (tool-use (append (cl-remove-if (lambda (tc) (plist-get tc :result))
+                                                     (plist-get info :tool-use))
+                                      nil)))
+          (with-current-buffer buffer
+            (let ((tracking-marker (or (plist-get info :tracking-marker)
+                                       (plist-get info :position))))
+              (when (markerp tracking-marker)
+                (save-excursion
+                  (goto-char tracking-marker)
+                  (dolist (tool-call tool-use)
+                    (let* ((name (plist-get tool-call :name))
+                           (args (plist-get tool-call :args))
+                           (arg-str (string-trim (prin1-to-string args))))
+                      (when (> (length arg-str) 500)
+                        (setq arg-str (concat (substring arg-str 0 500) " ...)")))
+                      (let ((text (format "\n%s %s\n"
+                                          (propertize (format "Calling %s:" name)
+                                                      'face 'font-lock-keyword-face)
+                                          (propertize arg-str 'face 'font-lock-string-face))))
+                        ;; Mark as 'ignore so gptel does NOT include this
+                        ;; display-only text in the conversation history.
+                        ;; rear-nonsticky prevents the gptel property from
+                        ;; leaking onto text inserted after the display block.
+                        (add-text-properties 0 (length text)
+                                             '(gptel ignore
+                                               front-sticky (gptel)
+                                               rear-nonsticky (gptel))
+                                             text)
+                        (insert text))))
+                  ;; Move tracking marker past all inserted text so tool
+                  ;; results appear below the "Calling..." lines.
+                  ;; Update once after all insertions to avoid wasted
+                  ;; intermediate marker allocations.
+                  (let ((new-marker (point-marker)))
+                    (set-marker-insertion-type new-marker t)
+                    (setq info (plist-put info :tracking-marker new-marker))
+                    (setf (gptel-fsm-info fsm) info))))))))
     (error
      (message "[tool-display] Error in pre-tool-call display: %S" err))))
 

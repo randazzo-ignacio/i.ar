@@ -8,6 +8,10 @@
 (require 'subr-x)
 (require 'session_persistence)
 
+(declare-function my-gptel--validate-session-name "session_persistence" (name))
+(declare-function my-gptel--safe-agent-name-p "session_persistence" (val))
+(declare-function my-gptel--safe-agent-file-p "session_persistence" (val))
+
 ;;; --- Test fixtures ---
 
 (defvar test-session--tmpdir nil
@@ -312,6 +316,129 @@
           ;; But the mock gptel-save-state writes delegate-depth: 0
           (should (string-match-p "my-gptel--delegate-depth" content)))))))
 
+;;; --- Sort sessions by mtime tests ---
+
+;; Helper: create a file with an explicit mtime to avoid filesystem
+;; resolution issues. set-file-times lets us control mtime precisely
+;; without relying on sleep-for, which is fragile on filesystems with
+;; coarse mtime resolution (e.g., FAT32, HFS+, some NFS mounts).
+(defun test-session--make-file-with-mtime (path content mtime)
+  "Create a file at PATH with CONTENT and set its mtime to MTIME."
+  (with-temp-file path (insert content))
+  (set-file-times path mtime))
+
+(ert-deftest test-session-sort-by-mtime-newest-first ()
+  "my-gptel--sort-sessions-by-mtime should sort files newest first."
+  (let ((dir (make-temp-file "test-sort-" :dir-flag)))
+    (unwind-protect
+        (let* ((base (current-time))
+               (file-old (expand-file-name "old.gptel" dir))
+               (file-mid (expand-file-name "mid.gptel" dir))
+               (file-new (expand-file-name "new.gptel" dir)))
+          ;; Use explicit mtimes to avoid filesystem resolution issues.
+          (test-session--make-file-with-mtime file-old "old" (time-subtract base 200))
+          (test-session--make-file-with-mtime file-mid "mid" (time-subtract base 100))
+          (test-session--make-file-with-mtime file-new "new" base)
+          ;; Pass in shuffled order to verify reordering.
+          (let ((sorted (my-gptel--sort-sessions-by-mtime
+                         (list file-old file-new file-mid))))
+            ;; Newest first: new, mid, old
+            (should (equal (nth 0 sorted) file-new))
+            (should (equal (nth 1 sorted) file-mid))
+            (should (equal (nth 2 sorted) file-old))))
+      (delete-directory dir t))))
+
+(ert-deftest test-session-sort-by-mtime-empty-list ()
+  "my-gptel--sort-sessions-by-mtime should return nil for empty list."
+  (should (null (my-gptel--sort-sessions-by-mtime nil))))
+
+(ert-deftest test-session-sort-by-mtime-single-file ()
+  "my-gptel--sort-sessions-by-mtime should handle a single file."
+  (let ((dir (make-temp-file "test-sort-" :dir-flag)))
+    (unwind-protect
+        (let* ((file (expand-file-name "only.gptel" dir)))
+          (with-temp-file file (insert "content"))
+          (let ((sorted (my-gptel--sort-sessions-by-mtime (list file))))
+            (should (equal (length sorted) 1))
+            (should (equal (car sorted) file))))
+      (delete-directory dir t))))
+
+(ert-deftest test-session-sort-by-mtime-returns-full-paths ()
+  "my-gptel--sort-sessions-by-mtime should return full paths, not filenames."
+  (let ((dir (make-temp-file "test-sort-" :dir-flag)))
+    (unwind-protect
+        (let* ((base (current-time))
+               (file-a (expand-file-name "a.gptel" dir))
+               (file-b (expand-file-name "b.gptel" dir)))
+          (test-session--make-file-with-mtime file-a "a" (time-subtract base 100))
+          (test-session--make-file-with-mtime file-b "b" base)
+          (let ((sorted (my-gptel--sort-sessions-by-mtime (list file-a file-b))))
+            (should (cl-every #'file-name-absolute-p sorted))
+            (should (equal (car sorted) file-b))))
+      (delete-directory dir t))))
+
+(ert-deftest test-session-sort-by-mtime-preserves-all-files ()
+  "my-gptel--sort-sessions-by-mtime should not lose any files."
+  (let ((dir (make-temp-file "test-sort-" :dir-flag)))
+    (unwind-protect
+        (let ((files nil)
+              (base (current-time)))
+          (dotimes (i 5)
+            (let ((f (expand-file-name (format "f%d.gptel" i) dir)))
+              (test-session--make-file-with-mtime f (format "file %d" i)
+                                                   (time-subtract base (* 10 i)))
+              (push f files)))
+          (let ((sorted (my-gptel--sort-sessions-by-mtime files)))
+            (should (= (length sorted) (length files)))
+            (should (equal (sort (copy-sequence sorted) #'string-lessp)
+                           (sort (copy-sequence files) #'string-lessp)))))
+      (delete-directory dir t))))
+
+(ert-deftest test-session-sort-by-mtime-equal-mtimes-stable ()
+  "my-gptel--sort-sessions-by-mtime should preserve input order for equal mtimes."
+  (let ((dir (make-temp-file "test-sort-" :dir-flag)))
+    (unwind-protect
+        (let* ((base (current-time))
+               (file-a (expand-file-name "a.gptel" dir))
+               (file-b (expand-file-name "b.gptel" dir))
+               (file-c (expand-file-name "c.gptel" dir)))
+          ;; All files get the same mtime.
+          (test-session--make-file-with-mtime file-a "a" base)
+          (test-session--make-file-with-mtime file-b "b" base)
+          (test-session--make-file-with-mtime file-c "c" base)
+          (let ((sorted (my-gptel--sort-sessions-by-mtime
+                         (list file-a file-b file-c))))
+            ;; With equal mtimes, sort should preserve input order.
+            (should (equal (nth 0 sorted) file-a))
+            (should (equal (nth 1 sorted) file-b))
+            (should (equal (nth 2 sorted) file-c))))
+      (delete-directory dir t))))
+
+(ert-deftest test-session-sort-by-mtime-nonexistent-file ()
+  "my-gptel--sort-sessions-by-mtime should filter out non-existent files.
+file-attributes returns nil for non-existent files. The function now
+filters them out (with a warning) instead of returning them with nil
+mtime, which would pollute sort order and appear in completion lists."
+  (let (warnings)
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) warnings))))
+      (let ((sorted (my-gptel--sort-sessions-by-mtime
+                     (list "/nonexistent/file.gptel"))))
+        (should (null sorted))
+        (should (cl-some (lambda (w) (string-match-p "vanished" w)) warnings))))))
+
+(ert-deftest test-session-sort-by-mtime-duplicate-paths ()
+  "my-gptel--sort-sessions-by-mtime should handle duplicate paths in input."
+  (let ((dir (make-temp-file "test-sort-" :dir-flag)))
+    (unwind-protect
+        (let* ((file (expand-file-name "only.gptel" dir)))
+          (with-temp-file file (insert "content"))
+          (let ((sorted (my-gptel--sort-sessions-by-mtime (list file file file))))
+            (should (= (length sorted) 3))
+            (should (cl-every (lambda (f) (equal f file)) sorted))))
+      (delete-directory dir t))))
+
 ;;; --- Safe local variable declarations ---
 
 (ert-deftest test-session-safe-local-variables-declared ()
@@ -320,6 +447,43 @@
   (should (get 'my-gptel--current-agent-file 'safe-local-variable))
   (should (get 'my-gptel--delegate-depth 'safe-local-variable)))
 
+(ert-deftest test-session-safe-agent-name-p-accepts-valid ()
+  "my-gptel--safe-agent-name-p should accept valid agent names."
+  (should (my-gptel--safe-agent-name-p "darwin"))
+  (should (my-gptel--safe-agent-name-p "reviewer"))
+  (should (my-gptel--safe-agent-name-p "test_agent"))
+  (should (my-gptel--safe-agent-name-p "ABC123")))
+
+(ert-deftest test-session-safe-agent-name-p-rejects-traversal ()
+  "my-gptel--safe-agent-name-p should reject path traversal and unsafe strings."
+  (should-not (my-gptel--safe-agent-name-p "../../etc/passwd"))
+  (should-not (my-gptel--safe-agent-name-p "foo/bar"))
+  (should-not (my-gptel--safe-agent-name-p "foo bar"))
+  (should-not (my-gptel--safe-agent-name-p ""))
+  (should-not (my-gptel--safe-agent-name-p nil))
+  (should-not (my-gptel--safe-agent-name-p 123))
+  ;; Multi-line bypass attempt
+  (should-not (my-gptel--safe-agent-name-p "valid\n../../etc")))
+
+(ert-deftest test-session-safe-agent-file-p-accepts-valid ()
+  "my-gptel--safe-agent-file-p should accept valid agent file paths."
+  (should (my-gptel--safe-agent-file-p "/root/.emacs.d/agents.d/darwin/prompt.org"))
+  (should (my-gptel--safe-agent-file-p "agents.d/reviewer/prompt.org")))
+
+(ert-deftest test-session-safe-agent-file-p-rejects-traversal ()
+  "my-gptel--safe-agent-file-p should reject path traversal and non-prompt.org paths."
+  (should-not (my-gptel--safe-agent-file-p "../../etc/passwd"))
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd"))
+  (should-not (my-gptel--safe-agent-file-p ""))
+  (should-not (my-gptel--safe-agent-file-p nil))
+  (should-not (my-gptel--safe-agent-file-p 123))
+  ;; Must end in prompt.org
+  (should-not (my-gptel--safe-agent-file-p "/root/.emacs.d/agents.d/darwin/MEMORIES.md"))
+  ;; Must not contain ..
+  (should-not (my-gptel--safe-agent-file-p "../agents.d/darwin/prompt.org"))
+  ;; Multi-line bypass: ends in prompt.org but has embedded newline
+  (should-not (my-gptel--safe-agent-file-p "/root/prompt.org\n/etc/passwd")))
+
 ;;; --- Auto-mode-alist ---
 
 (ert-deftest test-session-auto-mode-alist ()
@@ -327,5 +491,90 @@
   (let ((entry (assoc "\\.gptel\\'" auto-mode-alist)))
     (should entry)
     (should (equal (cdr entry) 'text-mode))))
+
+
+;;; --- Session name validation tests ---
+
+(ert-deftest test-session-validate-name-valid ()
+  "my-gptel--validate-session-name should accept valid names."
+  (should (string= (my-gptel--validate-session-name "test-session") "test-session"))
+  (should (string= (my-gptel--validate-session-name "darwin-20260703") "darwin-20260703"))
+  (should (string= (my-gptel--validate-session-name "session_1") "session_1"))
+  (should (string= (my-gptel--validate-session-name "my.session") "my.session"))
+  (should (string= (my-gptel--validate-session-name "ABC123") "ABC123")))
+
+(ert-deftest test-session-validate-name-rejects-path-traversal ()
+  "my-gptel--validate-session-name should reject path traversal characters.
+Note: \"..\" and \"/absolute/path\" are valid per the regex (only
+alphanumeric, dots, hyphens, underscores).  Slashes are the primary
+traversal vector, and \"../../etc/passwd\" is rejected because of the slashes."
+  (should-error (my-gptel--validate-session-name "../../etc/passwd") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "foo/bar") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "foo\\bar") :type 'user-error))
+
+(ert-deftest test-session-validate-name-rejects-empty ()
+  "my-gptel--validate-session-name should reject empty strings."
+  (should-error (my-gptel--validate-session-name "") :type 'user-error)
+  (should-error (my-gptel--validate-session-name nil) :type 'user-error))
+
+(ert-deftest test-session-validate-name-rejects-spaces ()
+  "my-gptel--validate-session-name should reject names with spaces."
+  (should-error (my-gptel--validate-session-name "my session") :type 'user-error)
+  (should-error (my-gptel--validate-session-name " session") :type 'user-error))
+
+(ert-deftest test-session-validate-name-rejects-special-chars ()
+  "my-gptel--validate-session-name should reject shell-unsafe characters."
+  (should-error (my-gptel--validate-session-name "session;rm") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "session$HOME") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "session`id`") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "session|cat") :type 'user-error)
+  (should-error (my-gptel--validate-session-name "session\n") :type 'user-error))
+
+(ert-deftest test-session-save-rejects-traversal-name ()
+  "my-gptel-save-session should reject path traversal in session name."
+  (with-session-fixture
+    (with-temp-buffer
+      (text-mode)
+      (gptel-mode 1)
+      (insert "User: hello\n")
+      (should-error (my-gptel-save-session "../../etc/passwd")))))
+
+;;; --- List sessions robustness tests ---
+
+(ert-deftest test-session-list-handles-vanished-file ()
+  "my-gptel-list-sessions should not crash if a session file is deleted
+between directory-files and file-attributes (race condition).
+file-attributes returns nil for non-existent files, which would crash
+(format \"%8d\" nil). The function should skip the vanished file and
+log a warning instead of crashing."
+  (with-session-fixture
+    ;; Create a real session file
+    (with-temp-buffer
+      (text-mode)
+      (gptel-mode 1)
+      (insert "Session content")
+      (cl-letf (((symbol-function 'gptel--save-state) #'test-session--mock-gptel-save-state))
+        (my-gptel-save-session "session-existing")))
+    ;; Mock directory-files to include a non-existent "ghost" file path,
+    ;; simulating a file that was listed but deleted before file-attributes.
+    (cl-letf (((symbol-function 'directory-files)
+               (lambda (dir _full _regexp &rest _)
+                 (list (expand-file-name "session-existing.gptel" dir)
+                       (expand-file-name "ghost-vanished.gptel" dir)))))
+      ;; Capture warning messages
+      (let (warnings)
+        (cl-letf (((symbol-function 'message)
+                   (lambda (fmt &rest args)
+                     (push (apply #'format fmt args) warnings))))
+          (my-gptel-list-sessions))
+        ;; Should not crash, buffer should exist
+        (should (buffer-live-p (get-buffer "*gptel-sessions*")))
+        ;; The ghost file should have been skipped (not in output)
+        (with-current-buffer (get-buffer "*gptel-sessions*")
+          (let ((content (buffer-string)))
+            (should (string-match-p "session-existing" content))
+            (should-not (string-match-p "ghost-vanished" content))))
+        ;; A warning should have been logged for the vanished file
+        (should (cl-some (lambda (w) (string-match-p "vanished" w)) warnings))))))
 
 (provide 'test-session)

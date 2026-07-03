@@ -37,8 +37,7 @@
 
 (defvar my-gptel--guard-allow-self-modification)
 
-;; Silence byte-compiler warning for function from 'ox' library
-(declare-function org-export-expand-include-keyword "ox" ())
+(declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
 
 ;;; --- Configuration ---
 
@@ -118,10 +117,14 @@ Silently skips if either is empty.  Logs success or failure."
             (string-empty-p chat-id))
         (message "[darwin] Telegram notification skipped (no token/chat-id configured)")
       (let ((url (format "https://api.telegram.org/bot%s/sendMessage" token))
-            (payload (json-encode
-                      `(("chat_id" . ,chat-id)
-                        ("text" . ,message)
-                        ("parse_mode" . "Markdown")))))
+            ;; Use json-serialize (not json-encode) to avoid dependency on
+            ;; global json-encode-object-type.  Consistent with the pattern
+            ;; used in my-gptel--memory-build-payload.
+            ;; Note: if boolean fields are added, pass :false-object :json-false.
+            (payload (json-serialize
+                      `(:chat_id ,chat-id
+                        :text ,message
+                        :parse_mode "Markdown"))))
         (message "[darwin] Sending Telegram notification...")
         (let ((result (with-temp-buffer
                         (call-process "curl" nil t nil
@@ -146,39 +149,39 @@ This is added to `kill-emacs-hook' so it fires automatically on exit."
 ;;; --- Cycle execution ---
 
 (defun darwin--load-profile ()
-  "Load darwin's agent profile from agents.d/darwin/prompt.org."
-  (let* ((agent-dir (expand-file-name "agents.d" user-emacs-directory))
-         (prompt-path (expand-file-name "darwin/prompt.org" agent-dir)))
-    (unless (file-exists-p prompt-path)
-      (error "Darwin profile not found at %s" prompt-path))
-    ;; Reuse the same profile reading function from agent_loader.el
-    (if (fboundp 'my-gptel-read-agent-profile)
-        (my-gptel-read-agent-profile prompt-path)
-      ;; Fallback: manual org-mode expansion
-      (require 'ox)
-      (with-temp-buffer
-        (setq default-directory (file-name-directory prompt-path))
-        (insert-file-contents prompt-path)
-        (org-mode)
-        (org-export-expand-include-keyword)
-        (buffer-string)))))
+  "Load darwin's agent profile from agents.d/darwin/prompt.org.
+Uses the shared `my-gptel--load-agent-profile' from delegate_tool.el,
+which validates the agent name, checks for path traversal, and
+expands #+INCLUDE directives."
+  (or (my-gptel--load-agent-profile "darwin")
+      (error "Darwin profile not found in agents.d/darwin/prompt.org")))
 
-(defun darwin--cycle-complete-p (buf)
+(defun darwin--cycle-complete-p (buf &optional start end)
   "Check if the cycle is truly complete by scanning BUF for completion markers.
-Looks for evidence that darwin has written to HISTORY.log and MEMORIES.md,
-which are the final mandatory steps."
+Looks for a completion phrase and evidence of history logging.
+
+When START and END are provided, only searches within that region
+(typically the latest model response).  This prevents false positives
+from early mentions of completion phrases in planning text.
+
+When START or END is nil or non-integer, or START >= END,
+searches the entire buffer (backward compatibility).
+
+START and END are clamped to buffer boundaries to prevent
+args-out-of-range errors from stale positions."
   (with-current-buffer buf
-    (save-excursion
-      (goto-char (point-min))
-      ;; The model has completed if the buffer contains evidence of
-      ;; the final steps: a history log entry and a memories update.
-      ;; We look for the continuation prompt being answered with
-      ;; a summary that mentions 'done' or 'complete'.
-      (let ((text (buffer-substring-no-properties (point-min) (point-max))))
-        ;; Check for explicit completion signals in the last response
-        (and (string-match-p "\\(cycle complete\\|all steps\\|cycle summary\\|done for this cycle\\|finished.*cycle\\)" text)
-             ;; Must have evidence of history logging
-             (string-match-p "HISTORY\\|history" text))))))
+    (let ((case-fold-search t)
+          (text (if (and (integerp start) (integerp end) (< start end))
+                    (buffer-substring-no-properties
+                     (min (max start (point-min)) (point-max))
+                     (min (max end (point-min)) (point-max)))
+                  (buffer-substring-no-properties (point-min) (point-max)))))
+      ;; Check for explicit completion signals and history reference.
+      ;; case-fold-search is bound to t for deterministic matching
+      ;; regardless of buffer-local settings.
+      (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished.*cycle\\|cycle is done\\)" text)
+           (string-match-p "HISTORY" text)
+           t))))
 
 (defun darwin-run-cycle (&rest args)
   "Run one darwin cycle in batch mode.
@@ -214,8 +217,12 @@ until it either completes all steps or reaches the turn limit."
       (setq-local my-gptel--current-agent-name "darwin")
       (setq-local my-gptel--current-agent-file
                   (expand-file-name "agents.d/darwin/prompt.org" user-emacs-directory))
-      ;; Set self-modification mode so darwin can edit init.d/*.el
-      (setq my-gptel--guard-allow-self-modification t)
+      ;; Set self-modification mode so darwin can edit init.d/*.el.
+      ;; Use setq-local (not setq) so only THIS buffer has self-modification
+      ;; enabled.  Delegate buffers (e.g., reviewer) inherit the global nil
+      ;; value and cannot modify init.d/*.el.  The global value remains nil,
+      ;; so future non-darwin sessions are also protected.
+      (setq-local my-gptel--guard-allow-self-modification t)
 
       ;; Tool call tracker: log every tool call for debugging
       (add-hook 'gptel-post-tool-call-functions
@@ -260,8 +267,10 @@ until it either completes all steps or reaches the turn limit."
                  (cl-incf turn-count)
                  (message "[darwin] Turn #%d completed (tool calls so far: %d)"
                           turn-count tool-call-count)
-                 (when (and start end (< start end))
-                   (let ((response (buffer-substring-no-properties start end)))
+                 (when (and (integerp start) (integerp end) (< start end))
+                   (let ((response (buffer-substring-no-properties
+                                    (min (max start (point-min)) (point-max))
+                                    (min (max end (point-min)) (point-max)))))
                      (message "[darwin] Response: %.300s" response)))
 
                  ;; Check if we've hit the turn limit
@@ -274,8 +283,10 @@ until it either completes all steps or reaches the turn limit."
                                      turn-count darwin-cycle-max-turns tool-call-count))
                        (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
 
-                   ;; Check if the cycle is truly complete
-                   (if (darwin--cycle-complete-p cycle-buf)
+                   ;; Check if the cycle is truly complete.
+                   ;; Pass start/end to search only the latest response,
+                   ;; preventing false positives from early planning text.
+                   (if (darwin--cycle-complete-p cycle-buf start end)
                        (progn
                          (setq completed t)
                          (let ((elapsed (float-time (time-subtract (current-time) cycle-start))))
@@ -390,7 +401,15 @@ until it either completes all steps or reaches the turn limit."
                     (setq darwin-cycle-result-message
                           (format "*Darwin Cycle: No FSM*\nTool calls: %d\nTurns: %d\nNo FSM found and idle for 60s."
                                   tool-call-count turn-count))
-                    (run-with-timer 1 nil (lambda () (kill-emacs exit-code))))))
+                    (run-with-timer 1 nil (lambda () (kill-emacs exit-code))))
+                   ;; FSM in a non-terminal state (or no FSM with low
+                   ;; idle-count).  This is anomalous -- if the FSM is
+                   ;; mid-cycle, there should be an active process.
+                   ;; Increment idle-count so the 1800s safety net below
+                   ;; can eventually bail out.  Without this, a stuck
+                   ;; non-terminal FSM spins forever.
+                   (t
+                    (cl-incf idle-count))))
                 ;; Safety: if idle for too long with no requests, bail out
                 (when (> idle-count 1800)
                   (setq completed t)
