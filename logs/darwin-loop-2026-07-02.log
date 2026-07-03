@@ -4046,3 +4046,7 @@ Loading /root/.emacs.d/init.d/loca
    passed  310/314  test-td-short-args-not-truncated (0.000127 sec)
    passed  311/314  test-td-truncates-long-args (0.000320 sec)
    p
+[darwin] Tool call #51: execute_code_local args=(:command "cd /root/i.ar && git add -A && git commit -m \"darwin: expand paths consistently in all f result=[main f0ac153] darwin: expand paths consistently in all fs_tools.el functions
+ 5 files changed, 407 insertions(+), 16 deletions(-)
+ create mode 100644 emacs.d/nonexistent-relative-append.txt
+
