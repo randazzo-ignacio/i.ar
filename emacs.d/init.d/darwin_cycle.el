@@ -163,21 +163,32 @@ This is added to `kill-emacs-hook' so it fires automatically on exit."
         (org-export-expand-include-keyword)
         (buffer-string)))))
 
-(defun darwin--cycle-complete-p (buf)
+(defun darwin--cycle-complete-p (buf &optional start end)
   "Check if the cycle is truly complete by scanning BUF for completion markers.
 Looks for a completion phrase and evidence of history logging.
-Note: scans the entire buffer, not just the latest response."
+
+When START and END are provided, only searches within that region
+(typically the latest model response).  This prevents false positives
+from early mentions of completion phrases in planning text.
+
+When START or END is nil or non-integer, or START >= END,
+searches the entire buffer (backward compatibility).
+
+START and END are clamped to buffer boundaries to prevent
+args-out-of-range errors from stale positions."
   (with-current-buffer buf
-    (save-excursion
-      (goto-char (point-min))
-      (let ((case-fold-search t)
-            (text (buffer-substring-no-properties (point-min) (point-max))))
-        ;; Check for explicit completion signals and history reference.
-        ;; case-fold-search is bound to t for deterministic matching
-        ;; regardless of buffer-local settings.
-        (and (string-match-p "\\(cycle complete\\|all steps\\|cycle summary\\|done for this cycle\\|finished.*cycle\\)" text)
-             (string-match-p "HISTORY" text)
-             t)))))
+    (let ((case-fold-search t)
+          (text (if (and (integerp start) (integerp end) (< start end))
+                    (buffer-substring-no-properties
+                     (max start (point-min))
+                     (min end (point-max)))
+                  (buffer-substring-no-properties (point-min) (point-max)))))
+      ;; Check for explicit completion signals and history reference.
+      ;; case-fold-search is bound to t for deterministic matching
+      ;; regardless of buffer-local settings.
+      (and (string-match-p "\\(cycle complete\\|all steps\\|cycle summary\\|done for this cycle\\|finished.*cycle\\)" text)
+           (string-match-p "HISTORY" text)
+           t))))
 
 (defun darwin-run-cycle (&rest args)
   "Run one darwin cycle in batch mode.
@@ -273,8 +284,10 @@ until it either completes all steps or reaches the turn limit."
                                      turn-count darwin-cycle-max-turns tool-call-count))
                        (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
 
-                   ;; Check if the cycle is truly complete
-                   (if (darwin--cycle-complete-p cycle-buf)
+                   ;; Check if the cycle is truly complete.
+                   ;; Pass start/end to search only the latest response,
+                   ;; preventing false positives from early planning text.
+                   (if (darwin--cycle-complete-p cycle-buf start end)
                        (progn
                          (setq completed t)
                          (let ((elapsed (float-time (time-subtract (current-time) cycle-start))))
