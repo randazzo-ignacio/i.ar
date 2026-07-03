@@ -2,7 +2,7 @@
 tool_display : Percent 31% [Relevant: 29 Covered: 9 Missed: 20]
 task_tools : Percent 91% [Relevant: 68 Covered: 62 Missed: 6]
 session_persistence : Percent 57% [Relevant: 99 Covered: 57 Missed: 42]
-replacement_tool : Percent 89% [Relevant: 19 Covered: 17 Missed: 2]
+replacement_tool : Percent 94% [Relevant: 39 Covered: 37 Missed: 2]
 reload_tools : Percent 62% [Relevant: 32 Covered: 20 Missed: 12]
 output_sanitizer : Percent 100% [Relevant: 25 Covered: 25 Missed: 0]
 memory_tools : Percent 39% [Relevant: 127 Covered: 50 Missed: 77]
