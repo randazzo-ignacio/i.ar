@@ -16542,3 +16542,14 @@ In toplevel form:
    passed  425/429  test-td-short-args-not-truncated (0.000461 sec)
    passed  426/429  test-td-truncates-long-args (0.000658 sec)
    p
+[darwin] Tool call #132: execute_code_local args=(:command "cd /root/i.ar && git add -A && git commit -m \"darwin: added buf return value to spawn-as result=[main 29dc304] darwin: added buf return value to spawn-async-delegate + 18 new delegate tests (51% -> higher coverage)
+ 4 files changed, 1077 insertions(+), 2 deletions(-)
+
+[darwin] Tool call #133: execute_code_local args=(:command "cd /root/i.ar && git push 2>&1") result=Enumerating objects: 19, done.
+Counting objects:   5% (1/19)Counting objects:  10% (2/19)Counting objects:  15% (3/19)Counting objects:  21% (4/19)Counting objects:  26% (5/19)Counting object
+[darwin] Tool call #134: execute_code_local args=(:command "date -u \"+%Y-%m-%d %H:%M:%S\"") result=2026-07-03 16:07:23
+
+[darwin] Tool call #135: append_file args=(:filepath "/root/.emacs.d/agents.d/darwin/HISTORY.log" :content "[2026-07-03 16:07:23] darwin: cycl result=Success: Content appended to '/root/.emacs.d/agents.d/darwin/HISTORY.log'
+[darwin] Tool call #136: replace_in_file args=(:path "/root/.emacs.d/agents.d/darwin/MEMORIES.md" :search_text "- Cycle 47 (2026-07-03): Fixed rac result=Success: Replaced text in '/root/.emacs.d/agents.d/darwin/MEMORIES.md'
+[darwin] Tool call #137: append_file args=(:content "- `my-gptel--spawn-async-delegate` (delegate_tool.el) now returns `buf`
+  (the buffer obje result=Success: Content appended to '/root/.emacs.d/agents.d/darwin/MEMORIES.md'
