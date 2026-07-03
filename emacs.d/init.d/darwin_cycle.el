@@ -173,8 +173,8 @@ args-out-of-range errors from stale positions."
     (let ((case-fold-search t)
           (text (if (and (integerp start) (integerp end) (< start end))
                     (buffer-substring-no-properties
-                     (max start (point-min))
-                     (min end (point-max)))
+                     (min (max start (point-min)) (point-max))
+                     (min (max end (point-min)) (point-max)))
                   (buffer-substring-no-properties (point-min) (point-max)))))
       ;; Check for explicit completion signals and history reference.
       ;; case-fold-search is bound to t for deterministic matching
@@ -263,8 +263,10 @@ until it either completes all steps or reaches the turn limit."
                  (cl-incf turn-count)
                  (message "[darwin] Turn #%d completed (tool calls so far: %d)"
                           turn-count tool-call-count)
-                 (when (and start end (< start end))
-                   (let ((response (buffer-substring-no-properties start end)))
+                 (when (and (integerp start) (integerp end) (< start end))
+                   (let ((response (buffer-substring-no-properties
+                                    (min (max start (point-min)) (point-max))
+                                    (min (max end (point-min)) (point-max)))))
                      (message "[darwin] Response: %.300s" response)))
 
                  ;; Check if we've hit the turn limit

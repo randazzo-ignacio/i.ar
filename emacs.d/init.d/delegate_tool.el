@@ -215,8 +215,10 @@ in text from terminating prematurely with a non-result."
           (when (symbol-value timer-sym)
             (cancel-timer (symbol-value timer-sym)))
           (let ((response
-                 (if (and (numberp start) (numberp end) (< start end))
-                     (buffer-substring-no-properties start end)
+                 (if (and (integerp start) (integerp end) (< start end))
+                     (buffer-substring-no-properties
+                      (min (max start (point-min)) (point-max))
+                      (min (max end (point-min)) (point-max)))
                    "")))
             (run-with-timer
              5 nil
@@ -250,8 +252,10 @@ in text from terminating prematurely with a non-result."
           (when (symbol-value timer-sym)
             (cancel-timer (symbol-value timer-sym)))
           (let ((response
-                 (if (and (numberp start) (numberp end) (< start end))
-                     (buffer-substring-no-properties start end)
+                 (if (and (integerp start) (integerp end) (< start end))
+                     (buffer-substring-no-properties
+                      (min (max start (point-min)) (point-max))
+                      (min (max end (point-min)) (point-max)))
                    "")))
             (message "[delegate] %s reached max text-only turns (%d), returning last response."
                      agent max-turns)
