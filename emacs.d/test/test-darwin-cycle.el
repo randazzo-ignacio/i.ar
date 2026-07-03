@@ -495,4 +495,96 @@ in the same text.  This test documents the known limitation."
     ;; by limiting search to the latest model response.
     (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
 
+;;; --- CYCLE_COMPLETE sentinel tests ---
+
+(ert-deftest test-darwin-cycle-complete-sentinel ()
+  "darwin--cycle-complete-p should return t when CYCLE_COMPLETE sentinel is present.
+The structured sentinel is an unambiguous completion signal that does not
+require a HISTORY reference -- it is only produced intentionally at the
+end of a completed cycle.  The sentinel must appear on its own line."
+  (with-temp-buffer
+    (insert "I have completed all steps. HISTORY.log updated.\nCYCLE_COMPLETE\n")
+    (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
+
+(ert-deftest test-darwin-cycle-complete-sentinel-no-history ()
+  "darwin--cycle-complete-p should return t with CYCLE_COMPLETE even without HISTORY.
+The sentinel is a structured signal -- it does not need the two-part
+check (completion phrase + HISTORY reference) that natural language
+phrases require.  This eliminates false negative risk."
+  (with-temp-buffer
+    (insert "Summary: all done.\nCYCLE_COMPLETE\n")
+    (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
+
+(ert-deftest test-darwin-cycle-complete-sentinel-in-region ()
+  "darwin--cycle-complete-p should detect CYCLE_COMPLETE within a START/END region.
+When the sentinel appears in the latest model response (within the
+region bounds), it should be detected even if earlier text contains
+no completion markers."
+  (with-temp-buffer
+    (insert "Let me look at the codebase.\n")
+    (insert "---\n")
+    (insert "All done.\nCYCLE_COMPLETE\n")
+    (let* ((sep-end (save-excursion
+                      (goto-char (point-min))
+                      (search-forward "---\n")))
+           (region-start sep-end)
+           (region-end (point-max)))
+      (should (eq (darwin--cycle-complete-p (current-buffer) region-start region-end) t)))))
+
+(ert-deftest test-darwin-cycle-complete-sentinel-outside-region ()
+  "darwin--cycle-complete-p should return nil when CYCLE_COMPLETE is outside region.
+The sentinel appears in early text (outside the region) and the latest
+response has no completion markers -- should return nil."
+  (with-temp-buffer
+    (insert "CYCLE_COMPLETE\n")
+    (insert "---\n")
+    (insert "Still working on things.\n")
+    (let* ((sep-end (save-excursion
+                      (goto-char (point-min))
+                      (search-forward "---\n")))
+           (region-start sep-end)
+           (region-end (point-max)))
+      (should (null (darwin--cycle-complete-p (current-buffer) region-start region-end))))))
+
+(ert-deftest test-darwin-cycle-complete-sentinel-case-sensitive ()
+  "darwin--cycle-complete-p should NOT match lowercase cycle_complete.
+The sentinel is case-sensitive (bound case-fold-search to nil for the
+sentinel check) because the prompt asks for the exact text CYCLE_COMPLETE.
+Lowercase or mixed-case variants should NOT match."
+  (with-temp-buffer
+    (insert "Done.\ncycle_complete\n")
+    (should (null (darwin--cycle-complete-p (current-buffer))))))
+
+(ert-deftest test-darwin-cycle-complete-sentinel-not-substring ()
+  "darwin--cycle-complete-p should NOT match CYCLE_COMPLETE as a substring.
+The sentinel must appear on its own line.  It should NOT match when
+embedded in a longer word (CYCLE_COMPLETED) or in a sentence
+(end with the exact text CYCLE_COMPLETE on its own line)."
+  (with-temp-buffer
+    ;; As part of a longer word on its own line -- should NOT match
+    (insert "CYCLE_COMPLETED\n")
+    (should (null (darwin--cycle-complete-p (current-buffer))))))
+
+(ert-deftest test-darwin-cycle-complete-sentinel-not-in-sentence ()
+  "darwin--cycle-complete-p should NOT match CYCLE_COMPLETE inside a sentence.
+The prompt text contains 'CYCLE_COMPLETE' as part of a longer line.
+The sentinel must be on its own line, so this should NOT match."
+  (with-temp-buffer
+    (insert "end with the exact text CYCLE_COMPLETE on its own line\n")
+    (should (null (darwin--cycle-complete-p (current-buffer))))))
+
+(ert-deftest test-darwin-cycle-complete-sentinel-at-buffer-start ()
+  "darwin--cycle-complete-p should match CYCLE_COMPLETE at the start of buffer.
+Tests that the \\(^\\|\n\\) anchor correctly matches at position 0."
+  (with-temp-buffer
+    (insert "CYCLE_COMPLETE\n")
+    (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
+
+(ert-deftest test-darwin-cycle-complete-sentinel-at-buffer-end ()
+  "darwin--cycle-complete-p should match CYCLE_COMPLETE at end of buffer without newline.
+Tests that the \\(\n\\|\\'\\) anchor correctly matches at end of string."
+  (with-temp-buffer
+    (insert "Summary done.\nCYCLE_COMPLETE")
+    (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
+
 (provide 'test-darwin-cycle)

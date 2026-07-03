@@ -91,7 +91,7 @@ Set this before killing Emacs.  Nil means no notification.")
    You MUST write to your history. Format: [TIMESTAMP] cycle: <what you did and why>
 10. Update your MEMORIES.md with what you learned (use write_file or replace_in_file).
     You MUST update your memories. Add what you learned this cycle.
-11. You are done for this cycle. Respond with a summary and stop.
+11. You are done for this cycle. Respond with a summary and end with the exact text CYCLE_COMPLETE on its own line.
 
 CRITICAL: Steps 5, 8, 9, and 10 are MANDATORY. Do not skip them.
 If you skip the reviewer delegation, the commit, the history log, or the memories update,
@@ -176,12 +176,20 @@ args-out-of-range errors from stale positions."
                      (min (max start (point-min)) (point-max))
                      (min (max end (point-min)) (point-max)))
                   (buffer-substring-no-properties (point-min) (point-max)))))
-      ;; Check for explicit completion signals and history reference.
-      ;; case-fold-search is bound to t for deterministic matching
-      ;; regardless of buffer-local settings.
-      (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished.*cycle\\|cycle is done\\)" text)
-           (string-match-p "HISTORY" text)
-           t))))
+      ;; Check for structured sentinel first (unambiguous, no HISTORY needed).
+      ;; The sentinel must appear on its own line (line-anchored) to avoid
+      ;; matching the substring inside the prompt text or tool output.
+      ;; Case-sensitive: the prompt asks for "exact text CYCLE_COMPLETE".
+      (or (and (let ((case-fold-search nil))
+                 (string-match-p "\\(^\\|\n\\)CYCLE_COMPLETE\\(\n\\|\\'\\)" text))
+               t)
+          ;; Natural language completion: requires both a completion phrase
+          ;; and a HISTORY reference (two-part check for reliability).
+          ;; case-fold-search is bound to t for deterministic matching
+          ;; regardless of buffer-local settings.
+          (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished.*cycle\\|cycle is done\\)" text)
+               (string-match-p "HISTORY" text)
+               t)))))
 
 (defun darwin-run-cycle (&rest args)
   "Run one darwin cycle in batch mode.
