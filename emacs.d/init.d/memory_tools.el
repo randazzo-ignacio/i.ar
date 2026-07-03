@@ -154,49 +154,57 @@ conversations with tool I/O can easily produce payloads exceeding
 this limit, causing execve to fail with E2BIG."
   (let* ((host (gptel-backend-host gptel-backend))
          (url (format "http://%s/api/chat" host))
-         (buf (generate-new-buffer " *gptel-memory-summary*"))
+         (buf nil)
          (start-time (current-time))
          (deadline (time-add start-time (seconds-to-time timeout)))
          (done nil)
          (exit-code nil)
          (proc nil)
-         ;; Write payload to temp file to avoid ARG_MAX / MAX_ARG_STRLEN limits
-         (payload-file (make-temp-file "gptel-payload-")))
-    ;; Write payload to temp file
-    (with-temp-file payload-file
-      (insert payload))
-    (setq proc
-          (make-process
-           :name "gptel-memory-curl"
-           :buffer buf
-           :command (list "curl" "-s" "-X" "POST" url
-                          "-H" "Content-Type: application/json"
-                          "-d" (format "@%s" payload-file))
-           :sentinel
-           (lambda (p _event)
-             (when (memq (process-status p) '(exit signal))
-               (setq exit-code (process-exit-status p))
-               (setq done t)))))
-    (while (and (not done)
-                (process-live-p proc)
-                (time-less-p (current-time) deadline))
-      (accept-process-output nil 0.1))
+         (payload-file nil))
     (unwind-protect
-        (let ((raw-output (with-current-buffer buf (buffer-string))))
-          (cond
-           ((not done)
-            (delete-process proc)
-            (let ((partial (with-current-buffer buf (buffer-string))))
-              (if (string-match-p "\\S-" partial)
-                  (format "Error: Timeout after %ds. Partial output:\n%s" timeout partial)
-                (format "Error: Timeout after %ds. No output received." timeout))))
-           ((and exit-code (/= exit-code 0))
-            (format "Error: curl exited with code %d. Output:\n%s" exit-code raw-output))
-           (t
-            (my-gptel--memory-parse-ollama-response raw-output))))
-      (when (buffer-live-p buf)
+        (progn
+          ;; Create resources inside unwind-protect so cleanup always runs,
+          ;; even if generate-new-buffer or make-temp-file fails.
+          (setq buf (generate-new-buffer " *gptel-memory-summary*"))
+          (setq payload-file (make-temp-file "gptel-payload-"))
+          ;; Write payload to temp file to avoid ARG_MAX / MAX_ARG_STRLEN limits
+          (with-temp-file payload-file
+            (insert payload))
+          (setq proc
+                (make-process
+                 :name "gptel-memory-curl"
+                 :buffer buf
+                 :command (list "curl" "-s" "-X" "POST" url
+                                "-H" "Content-Type: application/json"
+                                "-d" (concat "@" payload-file))
+                 :sentinel
+                 (lambda (p _event)
+                   (when (memq (process-status p) '(exit signal))
+                     (setq exit-code (process-exit-status p))
+                     (setq done t)))))
+          (while (and (not done)
+                      (process-live-p proc)
+                      (time-less-p (current-time) deadline))
+            (accept-process-output nil 0.1))
+          (let ((raw-output (with-current-buffer buf (buffer-string))))
+            (cond
+             ((not done)
+              (delete-process proc)
+              (let ((partial (with-current-buffer buf (buffer-string))))
+                (if (string-match-p "\\S-" partial)
+                    (format "Error: Timeout after %ds. Partial output:\n%s" timeout partial)
+                  (format "Error: Timeout after %ds. No output received." timeout))))
+             ((and exit-code (/= exit-code 0))
+              (format "Error: curl exited with code %d. Output:\n%s" exit-code raw-output))
+             (t
+              (my-gptel--memory-parse-ollama-response raw-output)))))
+      ;; Cleanup: always kill process, buffer, and temp file, even if
+      ;; make-process or with-temp-file signals an error.
+      (when (and proc (process-live-p proc))
+        (delete-process proc))
+      (when (and buf (buffer-live-p buf))
         (kill-buffer buf))
-      (when (file-exists-p payload-file)
+      (when (and payload-file (file-exists-p payload-file))
         (delete-file payload-file)))))
 
 (defun my-gptel--memory-parse-ollama-response (raw-output)

@@ -8,6 +8,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'json)
+(require 'memory_tools)
 
 ;;; --- Test fixtures ---
 
@@ -335,5 +336,100 @@ Temporarily rebinds `my-gptel--memory-get-agent-dir' to return the temp dir."
     (should (stringp result))
     (should (string-prefix-p "Error:" result))
     (should (string-match-p "non-string" result))))
+
+;;; --- Resource cleanup tests ---
+
+(ert-deftest test-memory-call-ollama-cleans-up-on-curl-error ()
+  "my-gptel--memory-call-ollama should clean up temp file when curl exits with error.
+Uses localhost:11434 (no server running) so curl gets connection refused
+and exits with non-zero code. Verifies temp file is cleaned up."
+  :tags '(integration)
+  (let* ((gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
+         (gptel-model "test-model")
+         (payload (my-gptel--memory-build-payload "- old" "conversation"))
+         (tracking-file (make-temp-file "gptel-payload-"))
+         (temp-dir (file-name-directory tracking-file)))
+    (unwind-protect
+        (let ((before-files (directory-files temp-dir nil "^gptel-payload-")))
+          (let ((result (my-gptel--memory-call-ollama payload 3)))
+            (should (stringp result))
+            ;; No new gptel-payload- temp files should remain
+            (let ((after-files (directory-files temp-dir nil "^gptel-payload-")))
+              (should (equal (length after-files) (length before-files))))))
+      (when (file-exists-p tracking-file)
+        (delete-file tracking-file)))))
+
+(ert-deftest test-memory-call-ollama-cleans-up-on-timeout ()
+  "my-gptel--memory-call-ollama should clean up temp file on timeout.
+Uses 10.255.255.1 (routable but non-responsive) to trigger actual
+timeout, not DNS failure. Temp file should be cleaned up."
+  :tags '(integration)
+  (let* ((gptel-backend (gptel-make-ollama "test" :host "10.255.255.1:9999"))
+         (gptel-model "test-model")
+         (payload (my-gptel--memory-build-payload "- old" "conversation"))
+         (tracking-file (make-temp-file "gptel-payload-"))
+         (temp-dir (file-name-directory tracking-file)))
+    (unwind-protect
+        (let ((before-files (directory-files temp-dir nil "^gptel-payload-")))
+          ;; Delete tracking file so before-count is clean
+          (delete-file tracking-file)
+          (setq before-files (directory-files temp-dir nil "^gptel-payload-"))
+          (let ((result (my-gptel--memory-call-ollama payload 2)))
+            (should (stringp result))
+            (should (string-match-p "Timeout" result))
+            ;; Temp file should be cleaned up even on timeout
+            (let ((after-files (directory-files temp-dir nil "^gptel-payload-")))
+              (should (equal (length after-files) (length before-files))))))
+      (when (file-exists-p tracking-file)
+        (delete-file tracking-file)))))
+
+(ert-deftest test-memory-call-ollama-cleans-up-buffer-on-completion ()
+  "my-gptel--memory-call-ollama should kill the process buffer after completion.
+The buffer ' *gptel-memory-summary*' (or similar) should not linger
+after the call returns."
+  :tags '(integration)
+  (let* ((gptel-backend (gptel-make-ollama "test" :host "nonexistent.invalid:9999"))
+         (gptel-model "test-model")
+         (payload (my-gptel--memory-build-payload "- old" "conversation")))
+    (let ((result (my-gptel--memory-call-ollama payload 1)))
+      (should (stringp result))
+      ;; No new *gptel-memory-summary* buffer should remain
+      (let ((memory-buffers (cl-remove-if-not
+                             (lambda (name)
+                               (string-match-p "gptel-memory-summary" name))
+                             (mapcar #'buffer-name (buffer-list)))))
+        (should (null memory-buffers))))))
+
+(ert-deftest test-memory-call-ollama-cleans-up-on-process-creation-failure ()
+  "my-gptel--memory-call-ollama should clean up when make-process fails.
+Simulates curl not found by setting exec-path to a nonexistent directory.
+The unwind-protect should still kill the buffer and delete the temp file."
+  :tags '(integration)
+  (let* ((gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
+         (gptel-model "test-model")
+         (payload (my-gptel--memory-build-payload "- old" "conversation"))
+         (tracking-file (make-temp-file "gptel-payload-"))
+         (temp-dir (file-name-directory tracking-file)))
+    (unwind-protect
+        (let ((before-files (directory-files temp-dir nil "^gptel-payload-")))
+          (delete-file tracking-file)
+          (setq before-files (directory-files temp-dir nil "^gptel-payload-"))
+          ;; Make curl unfindable to trigger make-process error
+          (let ((exec-path '("/nonexistent"))
+                (process-environment (cons "PATH=/nonexistent" process-environment)))
+            (condition-case _err
+                (my-gptel--memory-call-ollama payload 3)
+              (error nil)))
+          ;; Buffer should be cleaned up
+          (let ((memory-buffers (cl-remove-if-not
+                                 (lambda (name)
+                                   (string-match-p "gptel-memory-summary" name))
+                                 (mapcar #'buffer-name (buffer-list)))))
+            (should (null memory-buffers)))
+          ;; Temp file should be cleaned up
+          (let ((after-files (directory-files temp-dir nil "^gptel-payload-")))
+            (should (equal (length after-files) (length before-files)))))
+      (when (file-exists-p tracking-file)
+        (delete-file tracking-file)))))
 
 (provide 'test-memory)
