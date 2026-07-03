@@ -217,8 +217,12 @@ until it either completes all steps or reaches the turn limit."
       (setq-local my-gptel--current-agent-name "darwin")
       (setq-local my-gptel--current-agent-file
                   (expand-file-name "agents.d/darwin/prompt.org" user-emacs-directory))
-      ;; Set self-modification mode so darwin can edit init.d/*.el
-      (setq my-gptel--guard-allow-self-modification t)
+      ;; Set self-modification mode so darwin can edit init.d/*.el.
+      ;; Use setq-local (not setq) so only THIS buffer has self-modification
+      ;; enabled.  Delegate buffers (e.g., reviewer) inherit the global nil
+      ;; value and cannot modify init.d/*.el.  The global value remains nil,
+      ;; so future non-darwin sessions are also protected.
+      (setq-local my-gptel--guard-allow-self-modification t)
 
       ;; Tool call tracker: log every tool call for debugging
       (add-hook 'gptel-post-tool-call-functions
