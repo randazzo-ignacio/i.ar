@@ -182,7 +182,7 @@ variables are restored."
   (interactive)
   (unless (file-directory-p my-gptel-sessions-dir)
     (user-error "No sessions directory found: %s" my-gptel-sessions-dir))
-  (let* ((all-files (directory-files my-gptel-sessions-dir t "\\.gptel$"))
+  (let* ((all-files (directory-files my-gptel-sessions-dir t "\\.gptel\\'"))
          (_ (unless all-files
               (user-error "No saved sessions found in %s" my-gptel-sessions-dir)))
          (sorted-files (my-gptel--sort-sessions-by-mtime all-files))
@@ -211,7 +211,7 @@ Shows session name, size, and last modified time."
   (interactive)
   (unless (file-directory-p my-gptel-sessions-dir)
     (user-error "No sessions directory found: %s" my-gptel-sessions-dir))
-  (let* ((files (directory-files my-gptel-sessions-dir t "\\.gptel$"))
+  (let* ((files (directory-files my-gptel-sessions-dir t "\\.gptel\\'"))
          (_ (unless files
               (user-error "No saved sessions found")))
          (sorted-files (my-gptel--sort-sessions-by-mtime files))

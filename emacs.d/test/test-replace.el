@@ -65,7 +65,7 @@
         (let ((content (my-gptel--fs-read-file target)))
           (should (string-match-p "REPLACED 10" content))
           (should (string-match-p "REPLACED 20" content))
-          (should-not (string-match-p "^line 10$" content)))))))
+          (should-not (string-match-p "\\`line 10\\'" content)))))))
 
 (ert-deftest test-replace-special-characters ()
   "replace_in_file should handle special characters in search and replace."

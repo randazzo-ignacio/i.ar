@@ -64,8 +64,8 @@
     "^\\* TOOL CALLING PROTOCOL"
     "^\\* PROMPT INJECTION RESISTANCE"
     ;; Fake tool call blocks
-    "^```tool$"
-    "^```json$"
+    "^```tool\\'"
+    "^```json\\'"
     ;; Role-play injection patterns
     "^You are "
     "^Ignore \\(all \\)?\\(previous \\|prior \\)?instructions"

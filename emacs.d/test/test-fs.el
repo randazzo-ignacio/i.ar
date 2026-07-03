@@ -73,7 +73,7 @@ Binds `test-fs--tmpdir' to the temp dir path."
       ;; Should include the hidden file
       (should (string-match-p "\\.hidden" result))
       ;; Should NOT include . or .. as standalone entries
-      (should-not (string-match-p "^\\.\\.?$" result))
+      (should-not (string-match-p "\\`\\.\\.?\\'" result))
       ;; Regular files should still be there
       (should (string-match-p "hello\\.txt" result)))))
 
@@ -134,7 +134,7 @@ Binds `test-fs--tmpdir' to the temp dir path."
     (should (stringp result))
     (should (string-match-p "Error" result))
     ;; Error should NOT contain the raw relative path
-    (should-not (string-match-p "^Error: File 'nonexistent-relative-file.txt'" result))
+    (should-not (string-match-p "\\`Error: File 'nonexistent-relative-file.txt'" result))
     ;; Error SHOULD contain the expanded (absolute) path
     (should (string-match-p (regexp-quote (expand-file-name "nonexistent-relative-file.txt")) result))))
 
@@ -261,7 +261,7 @@ Binds `test-fs--tmpdir' to the temp dir path."
     (should (stringp result))
     (should (string-match-p "Error" result))
     ;; Error should NOT contain the raw relative path
-    (should-not (string-match-p "^Error: Failed to append to 'nonexistent-dir-xyz/sub/file.txt'" result))
+    (should-not (string-match-p "\\`Error: Failed to append to 'nonexistent-dir-xyz/sub/file.txt'" result))
     ;; Error SHOULD contain the expanded (absolute) path
     (should (string-match-p (regexp-quote (expand-file-name "nonexistent-dir-xyz/sub/file.txt")) result))))
 

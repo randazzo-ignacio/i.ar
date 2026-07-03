@@ -58,7 +58,7 @@ untrusted-content sessions."
   :group 'gptel)
 
 (defconst my-gptel--guard-history-pred
-  (lambda (path) (string-match-p "/HISTORY\\.log$" path))
+  (lambda (path) (string-match-p "/HISTORY\\.log\\'" path))
   "Predicate matching HISTORY.log files anywhere in the filesystem.
 Used both in the protected patterns list and by the append exception
 to ensure single-source-of-truth for the HISTORY.log regex.")
@@ -67,11 +67,11 @@ to ensure single-source-of-truth for the HISTORY.log regex.")
   (list
    ;; Agent prompt files -- no agent may modify any prompt.org
    (cons (lambda (path)
-           (string-match-p "/agents\\.d/[^/]+/prompt\\.org$" path))
+           (string-match-p "/agents\\.d/[^/]+/prompt\\.org\\'" path))
          "Agent prompt files are protected. Agents cannot modify their own or other agents' prompts.")
    ;; Shared context file
    (cons (lambda (path)
-           (string-match-p "/agents\\.d/base_context\\.org$" path))
+           (string-match-p "/agents\\.d/base_context\\.org\\'" path))
          "Shared context file (base_context.org) is protected. Agents cannot modify the shared context.")
    ;; HISTORY.log files -- append is allowed but overwrite/replace is not
    (cons my-gptel--guard-history-pred
@@ -85,13 +85,13 @@ if the path is protected.")
   (list
    ;; Emacs Lisp source files
    (cons (lambda (path)
-           (or (string-match-p "/init\\.el$" path)
-               (string-match-p "/init\\.d/.*\\.el$" path)))
+           (or (string-match-p "/init\\.el\\'" path)
+               (string-match-p "/init\\.d/.*\\.el\\'" path)))
          "Emacs Lisp source files (init.el, init.d/*.el) are protected. Agents cannot modify tool definitions or Emacs configuration.")
    ;; Container configuration
    (cons (lambda (path)
-           (or (string-match-p "/Containerfile$" path)
-               (string-match-p "/emacboros\\.sh$" path)
+           (or (string-match-p "/Containerfile\\'" path)
+               (string-match-p "/emacboros\\.sh\\'" path)
                (string-match-p "/containers/" path)))
          "Container configuration files are protected. Agents cannot modify Containerfile or emacboros.sh.")
    ;; Git hooks

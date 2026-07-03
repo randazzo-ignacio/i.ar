@@ -67,7 +67,7 @@ Discovers agent directories under agents.d/<name>/ containing prompt.org."
            (lambda (name)
              (let ((prompt-path (expand-file-name (format "%s/prompt.org" name) agent-dir)))
                (file-exists-p prompt-path)))
-           (directory-files agent-dir nil "^[a-zA-Z0-9_-]+$" t)))
+           (directory-files agent-dir nil "\\`[a-zA-Z0-9_-]+\\'" t)))
          (_ (unless agent-names
               (user-error "No agent profiles found in %s" agent-dir)))
          (chosen (completing-read "Select Agent Persona: " agent-names nil t))
