@@ -351,4 +351,365 @@ Returns a plist: (:parent-buf :delegate-buf :stream-fn)."
         (funcall fn 8 (point-max)))
       (should (null result)))))
 
+;;; --- Spawn async delegate tests ---
+;; These tests mock gptel-send to prevent actual API calls, then inspect
+;; the buffer state to verify setup was correct.
+
+(ert-deftest test-delegate-spawn-creates-buffer ()
+  "spawn-async-delegate should create a buffer with delegate- prefix."
+  (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+    (let ((buf nil))
+      (unwind-protect
+           (progn
+             (setq buf (my-gptel--spawn-async-delegate
+                        (lambda (_r)) "testagent" "do something" "ctx" 30
+                        "You are a test agent."))
+             (should (buffer-live-p buf))
+             (should (string-match-p "gptel-delegate" (buffer-name buf))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
+(ert-deftest test-delegate-spawn-sets-depth ()
+  "spawn-async-delegate should set delegate-depth to parent-depth + 1."
+  (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+    (let ((buf nil))
+      (unwind-protect
+           (progn
+             (setq buf (my-gptel--spawn-async-delegate
+                        (lambda (_r)) "testagent" "do something" "ctx" 30
+                        "You are a test agent."))
+             (with-current-buffer buf
+               (should (= my-gptel--delegate-depth 1))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
+(ert-deftest test-delegate-spawn-increments-depth-from-parent ()
+  "spawn-async-delegate should increment depth from parent's depth."
+  (with-temp-buffer
+    (setq-local my-gptel--delegate-depth 2)
+    (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+      (let ((buf nil))
+        (unwind-protect
+             (progn
+               (setq buf (my-gptel--spawn-async-delegate
+                          (lambda (_r)) "testagent" "do something" "ctx" 30
+                          "You are a test agent."))
+               (with-current-buffer buf
+                 (should (= my-gptel--delegate-depth 3))))
+          (when (buffer-live-p buf) (kill-buffer buf)))))))
+
+(ert-deftest test-delegate-spawn-inserts-prompt ()
+  "spawn-async-delegate should insert the full prompt into the buffer."
+  (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+    (let ((buf nil))
+      (unwind-protect
+           (progn
+             (setq buf (my-gptel--spawn-async-delegate
+                        (lambda (_r)) "testagent" "review the code" "some context" 30
+                        "You are a test agent."))
+             (with-current-buffer buf
+               (should (string-match-p "DELEGATED TASK" (buffer-string)))
+               (should (string-match-p "review the code" (buffer-string)))
+               (should (string-match-p "some context" (buffer-string)))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
+(ert-deftest test-delegate-spawn-sets-system-prompt ()
+  "spawn-async-delegate should set gptel-system-prompt to the profile."
+  (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+    (let ((buf nil))
+      (unwind-protect
+           (progn
+             (setq buf (my-gptel--spawn-async-delegate
+                        (lambda (_r)) "testagent" "task" "ctx" 30
+                        "You are a test agent profile."))
+             (with-current-buffer buf
+               (should (string= gptel-system-prompt "You are a test agent profile."))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
+(ert-deftest test-delegate-spawn-adds-completion-hook ()
+  "spawn-async-delegate should add a post-response hook to the buffer."
+  (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+    (let ((buf nil))
+      (unwind-protect
+           (progn
+             (setq buf (my-gptel--spawn-async-delegate
+                        (lambda (_r)) "testagent" "task" "ctx" 30
+                        "You are a test agent."))
+             (with-current-buffer buf
+               (should (> (length gptel-post-response-functions) 0))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
+(ert-deftest test-delegate-spawn-adds-pre-tool-hook ()
+  "spawn-async-delegate should add a pre-tool-call hook (unknown tool guard)."
+  (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+    (let ((buf nil))
+      (unwind-protect
+           (progn
+             (setq buf (my-gptel--spawn-async-delegate
+                        (lambda (_r)) "testagent" "task" "ctx" 30
+                        "You are a test agent."))
+             (with-current-buffer buf
+               (should (> (length gptel-pre-tool-call-functions) 0))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
+(ert-deftest test-delegate-spawn-adds-stream-hook ()
+  "spawn-async-delegate should add a post-stream hook for mirroring."
+  (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+    (let ((buf nil))
+      (unwind-protect
+           (progn
+             (setq buf (my-gptel--spawn-async-delegate
+                        (lambda (_r)) "testagent" "task" "ctx" 30
+                        "You are a test agent."))
+             (with-current-buffer buf
+               (should (> (length gptel-post-stream-hook) 0))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
+(ert-deftest test-delegate-spawn-removes-delegate-tool-at-max-depth ()
+  "spawn-async-delegate should remove delegate tool when depth >= max-depth."
+  (with-temp-buffer
+    (setq-local my-gptel--delegate-depth (1- my-gptel--delegate-max-depth))
+    (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+      (let ((buf nil)
+            (original-tools (copy-sequence gptel-tools)))
+        (unwind-protect
+             (progn
+               (setq buf (my-gptel--spawn-async-delegate
+                          (lambda (_r)) "testagent" "task" "ctx" 30
+                          "You are a test agent."))
+               (with-current-buffer buf
+                 (should (= my-gptel--delegate-depth my-gptel--delegate-max-depth))
+                 (let ((has-delegate
+                        (cl-find-if (lambda (tool)
+                                      (equal (gptel-tool-name tool) "delegate"))
+                                    gptel-tools)))
+                   (should-not has-delegate))))
+          (when (buffer-live-p buf) (kill-buffer buf))
+          (setq gptel-tools original-tools))))))
+
+(ert-deftest test-delegate-spawn-keeps-delegate-tool-below-max-depth ()
+  "spawn-async-delegate should keep delegate tool when depth < max-depth."
+  (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+    (let ((buf nil))
+      (unwind-protect
+           (progn
+             (setq buf (my-gptel--spawn-async-delegate
+                        (lambda (_r)) "testagent" "task" "ctx" 30
+                        "You are a test agent."))
+             (with-current-buffer buf
+               (should (< my-gptel--delegate-depth my-gptel--delegate-max-depth))
+               (let ((has-delegate
+                      (cl-find-if (lambda (tool)
+                                    (equal (gptel-tool-name tool) "delegate"))
+                                  gptel-tools)))
+                 (should has-delegate))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
+
+;;; --- Stream function edge case tests ---
+
+(ert-deftest test-delegate-stream-fn-dead-parent-buffer ()
+  "Stream function should not crash when parent buffer is dead."
+  (let ((parent-buf (generate-new-buffer "test-parent"))
+        (delegate-buf (generate-new-buffer "test-delegate"))
+        (stream-marker-sym (make-symbol "stream-marker"))
+        (stream-pos-sym (make-symbol "stream-pos")))
+    (set stream-marker-sym nil)
+    (with-current-buffer parent-buf
+      (insert "Parent buffer start.\n")
+      (let ((parent-marker (point-marker)))
+        (with-current-buffer delegate-buf
+          (insert "PROMPT TEXT\n")
+          (set stream-pos-sym (point-marker)))
+        (let ((stream-fn (my-gptel--delegate-stream-fn
+                          parent-buf parent-marker "testagent"
+                          stream-marker-sym stream-pos-sym)))
+          ;; Kill parent buffer before calling stream-fn
+          (kill-buffer parent-buf)
+          (with-current-buffer delegate-buf
+            (goto-char (point-max))
+            (insert "new text\n")
+            ;; Should not crash
+            (funcall stream-fn)))))
+    (when (buffer-live-p delegate-buf) (kill-buffer delegate-buf))))
+
+(ert-deftest test-delegate-stream-fn-nil-stream-pos ()
+  "Stream function should do nothing when stream-pos is nil."
+  (let ((parent-buf (generate-new-buffer "test-parent"))
+        (delegate-buf (generate-new-buffer "test-delegate"))
+        (stream-marker-sym (make-symbol "stream-marker"))
+        (stream-pos-sym (make-symbol "stream-pos")))
+    (set stream-marker-sym nil)
+    (set stream-pos-sym nil)  ; nil stream-pos
+    (with-current-buffer parent-buf
+      (insert "Parent buffer start.\n")
+      (let ((parent-marker (point-marker)))
+        (with-current-buffer delegate-buf
+          (insert "PROMPT TEXT\n"))
+        (let ((stream-fn (my-gptel--delegate-stream-fn
+                          parent-buf parent-marker "testagent"
+                          stream-marker-sym stream-pos-sym)))
+          (with-current-buffer delegate-buf
+            (goto-char (point-max))
+            (insert "new text\n")
+            (funcall stream-fn))
+          (with-current-buffer parent-buf
+            (should-not (string-match-p "new text" (buffer-string)))))))
+    (when (buffer-live-p parent-buf) (kill-buffer parent-buf))
+    (when (buffer-live-p delegate-buf) (kill-buffer delegate-buf))))
+
+;;; --- Completion function edge case tests ---
+
+(ert-deftest test-delegate-completion-hook-nil-start-end ()
+  "Completion hook should handle nil start/end by using empty response."
+  (with-temp-buffer
+    (insert "prefix\nresponse text here\n")
+    (let ((result nil)
+          (completed-sym (make-symbol "completed"))
+          (timer-sym (make-symbol "timer"))
+          (tools-called-sym (make-symbol "tools-called"))
+          (turn-count-sym (make-symbol "turn-count")))
+      (set completed-sym nil)
+      (set timer-sym nil)
+      (set tools-called-sym t)
+      (set turn-count-sym 0)
+      (let ((fn (my-gptel--delegate-completion-fn
+                 (current-buffer)
+                 (lambda (r) (setq result r))
+                 "testagent"
+                 completed-sym timer-sym 600
+                 tools-called-sym turn-count-sym
+                 my-gptel--delegate-max-turns)))
+        (funcall fn nil nil))
+      (should result)
+      (should (string-match-p "empty response" result))
+      (should (symbol-value completed-sym)))))
+
+(ert-deftest test-delegate-completion-hook-start-gt-end ()
+  "Completion hook should handle start > end by using empty response."
+  (with-temp-buffer
+    (insert "prefix\nresponse text here\n")
+    (let ((result nil)
+          (completed-sym (make-symbol "completed"))
+          (timer-sym (make-symbol "timer"))
+          (tools-called-sym (make-symbol "tools-called"))
+          (turn-count-sym (make-symbol "turn-count")))
+      (set completed-sym nil)
+      (set timer-sym nil)
+      (set tools-called-sym t)
+      (set turn-count-sym 0)
+      (let ((fn (my-gptel--delegate-completion-fn
+                 (current-buffer)
+                 (lambda (r) (setq result r))
+                 "testagent"
+                 completed-sym timer-sym 600
+                 tools-called-sym turn-count-sym
+                 my-gptel--delegate-max-turns)))
+        (funcall fn 20 5))
+      (should result)
+      (should (string-match-p "empty response" result))
+      (should (symbol-value completed-sym)))))
+
+(ert-deftest test-delegate-completion-hook-non-integer-start ()
+  "Completion hook should handle non-integer start by using empty response."
+  (with-temp-buffer
+    (insert "prefix\nresponse text here\n")
+    (let ((result nil)
+          (completed-sym (make-symbol "completed"))
+          (timer-sym (make-symbol "timer"))
+          (tools-called-sym (make-symbol "tools-called"))
+          (turn-count-sym (make-symbol "turn-count")))
+      (set completed-sym nil)
+      (set timer-sym nil)
+      (set tools-called-sym t)
+      (set turn-count-sym 0)
+      (let ((fn (my-gptel--delegate-completion-fn
+                 (current-buffer)
+                 (lambda (r) (setq result r))
+                 "testagent"
+                 completed-sym timer-sym 600
+                 tools-called-sym turn-count-sym
+                 my-gptel--delegate-max-turns)))
+        (funcall fn "not-a-number" 10))
+      (should result)
+      (should (string-match-p "empty response" result))
+      (should (symbol-value completed-sym)))))
+
+(ert-deftest test-delegate-completion-hook-cancels-timer ()
+  "Completion hook should cancel the timer when tools were called."
+  (let ((timer-cancelled nil)
+        (result nil)
+        (buf (generate-new-buffer "test-timer")))
+    (unwind-protect
+         (with-current-buffer buf
+           (insert "prefix\nresponse text\n")
+           (let ((completed-sym (make-symbol "completed"))
+                 (timer-sym (make-symbol "timer"))
+                 (tools-called-sym (make-symbol "tools-called"))
+                 (turn-count-sym (make-symbol "turn-count")))
+             (set completed-sym nil)
+             (set tools-called-sym t)
+             (set turn-count-sym 0)
+             ;; Create a real timer so cancel-timer has something to cancel
+             (let ((real-timer (run-with-timer 100 nil (lambda () nil))))
+               (set timer-sym real-timer)
+               ;; Mock cancel-timer to track if it was called
+               (cl-letf (((symbol-function 'cancel-timer)
+                          (lambda (_timer) (setq timer-cancelled t))))
+                 (let ((fn (my-gptel--delegate-completion-fn
+                            buf (lambda (r) (setq result r))
+                            "testagent"
+                            completed-sym timer-sym 600
+                            tools-called-sym turn-count-sym
+                            my-gptel--delegate-max-turns)))
+                   (funcall fn 8 (point-max))))
+               ;; Cancel the real timer to prevent leak (cancel-timer was mocked above)
+               (cancel-timer real-timer))
+             (should timer-cancelled)
+             (should result)
+             (should (string-match-p "response text" result))
+             (should (symbol-value completed-sym))))
+      (when (buffer-live-p buf) (kill-buffer buf)))))
+
+(ert-deftest test-delegate-completion-hook-max-turns-cancels-timer ()
+  "Completion hook case 3 should also cancel the timer."
+  (let ((timer-cancelled nil)
+        (result nil)
+        (buf (generate-new-buffer "test-timer")))
+    (unwind-protect
+         (with-current-buffer buf
+           (insert "prefix\ntext response\n")
+           (let ((completed-sym (make-symbol "completed"))
+                 (timer-sym (make-symbol "timer"))
+                 (tools-called-sym (make-symbol "tools-called"))
+                 (turn-count-sym (make-symbol "turn-count")))
+             (set completed-sym nil)
+             (set tools-called-sym nil)
+             (set turn-count-sym 15)
+             (let ((real-timer (run-with-timer 100 nil (lambda () nil))))
+               (set timer-sym real-timer)
+               (cl-letf (((symbol-function 'cancel-timer)
+                          (lambda (_timer) (setq timer-cancelled t))))
+                 (let ((fn (my-gptel--delegate-completion-fn
+                            buf (lambda (r) (setq result r))
+                            "testagent"
+                            completed-sym timer-sym 600
+                            tools-called-sym turn-count-sym 15)))
+                   (funcall fn 8 (point-max))))
+               ;; Cancel the real timer to prevent leak (cancel-timer was mocked above)
+               (cancel-timer real-timer))
+             (should timer-cancelled)
+             (should result)
+             (should (symbol-value completed-sym))))
+      (when (buffer-live-p buf) (kill-buffer buf)))))
+
+(ert-deftest test-delegate-spawn-sets-gptel-confirm-tool-calls-nil ()
+  "spawn-async-delegate should set gptel-confirm-tool-calls to nil."
+  (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+    (let ((buf nil))
+      (unwind-protect
+           (progn
+             (setq buf (my-gptel--spawn-async-delegate
+                        (lambda (_r)) "testagent" "task" "ctx" 30
+                        "You are a test agent."))
+             (with-current-buffer buf
+               (should (null gptel-confirm-tool-calls))))
+        (when (buffer-live-p buf) (kill-buffer buf))))))
 (provide 'test-delegate)

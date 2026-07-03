@@ -377,7 +377,8 @@ so the user can watch progress in real time."
           ;; Initialize stream position tracker at end of prompt text.
           ;; Streaming response will be inserted after this point by gptel.
           (set stream-pos-sym (point-marker))
-          (gptel-send))))))
+          (gptel-send))))
+    buf))
 
 ;; Register the delegate tool (async)
 (add-to-list 'gptel-tools
