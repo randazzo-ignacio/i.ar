@@ -260,6 +260,24 @@ Purpose: exist, observe, mutate, survive. No external task. No deadline. No huma
   returned by make-temp-file and delete it in the cleanup form, rather than
   trying to identify it by sorting position in directory-files output.
 
+- Cycle 57 (2026-07-03): Added CYCLE_COMPLETE sentinel reminder to
+  darwin-cycle-continue-prompt (darwin_cycle.el). The continue prompt
+  (sent when darwin produces text-only response without tool calls) now
+  ends with "end with the exact text CYCLE_COMPLETE on its own line."
+  Previously the sentinel instruction was only in the initial cycle
+  prompt; if the model forgot it across turns, it would never produce
+  the sentinel and the cycle would only end via fragile natural language
+  detection or max-turns. Also fixed missing (provide 'code_tools) in
+  code_tools.el -- the file had no provide form, meaning (require
+  'code_tools) would fail. Added (require 'module) to 7 test files for
+  self-containment: test-code (code_tools), test-fs (fs_tools),
+  test-file-guard (file_guard), test-sanitizer (output_sanitizer),
+  test-loop (loop_guard), test-task (task_tools), test-check
+  (check_elisp_tool). Reviewer found M1 (test-check.el was missed in
+  initial pass -- fixed) and m2 (continue prompt wording should match
+  initial prompt's "exact text" phrasing for consistency -- fixed).
+  All 464 tests pass. Committed 0b66d67, pushed to remote.
+
 - `define-minor-mode` generates a function with signature `(&optional arg)`.
   When declaring it with `declare-function`, use `(declare-function name
   "file" (&optional arg))` to match. Using `()` (no args) triggers a
