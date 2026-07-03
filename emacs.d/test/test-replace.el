@@ -116,7 +116,7 @@
     (let* ((target (expand-file-name "atomic.txt" test-replace--tmpdir)))
       (my-gptel--fs-write-file target "original\n")
       ;; No buffer is open for this file
-      (should-not (get-file-buffer target))
+      (should-not (find-buffer-visiting target))
       (let ((result (my-gptel--fs-replace target "original" "replaced")))
         (should (string-match-p "SUCCESS" result))
         (should (string= (my-gptel--fs-read-file target)
@@ -213,5 +213,37 @@
         (should (string-match-p "SUCCESS" result))
         ;; The expanded path should appear in the message
         (should (string-match-p target result))))))
+
+;;; --- Symlink resolution test ---
+
+(ert-deftest test-replace-via-symlink-finds-buffer ()
+  "replace_in_file via a symlink path should find the buffer visiting the real file.
+find-buffer-visiting resolves truenames, so replacing text in a file
+via a symlink should find and update the buffer opened with the real path."
+  (with-replace-fixture
+    (let* ((target (expand-file-name "real.txt" test-replace--tmpdir))
+           (link (expand-file-name "link.txt" test-replace--tmpdir)))
+      ;; Create the real file
+      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      ;; Create a symlink to it
+      (make-symbolic-link target link)
+      ;; Open the real file in a buffer
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              ;; Replace via the symlink path -- should find the buffer
+              (let ((result (my-gptel--fs-replace link "old text" "new text")))
+                (should (string-match-p "SUCCESS" result))
+                ;; Buffer content should be updated
+                (with-current-buffer buf
+                  (should (string-match-p "new text" (buffer-string)))
+                  (should-not (string-match-p "old text" (buffer-string))))
+                ;; File on disk should be updated
+                (should (string= (my-gptel--fs-read-file target)
+                                 "new text\nkeep this\n"))))
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf)
+          (when (file-exists-p link)
+            (delete-file link)))))))
 
 (provide 'test-replace)

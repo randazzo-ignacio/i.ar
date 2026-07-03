@@ -83,7 +83,7 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
          (guard-reason (my-gptel--guard-check-write expanded-path)))
     (if guard-reason
         (format "Error: %s" guard-reason)
-      (let ((buf (get-file-buffer expanded-path)))
+      (let ((buf (find-buffer-visiting expanded-path)))
         (condition-case err
             (progn
               (make-directory (file-name-directory expanded-path) t)

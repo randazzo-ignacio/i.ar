@@ -36,7 +36,7 @@ with a misleading message."
     (if guard-reason
         (format "ERROR: %s" guard-reason)
       (condition-case err
-          (let ((buf (get-file-buffer expanded-path)))
+          (let ((buf (find-buffer-visiting expanded-path)))
             (if buf
                 ;; File is open in a buffer -- replace in buffer and save.
                 ;; Guard against read-only and dirty buffers to avoid

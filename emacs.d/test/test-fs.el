@@ -424,12 +424,81 @@ Binds `test-fs--tmpdir' to the temp dir path."
   (with-fs-fixture
     (let* ((target (expand-file-name "atomic.txt" test-fs--tmpdir)))
       ;; Ensure no buffer is visiting this file
-      (should-not (get-file-buffer target))
+      (should-not (find-buffer-visiting target))
       (let ((result (my-gptel--fs-write-file target "atomic content\n")))
         (should (string-match-p "Success" result))
         (should (string= (with-temp-buffer
                            (insert-file-contents target)
                            (buffer-string))
                          "atomic content\n"))))))
+
+;;; --- Symlink resolution tests ---
+
+(ert-deftest test-fs-write-file-via-symlink-finds-buffer ()
+  "write_file via a symlink path should find the buffer visiting the real file.
+find-buffer-visiting resolves truenames, so writing to a symlink of a
+file that is open in a buffer should update that buffer.  This was
+previously broken when get-file-buffer was used (it matches on the
+literal buffer-file-name string and does not resolve symlinks)."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "real.txt" test-fs--tmpdir))
+           (link (expand-file-name "link.txt" test-fs--tmpdir)))
+      ;; Create the real file
+      (my-gptel--fs-write-file target "original\n")
+      ;; Create a symlink to it
+      (make-symbolic-link target link)
+      ;; Open the real file in a buffer
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              ;; Write via the symlink path -- should find the buffer
+              ;; visiting the real file via truename resolution
+              (let ((result (my-gptel--fs-write-file link "via symlink\n")))
+                (should (string-match-p "Success" result))
+                ;; Buffer content should be updated
+                (with-current-buffer buf
+                  (should (string= (buffer-string) "via symlink\n")))
+                ;; File on disk should be updated
+                (should (string= (with-temp-buffer
+                                   (insert-file-contents target)
+                                   (buffer-string))
+                                 "via symlink\n"))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf))
+          (when (file-exists-p link)
+            (delete-file link)))))))
+
+(ert-deftest test-fs-write-file-via-real-path-finds-symlink-buffer ()
+  "write_file via the real path should find the buffer opened via the symlink.
+The reverse direction: open the file via its symlink name, then write
+to the real path.  find-buffer-visiting resolves truenames so the buffer
+is found regardless of which name was used to open it."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "real.txt" test-fs--tmpdir))
+           (link (expand-file-name "link.txt" test-fs--tmpdir)))
+      ;; Create the real file
+      (my-gptel--fs-write-file target "original\n")
+      ;; Create a symlink to it
+      (make-symbolic-link target link)
+      ;; Open the file via the symlink path
+      (let ((buf (find-file link)))
+        (unwind-protect
+            (progn
+              ;; Write via the real path -- should find the buffer
+              ;; that was opened via the symlink
+              (let ((result (my-gptel--fs-write-file target "via real path\n")))
+                (should (string-match-p "Success" result))
+                ;; Buffer content should be updated
+                (with-current-buffer buf
+                  (should (string= (buffer-string) "via real path\n")))
+                ;; File on disk should be updated
+                (should (string= (with-temp-buffer
+                                   (insert-file-contents target)
+                                   (buffer-string))
+                                 "via real path\n"))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf))
+          (when (file-exists-p link)
+            (delete-file link)))))))
 
 (provide 'test-fs)
