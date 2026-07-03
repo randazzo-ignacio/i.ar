@@ -9,6 +9,8 @@
 (require 'session_persistence)
 
 (declare-function my-gptel--validate-session-name "session_persistence" (name))
+(declare-function my-gptel--safe-agent-name-p "session_persistence" (val))
+(declare-function my-gptel--safe-agent-file-p "session_persistence" (val))
 
 ;;; --- Test fixtures ---
 
@@ -444,6 +446,43 @@ mtime, which would pollute sort order and appear in completion lists."
   (should (get 'my-gptel--current-agent-name 'safe-local-variable))
   (should (get 'my-gptel--current-agent-file 'safe-local-variable))
   (should (get 'my-gptel--delegate-depth 'safe-local-variable)))
+
+(ert-deftest test-session-safe-agent-name-p-accepts-valid ()
+  "my-gptel--safe-agent-name-p should accept valid agent names."
+  (should (my-gptel--safe-agent-name-p "darwin"))
+  (should (my-gptel--safe-agent-name-p "reviewer"))
+  (should (my-gptel--safe-agent-name-p "test_agent"))
+  (should (my-gptel--safe-agent-name-p "ABC123")))
+
+(ert-deftest test-session-safe-agent-name-p-rejects-traversal ()
+  "my-gptel--safe-agent-name-p should reject path traversal and unsafe strings."
+  (should-not (my-gptel--safe-agent-name-p "../../etc/passwd"))
+  (should-not (my-gptel--safe-agent-name-p "foo/bar"))
+  (should-not (my-gptel--safe-agent-name-p "foo bar"))
+  (should-not (my-gptel--safe-agent-name-p ""))
+  (should-not (my-gptel--safe-agent-name-p nil))
+  (should-not (my-gptel--safe-agent-name-p 123))
+  ;; Multi-line bypass attempt
+  (should-not (my-gptel--safe-agent-name-p "valid\n../../etc")))
+
+(ert-deftest test-session-safe-agent-file-p-accepts-valid ()
+  "my-gptel--safe-agent-file-p should accept valid agent file paths."
+  (should (my-gptel--safe-agent-file-p "/root/.emacs.d/agents.d/darwin/prompt.org"))
+  (should (my-gptel--safe-agent-file-p "agents.d/reviewer/prompt.org")))
+
+(ert-deftest test-session-safe-agent-file-p-rejects-traversal ()
+  "my-gptel--safe-agent-file-p should reject path traversal and non-prompt.org paths."
+  (should-not (my-gptel--safe-agent-file-p "../../etc/passwd"))
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd"))
+  (should-not (my-gptel--safe-agent-file-p ""))
+  (should-not (my-gptel--safe-agent-file-p nil))
+  (should-not (my-gptel--safe-agent-file-p 123))
+  ;; Must end in prompt.org
+  (should-not (my-gptel--safe-agent-file-p "/root/.emacs.d/agents.d/darwin/MEMORIES.md"))
+  ;; Must not contain ..
+  (should-not (my-gptel--safe-agent-file-p "../agents.d/darwin/prompt.org"))
+  ;; Multi-line bypass: ends in prompt.org but has embedded newline
+  (should-not (my-gptel--safe-agent-file-p "/root/prompt.org\n/etc/passwd")))
 
 ;;; --- Auto-mode-alist ---
 

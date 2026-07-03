@@ -52,9 +52,12 @@ Returns NAME if valid."
   "Return the directory path for the currently loaded agent.
 Validates the agent name against path traversal before constructing
 the path.  This is defense-in-depth: the name is typically set by
-`my-gptel-load-agent' which already validates, but the variable is
-declared `safe-local-variable' for `stringp', so a tampered session
-file could set it to an arbitrary string."
+`my-gptel-load-agent' which already validates, and the variable is
+declared `safe-local-variable' with a validating predicate
+(`my-gptel--safe-agent-name-p' in session_persistence.el), so
+tampered session files are filtered at the source.  This function
+provides defense-in-depth in case the predicate is bypassed or
+the variable is set by other means."
   (let* ((agent-dir (expand-file-name "agents.d" user-emacs-directory))
          (agent-name
           (if (and (boundp 'my-gptel--current-agent-name)

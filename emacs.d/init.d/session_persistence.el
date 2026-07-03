@@ -50,9 +50,38 @@
 ;;;###autoload
 (add-to-list 'auto-mode-alist '("\\.gptel\\'" . text-mode))
 
-;; Declare safe local variables so Emacs doesn't prompt on session restore
-(put 'my-gptel--current-agent-name 'safe-local-variable #'stringp)
-(put 'my-gptel--current-agent-file 'safe-local-variable #'stringp)
+;; Declare safe local variables so Emacs doesn't prompt on session restore.
+;; Use validating predicates (not bare #'stringp) to prevent tampered session
+;; files from setting agent name/file to path traversal strings.  This is
+;; defense at the source: malicious values are rejected before any consumer
+;; sees them.  Consumers (my-gptel--get-agent-dir, my-gptel--load-agent-profile)
+;; also validate independently -- defense-in-depth.
+
+(defun my-gptel--safe-agent-name-p (val)
+  "Safe-local-variable predicate for `my-gptel--current-agent-name'.
+Returns non-nil if VAL is a valid agent name (alphanumeric, hyphens,
+underscores only, at least one character).  Rejects path traversal
+strings, empty strings, and non-strings."
+  (and (stringp val)
+       (string-match-p "\\`[a-zA-Z0-9_-]+\\'" val)))
+
+(defun my-gptel--safe-agent-file-p (val)
+  "Safe-local-variable predicate for `my-gptel--current-agent-file'.
+Returns non-nil if VAL is a string ending in prompt.org that does not
+contain path traversal sequences (..).  This prevents tampered session
+files from setting the agent file to arbitrary filesystem paths.
+
+Note: This rejects any path containing '..' anywhere, not just
+path traversal components.  This is intentionally conservative for
+a safe-local-variable predicate.  Downstream consumers
+\(`my-gptel--get-agent-dir', `my-gptel--load-agent-profile'\) also
+validate via truename containment checks."
+  (and (stringp val)
+       (string-suffix-p "prompt.org" val)
+       (not (string-match-p "\\.\\." val))))
+
+(put 'my-gptel--current-agent-name 'safe-local-variable #'my-gptel--safe-agent-name-p)
+(put 'my-gptel--current-agent-file 'safe-local-variable #'my-gptel--safe-agent-file-p)
 (put 'my-gptel--delegate-depth 'safe-local-variable #'integerp)
 
 ;;; --- Custom variable save/restore ---
