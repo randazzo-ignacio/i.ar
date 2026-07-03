@@ -89,13 +89,17 @@ to prevent interactive pagers (less/more) from hanging in batch mode."
     (let* ((cmd callback-or-command)
            (timeout (or command 3600))
            (result nil)
-           (done nil))
+           (done nil)
+           ;; Compute deadline ONCE before the loop. Computing it inside
+           ;; the while condition (as the old code did) makes the condition
+           ;; always true, since (current-time) is always less than
+           ;; (current-time) + timeout. The deadline must be fixed.
+           (deadline (time-add (current-time) (seconds-to-time timeout))))
       (my-gptel--async-shell-command
        (lambda (r) (setq result r done t))
        cmd timeout)
       (while (and (not done)
-                  (time-less-p (current-time)
-                              (time-add (current-time) (seconds-to-time timeout))))
+                  (time-less-p (current-time) deadline))
         (accept-process-output nil 0.1))
       (or result (format "[TIMEOUT after %ds — process killed]\n" timeout)))))
 
