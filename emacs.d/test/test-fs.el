@@ -321,4 +321,91 @@ Binds `test-fs--tmpdir' to the temp dir path."
     (should (stringp result))
     (should (string-match-p "Error" result))))
 
+;;; --- write_file buffer-aware tests ---
+
+(ert-deftest test-fs-write-file-to-open-buffer ()
+  "write_file to a file open in a buffer should update the buffer and save."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "buffered.txt" test-fs--tmpdir)))
+      ;; Create initial file
+      (my-gptel--fs-write-file target "original\n")
+      ;; Open it in a buffer
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (let ((result (my-gptel--fs-write-file target "updated\n")))
+              (should (string-match-p "Success" result))
+              ;; Buffer content should be updated
+              (with-current-buffer buf
+                (should (string= (buffer-string) "updated\n")))
+              ;; File on disk should be updated
+              (should (string= (with-temp-buffer
+                                 (insert-file-contents target)
+                                 (buffer-string))
+                               "updated\n")))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-write-file-dirty-buffer-rejected ()
+  "write_file to a buffer with unsaved modifications should return error."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "dirty.txt" test-fs--tmpdir)))
+      ;; Create initial file
+      (my-gptel--fs-write-file target "original\n")
+      ;; Open it in a buffer and make unsaved changes
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (goto-char (point-max))
+                (insert "unsaved change\n")
+                (should (buffer-modified-p)))
+              ;; Attempt to write_file -- should be rejected
+              (let ((result (my-gptel--fs-write-file target "new content\n")))
+                (should (string-match-p "Error" result))
+                (should (string-match-p "unsaved" result))
+                ;; File on disk should still be original
+                (should (string= (with-temp-buffer
+                                   (insert-file-contents target)
+                                   (buffer-string))
+                                 "original\n"))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-write-file-read-only-buffer-rejected ()
+  "write_file to a read-only buffer should return error."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "readonly.txt" test-fs--tmpdir)))
+      ;; Create initial file
+      (my-gptel--fs-write-file target "original\n")
+      ;; Open it in a buffer and make it read-only
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (setq buffer-read-only t))
+              ;; Attempt to write_file -- should be rejected
+              (let ((result (my-gptel--fs-write-file target "new content\n")))
+                (should (string-match-p "Error" result))
+                (should (string-match-p "read-only" result))
+                ;; File on disk should still be original
+                (should (string= (with-temp-buffer
+                                   (insert-file-contents target)
+                                   (buffer-string))
+                                 "original\n"))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-write-file-atomic-fallback-no-buffer ()
+  "write_file to a file not open in any buffer should use atomic write."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "atomic.txt" test-fs--tmpdir)))
+      ;; Ensure no buffer is visiting this file
+      (should-not (get-file-buffer target))
+      (let ((result (my-gptel--fs-write-file target "atomic content\n")))
+        (should (string-match-p "Success" result))
+        (should (string= (with-temp-buffer
+                           (insert-file-contents target)
+                           (buffer-string))
+                         "atomic content\n"))))))
+
 (provide 'test-fs)

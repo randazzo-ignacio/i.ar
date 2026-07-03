@@ -87,15 +87,24 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
               (make-directory (file-name-directory expanded-path) t)
               (if buf
                   (with-current-buffer buf
-                    (erase-buffer)
-                    (insert content)
-                    (save-buffer))
+                    (cond
+                     (buffer-read-only
+                      (format "Error: Buffer for '%s' is read-only" expanded-path))
+                     ((buffer-modified-p)
+                      (format "Error: Buffer for '%s' has unsaved modifications. Save or revert the buffer first."
+                              expanded-path))
+                     (t
+                      (erase-buffer)
+                      (insert content)
+                      (save-buffer)
+                      (my-gptel--audit-log-write expanded-path)
+                      (format "Success: File written to '%s'" expanded-path))))
                 (let ((tmp-file (make-temp-file "gptel-write-")))
                   (with-temp-file tmp-file
                     (insert content))
-                  (rename-file tmp-file expanded-path t)))
-              (my-gptel--audit-log-write expanded-path)
-              (format "Success: File written to '%s'" expanded-path))
+                  (rename-file tmp-file expanded-path t)
+                  (my-gptel--audit-log-write expanded-path)
+                  (format "Success: File written to '%s'" expanded-path))))
           (error (format "Error: Failed to write file to '%s'. Emacs says: %s"
                          expanded-path (error-message-string err))))))))
 
