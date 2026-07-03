@@ -231,14 +231,29 @@ with \"Error:\" if the response is malformed."
 
 (defun my-gptel--memory-write-memories (agent-dir new-memories)
   "Write NEW-MEMORIES to MEMORIES.md in AGENT-DIR.
-Uses atomic write (temp file + rename) for safety."
+Uses atomic write (temp file + rename) for safety.
+Returns a string starting with \"Success:\" or \"Error:\".
+The temp file is cleaned up on failure via unwind-protect."
   (let* ((memories-file (expand-file-name "MEMORIES.md" agent-dir))
-         (tmp-file (make-temp-file "gptel-memory-")))
-    (with-temp-file tmp-file
-      (insert new-memories)
-      (insert "\n"))
-    (rename-file tmp-file memories-file t)
-    (format "Success: Updated MEMORIES.md in '%s'" agent-dir)))
+         (tmp-file nil))
+    (unwind-protect
+        (condition-case err
+            (progn
+              (setq tmp-file (make-temp-file "gptel-memory-"))
+              (with-temp-file tmp-file
+                (insert new-memories)
+                (insert "\n"))
+              (rename-file tmp-file memories-file t)
+              ;; Rename succeeded -- mark nil so cleanup skips it.
+              (setq tmp-file nil)
+              (format "Success: Updated MEMORIES.md in '%s'" agent-dir))
+          (error
+           (format "Error: Failed to write MEMORIES.md: %s"
+                   (error-message-string err))))
+      ;; Cleanup: delete temp file if it still exists (rename failed,
+      ;; with-temp-file failed, or make-temp-file failed after creating it).
+      (when (and tmp-file (file-exists-p tmp-file))
+        (ignore-errors (delete-file tmp-file))))))
 
 (defun my-gptel--memory-count-entries (memories-text)
   "Count the number of bullet-point entries in MEMORIES-TEXT."
@@ -278,12 +293,16 @@ memories take effect immediately."
             (let* ((new-memories (string-trim result))
                    (entry-count (my-gptel--memory-count-entries new-memories))
                    (update-result (my-gptel--memory-write-memories agent-dir new-memories)))
-              (my-gptel-tool-reload-agent)
-              (message "[Memories updated: %d entries written to %s/MEMORIES.md]"
-                        entry-count
-                        (file-name-nondirectory
-                         (directory-file-name agent-dir)))
-              (format "%s. %d entries written." update-result entry-count)))))
+              (if (string-prefix-p "Error:" update-result)
+                  (progn
+                    (message "%s" update-result)
+                    (user-error "%s" update-result))
+                (my-gptel-tool-reload-agent)
+                (message "[Memories updated: %d entries written to %s/MEMORIES.md]"
+                          entry-count
+                          (file-name-nondirectory
+                           (directory-file-name agent-dir)))
+                (format "%s. %d entries written." update-result entry-count))))))
     (error
      (message "Memory summarization failed: %s" (error-message-string err))
      (user-error "Memory summarization failed: %s" (error-message-string err)))))

@@ -179,6 +179,25 @@ Temporarily rebinds `my-gptel--memory-get-agent-dir' to return the temp dir."
                       (buffer-string))))
       (should (string-suffix-p "\n" written)))))
 
+(ert-deftest test-memory-write-cleans-up-temp-on-rename-failure ()
+  "my-gptel--memory-write-memories should clean up temp file when rename fails.
+Renames to a nonexistent target directory to trigger a rename-file error.
+Verifies: (1) error string is returned, (2) no gptel-memory- temp files
+are left behind in the temp directory."
+  (let* ((temp-dir (make-temp-file "test-mem-cleanup-" :dir-flag))
+         (nonexistent-agent-dir (expand-file-name "nonexistent/deeply/nested" temp-dir)))
+    (unwind-protect
+        (let* ((temp-files-before (directory-files temporary-file-directory nil "^gptel-memory-"))
+               (result (my-gptel--memory-write-memories nonexistent-agent-dir "- test memory"))
+               (temp-files-after (directory-files temporary-file-directory nil "^gptel-memory-")))
+          ;; Should return an error string, not a success string
+          (should (stringp result))
+          (should (string-prefix-p "Error:" result))
+          ;; No new temp files should be left behind (set difference, not
+          ;; just length, to be robust against concurrent test temp files).
+          (should (null (cl-set-difference temp-files-after temp-files-before :test #'string=))))
+      (delete-directory temp-dir t))))
+
 ;;; --- Conversation extraction tests ---
 
 (ert-deftest test-memory-extract-conversation-from-buffer ()
