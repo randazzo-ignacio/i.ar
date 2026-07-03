@@ -165,20 +165,19 @@ This is added to `kill-emacs-hook' so it fires automatically on exit."
 
 (defun darwin--cycle-complete-p (buf)
   "Check if the cycle is truly complete by scanning BUF for completion markers.
-Looks for evidence that darwin has written to HISTORY.log and MEMORIES.md,
-which are the final mandatory steps."
+Looks for a completion phrase and evidence of history logging.
+Note: scans the entire buffer, not just the latest response."
   (with-current-buffer buf
     (save-excursion
       (goto-char (point-min))
-      ;; The model has completed if the buffer contains evidence of
-      ;; the final steps: a history log entry and a memories update.
-      ;; We look for the continuation prompt being answered with
-      ;; a summary that mentions 'done' or 'complete'.
-      (let ((text (buffer-substring-no-properties (point-min) (point-max))))
-        ;; Check for explicit completion signals in the last response
+      (let ((case-fold-search t)
+            (text (buffer-substring-no-properties (point-min) (point-max))))
+        ;; Check for explicit completion signals and history reference.
+        ;; case-fold-search is bound to t for deterministic matching
+        ;; regardless of buffer-local settings.
         (and (string-match-p "\\(cycle complete\\|all steps\\|cycle summary\\|done for this cycle\\|finished.*cycle\\)" text)
-             ;; Must have evidence of history logging
-             (string-match-p "HISTORY\\|history" text))))))
+             (string-match-p "HISTORY" text)
+             t)))))
 
 (defun darwin-run-cycle (&rest args)
   "Run one darwin cycle in batch mode.
