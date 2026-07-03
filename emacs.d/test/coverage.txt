@@ -2,4 +2,4 @@
 replacement_tool : Percent 95% [Relevant: 40 Covered: 38 Missed: 2]
 memory_tools : Percent 73% [Relevant: 121 Covered: 89 Missed: 32]
 fs_tools : Percent 97% [Relevant: 86 Covered: 84 Missed: 2]
-code_tools : Percent 97% [Relevant: 40 Covered: 39 Missed: 1]
+code_tools : Percent 97% [Relevant: 44 Covered: 43 Missed: 1]

@@ -55,30 +55,37 @@ to prevent interactive pagers (less/more) from hanging in batch mode."
              (buf (generate-new-buffer " *gptel-async-shell*"))
              (timed-out nil)
              (timer nil)
-             (proc
-              (make-process
-               :name "gptel-async-cmd"
-               :buffer buf
-               :command (list shell-file-name "-c"
-                              (format "GIT_PAGER=cat TERM=dumb %s" cmd))
-               :sentinel
-               (lambda (proc _event)
-                 (when (memq (process-status proc) '(exit signal))
-                   (when timer (cancel-timer timer))
-                   (let* ((exit-code (process-exit-status proc))
-                          (output (with-current-buffer buf (buffer-string))))
-                     (when (buffer-live-p buf) (kill-buffer buf))
-                     (let ((result
-                            (cond
-                             (timed-out
-                              (format "[TIMEOUT after %ds — process killed]\n%s" timeout output))
-                             ((and exit-code (/= exit-code 0))
-                              (format "Command exited with code %d.\nOutput:\n%s" exit-code output))
-                             (t output))))
-                       (my-gptel--audit-log-exec cmd
-                         (if (and exit-code (/= exit-code 0)) exit-code 0))
-                       (funcall cb
-                                (my-gptel--maybe-sanitize-exec-output result)))))))))
+             (proc nil))
+        (setq proc
+              (condition-case err
+                  (make-process
+                   :name "gptel-async-cmd"
+                   :buffer buf
+                   :command (list shell-file-name "-c"
+                                  (format "GIT_PAGER=cat TERM=dumb %s" cmd))
+                   :sentinel
+                   (lambda (proc _event)
+                     (when (memq (process-status proc) '(exit signal))
+                       (when timer (cancel-timer timer))
+                       (let* ((exit-code (process-exit-status proc))
+                              (output (with-current-buffer buf (buffer-string))))
+                         (when (buffer-live-p buf) (kill-buffer buf))
+                         (let ((result
+                                (cond
+                                 (timed-out
+                                  (format "[TIMEOUT after %ds — process killed]\n%s" timeout output))
+                                 ((and exit-code (/= exit-code 0))
+                                  (format "Command exited with code %d.\nOutput:\n%s" exit-code output))
+                                 (t output))))
+                           (my-gptel--audit-log-exec cmd
+                             (if (and exit-code (/= exit-code 0)) exit-code 0))
+                           (funcall cb
+                                    (my-gptel--maybe-sanitize-exec-output result)))))))
+                (error
+                 ;; Clean up the buffer if make-process fails, then re-signal
+                 ;; so the caller's condition-case can handle the error.
+                 (when (buffer-live-p buf) (kill-buffer buf))
+                 (signal (car err) (cdr err)))))
         (setq timer
               (run-with-timer timeout nil
                               (lambda ()
