@@ -123,3 +123,4 @@ to prevent interactive pagers (less/more) from hanging in batch mode."
                 (error (funcall callback
                                 (format "Error: Failed to execute command: %s\nDetail: %s"
                                         command (error-message-string err))))))))
+(provide 'code_tools)

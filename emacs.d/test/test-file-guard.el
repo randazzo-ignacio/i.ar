@@ -20,6 +20,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'file_guard)
 
 ;;; --- Test fixtures ---
 

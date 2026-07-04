@@ -14,6 +14,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'fs_tools)
 
 ;;; --- Test fixtures ---
 
@@ -808,5 +809,152 @@ annotate or alter the content being written."
                 (should (null hook-called))))
           (when (buffer-live-p buf)
             (kill-buffer buf)))))))
+
+;;; --- append_file direct-to-disk optimization tests ---
+
+(ert-deftest test-fs-append-file-large-file-partial-read ()
+  "append_file direct-to-disk should only read the last byte for newline check.
+Creates a large file (>100KB) without a trailing newline, appends to it,
+and verifies the content is correct.  This tests the partial-read
+optimization (insert-file-contents with START/END) which avoids reading
+the entire file into memory just to check the last character."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "large.txt" test-fs--tmpdir))
+           ;; Create a 200KB file without trailing newline
+           (chunk (make-string 1000 ?x))
+           (lines 200))
+      (with-temp-file target
+        (dotimes (_ lines)
+          (insert chunk)))
+      ;; Verify file does not end with newline
+      (should-not (string-suffix-p "\n"
+                                   (with-temp-buffer
+                                     (insert-file-contents target nil (1- (file-attribute-size (file-attributes target))) (file-attribute-size (file-attributes target)))
+                                     (buffer-string))))
+      ;; Append to it
+      (let ((result (my-gptel--fs-append-file target "appended\n")))
+        (should (string-match-p "Success" result))
+        ;; Verify the file now ends with the appended content
+        (let* ((size (file-attribute-size (file-attributes target)))
+               (tail (with-temp-buffer
+                       (insert-file-contents target nil (- size 20) size)
+                       (buffer-string))))
+          (should (string-suffix-p "appended\n" tail)))))))
+
+(ert-deftest test-fs-append-file-vanished-file-no-crash ()
+  "append_file direct-to-disk should not crash if file does not exist.
+When file-attributes returns nil (file vanished or never existed),
+the nil attrs guard should treat the file as new and write without prefix."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "ghost.txt" test-fs--tmpdir)))
+      ;; Do NOT create the file -- file-attributes will return nil naturally.
+      ;; This tests the TOCTOU scenario: file vanished after file-exists-p
+      ;; but before file-attributes, or simply a non-existent file.
+      (should-not (file-exists-p target))
+      (let ((result (my-gptel--fs-append-file target "appended\n")))
+        (should (string-match-p "Success" result))
+        ;; File should be created with just the appended content (no prefix)
+        (should (string= (with-temp-buffer
+                           (insert-file-contents target)
+                           (buffer-string))
+                         "appended\n"))))))
+
+(ert-deftest test-fs-append-file-empty-file-zero-size ()
+  "append_file to a 0-byte file should not prepend a newline.
+file-attributes returns size 0, which should be treated as 'no prefix needed'."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "zero.txt" test-fs--tmpdir)))
+      ;; Create a 0-byte file
+      (with-temp-file target nil)
+      (should (= (file-attribute-size (file-attributes target)) 0))
+      (let ((result (my-gptel--fs-append-file target "content\n")))
+        (should (string-match-p "Success" result))
+        (should (string= (with-temp-buffer
+                           (insert-file-contents target)
+                           (buffer-string))
+                         "content\n"))))))
+
+(ert-deftest test-fs-append-file-single-byte-no-newline ()
+  "append_file to a 1-byte file without newline should prepend a newline.
+Tests the size=1 edge case where (1- size) = 0, so insert-file-contents
+reads from byte 0 to byte 1 (the only byte)."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "single.txt" test-fs--tmpdir)))
+      (with-temp-file target (insert "A"))
+      (should (= (file-attribute-size (file-attributes target)) 1))
+      (let ((result (my-gptel--fs-append-file target "appended\n")))
+        (should (string-match-p "Success" result))
+        (should (string= (with-temp-buffer
+                           (insert-file-contents target)
+                           (buffer-string))
+                         "A\nappended\n"))))))
+
+(ert-deftest test-fs-append-file-single-byte-with-newline ()
+  "append_file to a 1-byte file containing just a newline should not prepend.
+Tests the size=1 edge case where the single byte IS a newline."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "single-nl.txt" test-fs--tmpdir)))
+      (with-temp-file target (insert "\n"))
+      (should (= (file-attribute-size (file-attributes target)) 1))
+      (let ((result (my-gptel--fs-append-file target "appended\n")))
+        (should (string-match-p "Success" result))
+        (should (string= (with-temp-buffer
+                           (insert-file-contents target)
+                           (buffer-string))
+                         "\nappended\n"))))))
+
+(ert-deftest test-fs-append-file-large-file-with-trailing-newline ()
+  "append_file to a large file WITH trailing newline should not add extra.
+Tests the partial-read optimization on the other branch: the last byte
+IS a newline, so no prefix should be added."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "large-nl.txt" test-fs--tmpdir))
+           (chunk (make-string 1000 ?x))
+           (lines 200))
+      ;; Create a 200KB file WITH trailing newline
+      (with-temp-file target
+        (dotimes (_ lines)
+          (insert chunk))
+        (insert "\n"))
+      (let ((result (my-gptel--fs-append-file target "appended\n")))
+        (should (string-match-p "Success" result))
+        ;; Verify no double newline
+        (let* ((size (file-attribute-size (file-attributes target)))
+               (tail (with-temp-buffer
+                       (insert-file-contents target nil (max 0 (- size 20)) size)
+                       (buffer-string))))
+          (should (string-suffix-p "appended\n" tail))
+          (should-not (string-match-p "\n\nappended" tail)))))))
+
+(ert-deftest test-fs-append-file-toctou-vanished-between-attrs-and-read ()
+  "append_file should handle TOCTOU: file exists at file-attributes time
+but vanishes before insert-file-contents.  The inner condition-case should
+catch the error and treat prefix as empty, allowing write-region to create
+the file fresh.
+
+We simulate this by mocking file-attributes to return a fake size (100)
+for a file that doesn't exist.  When insert-file-contents tries to read
+the last byte, it will fail naturally (file not found).  The inner
+condition-case should catch this and default to empty prefix."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "toctou.txt" test-fs--tmpdir))
+           (real-file-attributes (symbol-function 'file-attributes)))
+      ;; Do NOT create the file -- but mock file-attributes to pretend it exists
+      (cl-letf* ((real-fa (symbol-function 'file-attributes))
+                 ((symbol-function 'file-attributes)
+                  (lambda (&rest args)
+                    ;; Return a fake attrs list with size 100 for the target path
+                    (if (and args (stringp (car args))
+                             (string-match-p "toctou\\.txt" (car args)))
+                        (list nil 1 0 0 (current-time) (current-time)
+                              (current-time) 100 "-rw-r--r--" nil 0 0)
+                      (apply real-fa args)))))
+        (let ((result (my-gptel--fs-append-file target "appended\n")))
+          (should (string-match-p "Success" result))
+          ;; File should be created fresh with just the appended content (no prefix)
+          (should (string= (with-temp-buffer
+                             (insert-file-contents target)
+                             (buffer-string))
+                           "appended\n")))))))
 
 (provide 'test-fs)

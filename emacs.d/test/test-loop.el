@@ -8,6 +8,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'loop_guard)
 
 ;;; --- Args signature tests ---
 

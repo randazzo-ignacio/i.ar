@@ -8,6 +8,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'output_sanitizer)
 
 ;;; --- Control character stripping tests ---
 

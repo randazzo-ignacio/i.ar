@@ -12,6 +12,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'code_tools)
 
 ;;; --- Synchronous test wrapper ---
 

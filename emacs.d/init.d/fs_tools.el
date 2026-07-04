@@ -181,14 +181,28 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
                     (my-gptel--audit-log-append expanded-path)
                     (format "Success: Content appended to '%s'" expanded-path))))
               ;; Direct-to-disk path: no buffer visiting this file
-              (let* ((prefix
-                      (if (and (file-exists-p expanded-path)
-                               (> (file-attribute-size (file-attributes expanded-path)) 0))
-                          (with-temp-buffer
-                            (insert-file-contents expanded-path)
-                            (if (string-suffix-p "\n" (buffer-string))
-                                ""
-                              "\n"))
+              ;; Read only the last byte to check for trailing newline,
+              ;; instead of reading the entire file into memory.  This is
+              ;; a significant optimization for large files (e.g., a 10MB
+              ;; audit log would be fully read just to check 1 byte).
+              ;; Also guards against nil attrs (TOCTOU: file could vanish
+              ;; between file-attributes and insert-file-contents).
+              (let* ((attrs (file-attributes expanded-path))
+                     (size (and attrs (file-attribute-size attrs)))
+                     (prefix
+                      (if (and size (> size 0))
+                          ;; Wrap in condition-case to handle TOCTOU: file
+                          ;; could vanish between file-attributes and
+                          ;; insert-file-contents.  On error, treat as
+                          ;; no prefix needed (write-region will create
+                          ;; the file fresh).
+                          (condition-case nil
+                              (with-temp-buffer
+                                (insert-file-contents expanded-path nil (1- size) size)
+                                (if (string-suffix-p "\n" (buffer-string))
+                                    ""
+                                  "\n"))
+                            (error ""))
                         "")))
                 (write-region (concat prefix content) nil expanded-path t 'silent)
                 (my-gptel--audit-log-append expanded-path)

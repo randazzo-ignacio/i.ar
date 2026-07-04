@@ -257,16 +257,21 @@ Shows session name, size, and last modified time."
               (user-error "No saved sessions found")))
          (sorted-files (my-gptel--sort-sessions-by-mtime files))
          (entries
-          (mapcar (lambda (f)
-                    (let* ((attrs (file-attributes f))
-                           (size (file-attribute-size attrs))
-                           (mtime (file-attribute-modification-time attrs))
-                           (name (file-name-nondirectory f)))
-                      (format "%-40s %8d bytes  %s"
-                              name
-                              (or size 0)
-                              (format-time-string "%Y-%m-%d %H:%M" mtime))))
-                  sorted-files)))
+          (delq nil
+                (mapcar (lambda (f)
+                          (let* ((attrs (file-attributes f)))
+                            (if (null attrs)
+                                (progn
+                                  (message "Warning: session file vanished: %s" f)
+                                  nil)
+                              (let* ((size (file-attribute-size attrs))
+                                     (mtime (file-attribute-modification-time attrs))
+                                     (name (file-name-nondirectory f)))
+                                (format "%-40s %8d bytes  %s"
+                                        name
+                                        (or size 0)
+                                        (format-time-string "%Y-%m-%d %H:%M" mtime))))))
+                        sorted-files))))
     (with-current-buffer (get-buffer-create "*gptel-sessions*")
       (erase-buffer)
       (insert "Saved gptel Sessions\n")

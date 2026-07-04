@@ -7,6 +7,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
+(require 'task_tools)
 
 ;;; --- Test fixtures ---
 
