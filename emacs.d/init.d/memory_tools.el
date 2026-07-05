@@ -45,6 +45,7 @@
 The summarizer is instructed to keep at most this many concise bullet points,
 prioritizing the most important and recent information."
   :type 'integer
+  :safe #'integerp
   :group 'gptel)
 
 (defcustom my-gptel-memory-timeout 300
@@ -53,6 +54,7 @@ If the model does not respond within this time, the operation is aborted
 and a partial result (if any) is returned.
 Default is 300 (5 minutes) to accommodate large contexts with slow models."
   :type 'integer
+  :safe #'integerp
   :group 'gptel)
 
 (defcustom my-gptel-memory-max-conversation-chars 100000
@@ -61,6 +63,7 @@ If the conversation exceeds this length, it is truncated to the most recent
 portion. This prevents extremely large payloads that could cause timeouts or
 exceed API limits. 100000 chars is roughly 25K tokens."
   :type 'integer
+  :safe #'integerp
   :group 'gptel)
 
 (defconst my-gptel-memory-system-prompt
@@ -192,14 +195,32 @@ this limit, causing execve to fail with E2BIG."
                       (process-live-p proc)
                       (time-less-p (current-time) deadline))
             (accept-process-output nil 0.1))
-          (let ((raw-output (with-current-buffer buf (buffer-string))))
+          (let ((raw-output
+                 (if (buffer-live-p buf)
+                     (with-current-buffer buf (buffer-string))
+                   ;; Buffer was killed during event processing (unlikely
+                   ;; but possible if a sentinel/filter killed it).
+                   ;; Return empty string so parsing produces a clear error.
+                   "")))
             (cond
+             ((not (buffer-live-p buf))
+              ;; Buffer was killed during event processing.  This is
+              ;; distinct from a timeout -- the process may still be
+              ;; running.  Delete the process and report the real cause.
+              (when (and proc (process-live-p proc))
+                (delete-process proc))
+              "Error: Process buffer was killed during summarization.")
              ((not done)
+              ;; Timeout: delete-process doesn't modify buffer contents
+              ;; and no accept-process-output runs between raw-output and
+              ;; here, so raw-output is still current.  No need to re-read.
+              ;; Note: delete-process fires the sentinel synchronously,
+              ;; setting done/exit-code, but we've already branched here
+              ;; so it has no effect on the current flow.
               (delete-process proc)
-              (let ((partial (with-current-buffer buf (buffer-string))))
-                (if (string-match-p "\\S-" partial)
-                    (format "Error: Timeout after %ds. Partial output:\n%s" timeout partial)
-                  (format "Error: Timeout after %ds. No output received." timeout))))
+              (if (string-match-p "\\S-" raw-output)
+                  (format "Error: Timeout after %ds. Partial output:\n%s" timeout raw-output)
+                (format "Error: Timeout after %ds. No output received." timeout)))
              ((and exit-code (/= exit-code 0))
               (format "Error: curl exited with code %d. Output:\n%s" exit-code raw-output))
              (t
@@ -288,7 +309,7 @@ memories take effect immediately."
                              (symbol-name gptel-model)
                            gptel-model)))
         (when (< (length (string-trim conversation)) 50)
-          (error "Conversation is too short to summarize. Have a meaningful exchange first."))
+          (user-error "Conversation is too short to summarize. Have a meaningful exchange first."))
         (message "[Summarizing memories with %s... payload: %d chars, conversation: %d chars]"
                  model-name (length payload) (length conversation))
         (let ((result (my-gptel--memory-call-ollama payload my-gptel-memory-timeout)))
@@ -309,6 +330,13 @@ memories take effect immediately."
                           (file-name-nondirectory
                            (directory-file-name agent-dir)))
                 (format "%s. %d entries written." update-result entry-count))))))
+    (user-error
+     ;; Re-signal user-errors unchanged.  These are intentional error
+     ;; messages (e.g., "Error: curl failed") from the body that should
+     ;; not be double-wrapped with "Memory summarization failed:".
+     ;; Without this handler, the outer (error ...) handler catches
+     ;; user-error (a subclass of error) and wraps the message again.
+     (signal (car err) (cdr err)))
     (error
      (message "Memory summarization failed: %s" (error-message-string err))
      (user-error "Memory summarization failed: %s" (error-message-string err)))))

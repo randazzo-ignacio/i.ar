@@ -38,12 +38,18 @@
 (defvar my-gptel--guard-allow-self-modification)
 
 (declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
+(declare-function my-gptel--block-unknown-tools "delegate_tool" (info))
 
 ;;; --- Configuration ---
+
+(defgroup darwin nil
+  "Darwin autonomous self-improvement cycle configuration."
+  :group 'gptel)
 
 (defcustom darwin-cycle-timeout 7200
   "Default timeout for a darwin cycle in seconds (120 minutes)."
   :type 'integer
+  :safe #'integerp
   :group 'darwin)
 
 (defcustom darwin-cycle-max-turns 40
@@ -51,6 +57,7 @@
 Each turn is one model response (with or without tool calls).
 This prevents infinite loops."
   :type 'integer
+  :safe #'integerp
   :group 'darwin)
 
 (defcustom darwin-telegram-bot-token
@@ -59,6 +66,7 @@ This prevents infinite loops."
 Get this from @BotFather on Telegram.
 Can also be set via DARWIN_TELEGRAM_BOT_TOKEN env var."
   :type 'string
+  :safe #'stringp
   :group 'darwin)
 
 (defcustom darwin-telegram-chat-id
@@ -67,11 +75,13 @@ Can also be set via DARWIN_TELEGRAM_BOT_TOKEN env var."
 Message @userinfobot on Telegram to get your chat ID.
 Can also be set via DARWIN_TELEGRAM_CHAT_ID env var."
   :type 'string
+  :safe #'stringp
   :group 'darwin)
 
 (defvar darwin-cycle-result-message nil
   "Message to send via Telegram when the cycle ends.
-Set this before killing Emacs.  Nil means no notification.")
+Set this before killing Emacs.  Nil or empty string means no
+notification.  Must be a non-empty string to trigger a send.")
 
 (defconst darwin-cycle-prompt
   "You are waking up for a new cycle. Follow your cycle protocol:
@@ -154,8 +164,11 @@ Silently skips if either is empty.  Logs success or failure."
 
 (defun darwin--notify-on-exit ()
   "Send Telegram notification if `darwin-cycle-result-message' is set.
-This is added to `kill-emacs-hook' so it fires automatically on exit."
-  (when darwin-cycle-result-message
+This is added to `kill-emacs-hook' so it fires automatically on exit.
+Only sends when the message is a non-empty string -- empty strings are
+truthy in Emacs Lisp but would send an empty Telegram message."
+  (when (and (stringp darwin-cycle-result-message)
+             (not (string-empty-p darwin-cycle-result-message)))
     (darwin--notify-telegram darwin-cycle-result-message)))
 
 (add-hook 'kill-emacs-hook #'darwin--notify-on-exit)
@@ -201,7 +214,7 @@ args-out-of-range errors from stale positions."
           ;; and a HISTORY reference (two-part check for reliability).
           ;; case-fold-search is bound to t for deterministic matching
           ;; regardless of buffer-local settings.
-          (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished.*cycle\\|cycle is done\\)" text)
+          (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished \\(?:[a-z]+ \\)\\{0,2\\}cycle\\>\\|cycle is done\\)" text)
                (string-match-p "HISTORY" text)
                t)))))
 
@@ -260,21 +273,8 @@ until it either completes all steps or reaches the turn limit."
                 nil t)
 
       ;; Unknown tool guard: block hallucinated tool names to prevent FSM hang.
-      ;; When the model calls a tool that does not exist in gptel-tools, gptel
-      ;; logs a message but does not set :result on the tool-call, causing the
-      ;; FSM to hang in TOOL state forever.  This hook intercepts unknown tool
-      ;; calls and returns (:block ...) which injects an error result via
-      ;; gptel--process-tool-call, letting the FSM progress.  The model receives
-      ;; the error feedback and can retry with the correct tool name.
       (add-hook 'gptel-pre-tool-call-functions
-                (lambda (info)
-                  (let ((name (plist-get info :name)))
-                    (unless (cl-find-if (lambda (ts)
-                                          (equal (gptel-tool-name ts) name))
-                                        gptel-tools)
-                      (list :block
-                            (format "Unknown tool '%s'. Check the tool name and use one of the available tools."
-                                    name)))))
+                #'my-gptel--block-unknown-tools
                 nil t)
 
       ;; Continuation hook: fires on every DONE/ERRS/ABRT state.
@@ -348,7 +348,8 @@ until it either completes all steps or reaches the turn limit."
              (setq darwin-cycle-result-message
                    (format "*Darwin Cycle: Timed Out*\nTimeout: %ds\nTool calls: %d\nTurns: %d\nThe cycle exceeded its time limit."
                            timeout tool-call-count turn-count))
-             (gptel-abort cycle-buf)
+             (when (buffer-live-p cycle-buf)
+               (gptel-abort cycle-buf))
              (run-with-timer 3 nil (lambda () (kill-emacs 1)))))
 
         ;; Insert prompt and send
@@ -364,31 +365,19 @@ until it either completes all steps or reaches the turn limit."
           ;; Check for dead timers / processes
           (unless (or completed (get-buffer-process cycle-buf) continuation-pending)
             ;; No active process in cycle-buf -- but there might be delegate
-            ;; subprocesses still running. Check for any active gptel requests.
-            ;; Also check for any buffer with "gptel-delegate" in its name that
-            ;; has an active process (sub-agent still working).
-            (let ((active-requests nil)
-                  (delegate-active
+            ;; subprocesses still running. Check if any gptel request has a
+            ;; live buffer -- this covers both the main cycle buffer and any
+            ;; delegate sub-agent buffers.
+            (let ((active-requests
                    (cl-some
                     (lambda (entry)
                       (let* ((fsm (cadr entry))
                              (info (and fsm (gptel-fsm-p fsm)
                                         (gptel-fsm-info fsm)))
                              (req-buf (and info (plist-get info :buffer))))
-                        (and req-buf (buffer-live-p req-buf)
-                             (or (string-match-p "gptel-delegate"
-                                                  (buffer-name req-buf))
-                                 ;; Also check if the request's buffer has
-                                 ;; an active process
-                                 (get-buffer-process req-buf)))))
+                        (and req-buf (buffer-live-p req-buf))))
                     gptel--request-alist)))
-              (dolist (entry gptel--request-alist)
-                (let* ((fsm (cadr entry))
-                       (info (and fsm (gptel-fsm-p fsm) (gptel-fsm-info fsm)))
-                       (req-buf (and info (plist-get info :buffer))))
-                  (when (and req-buf (buffer-live-p req-buf))
-                    (setq active-requests t))))
-              (if (or active-requests delegate-active)
+              (if active-requests
                   (setq idle-count 0) ; Reset: active requests mean we're not idle
                 ;; No active requests at all -- check if the FSM is done
                 (let ((fsm (buffer-local-value 'gptel--fsm-last cycle-buf)))

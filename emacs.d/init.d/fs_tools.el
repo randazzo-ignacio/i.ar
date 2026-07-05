@@ -31,21 +31,44 @@
 (require 'file_guard)
 (require 'audit_log)
 
+;;; --- Configuration ---
+
+(defcustom my-gptel--fs-read-max-size (* 1024 1024)
+  "Maximum number of characters that read_file will return without truncation.
+Files with more characters than this are truncated to this limit and a
+truncation notice is appended.  This prevents accidentally loading huge
+files (e.g., large log files, binary blobs) into the AI context, which
+would consume excessive tokens and slow down responses.
+Uses character count (not byte count) because insert-file-contents
+decodes the file into Emacs internal representation, and AI token
+consumption correlates more with character count than byte count.
+Set to nil to disable truncation (read full file regardless of size)."
+  :type '(choice (integer :tag "Max characters")
+                 (const :tag "No limit" nil))
+  :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
+  :group 'gptel)
+
 ;;; --- list_directory ---
 
 (defun my-gptel--fs-list-directory (path)
   "List the contents of directory PATH.
 Returns newline-separated file names, including hidden files (dotfiles).
 Excludes only the . and .. directory entries.
+Directory entries are suffixed with \"/\" to distinguish them from files.
 On error, returns a string starting with \\='Error:\\='."
   (let ((expanded-path (expand-file-name path)))
-    (condition-case nil
-        (mapconcat #'identity
-                   (sort (cl-remove-if (lambda (f) (member f '("." "..")))
-                                       (directory-files expanded-path nil))
-                         #'string-lessp)
-                   "\n")
-      (error (format "Error: Directory '%s' not found or permission denied." expanded-path)))))
+    (condition-case err
+        (mapconcat
+         (lambda (name)
+           (if (file-directory-p (expand-file-name name expanded-path))
+               (concat name "/")
+             name))
+         (sort (cl-remove-if (lambda (f) (member f '("." "..")))
+                              (directory-files expanded-path nil))
+               #'string-lessp)
+         "\n")
+      (error (format "Error: Directory '%s' not found or cannot be read: %s"
+                     expanded-path (error-message-string err))))))
 
 (add-to-list 'gptel-tools
  (gptel-make-tool
@@ -58,13 +81,29 @@ On error, returns a string starting with \\='Error:\\='."
 
 (defun my-gptel--fs-read-file (filepath)
   "Read the text contents of FILEPATH into a string.
-On error, returns a string starting with \\='Error:\\='."
+On error, returns a string starting with \\='Error:\\='.
+
+When `my-gptel--fs-read-max-size' is non-nil and the file has more
+characters than that limit, only the first `my-gptel--fs-read-max-size'
+characters are returned, followed by a truncation notice.  This
+prevents loading huge files into the AI context.  Uses character
+count (not byte count) because insert-file-contents decodes the
+file, and token consumption correlates with characters."
   (let ((expanded-path (expand-file-name filepath)))
-    (condition-case nil
+    (condition-case err
         (with-temp-buffer
           (insert-file-contents expanded-path)
-          (buffer-string))
-      (error (format "Error: File '%s' not found or cannot be read." expanded-path)))))
+          (if (and my-gptel--fs-read-max-size
+                   (> (buffer-size) my-gptel--fs-read-max-size))
+              (let ((max my-gptel--fs-read-max-size))
+                (goto-char (1+ max))
+                (delete-region (point) (point-max))
+                (goto-char (point-max))
+                (insert (format "\n\n[... file truncated at %d characters ...]" max))
+                (buffer-string))
+            (buffer-string)))
+      (error (format "Error: File '%s' not found or cannot be read: %s"
+                      expanded-path (error-message-string err))))))
 
 (add-to-list 'gptel-tools
  (gptel-make-tool

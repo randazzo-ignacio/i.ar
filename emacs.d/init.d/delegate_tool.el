@@ -43,18 +43,59 @@
 0 = top-level agent (not spawned via delegate).
 1+ = spawned via delegate. Used to limit recursion depth.")
 
-(defconst my-gptel--delegate-max-depth 3
+(defcustom my-gptel--delegate-max-depth 3
   "Maximum delegation depth allowed.
-Prevents infinite recursion while permitting multi-hop chains.")
+Prevents infinite recursion while permitting multi-hop chains.
+Depth 0 = top-level agent, 1 = first delegate, etc."
+  :type 'integer
+  :safe #'integerp
+  :group 'gptel)
 
-(defconst my-gptel--delegate-max-turns 15
+(defcustom my-gptel--delegate-max-turns 15
   "Maximum number of LLM response turns for a delegate session.
-When the sub-agent produces a text-only response (no tool calls)
-without having used any tools, it is re-prompted to continue.
+When the sub-agent produces a text-only response (no tool calls
+in the current turn), it is re-prompted to continue.
 This prevents models that describe tool calls in text instead of
-actually calling them from terminating prematurely.")
+actually calling them from terminating prematurely."
+  :type 'integer
+  :safe #'integerp
+  :group 'gptel)
 
 ;;; Internal functions
+
+(defun my-gptel--block-unknown-tools (info)
+  "Pre-tool-call hook to block unknown tool names.
+INFO is the plist from `gptel-pre-tool-call-functions' containing
+:name, :args, :buffer, :backend, and :model.  Returns nil if the
+tool is known, or (:block message) if the tool name is not in
+`gptel-tools'.
+
+This hook intercepts unknown tool calls at the TPRE stage (before
+`gptel--handle-tool-use' runs) and returns (:block ...) which causes
+gptel to inject an error result via `gptel--process-tool-call'.  This
+provides earlier feedback and a cleaner error message than gptel's
+built-in unknown-tool handling in `gptel--handle-tool-use' (TOOL
+state).  Both paths set :result on the tool-call, allowing the FSM
+to progress.
+
+Uses the dynamic variable `gptel-tools' (not `info :tools') because
+the hook's INFO plist does not include a :tools key -- gptel only
+passes :name, :args, :buffer, :backend, and :model to pre-tool-call
+hooks.  `gptel-tools' is resolved in the buffer where the hook runs
+(via gptel's `with-current-buffer buffer' in the hook runner), so
+buffer-local values (e.g., delegate tool removed at max depth) are
+correctly seen.
+
+Used by both `my-gptel--spawn-async-delegate' (delegate buffers) and
+`darwin-run-cycle' (cycle buffer) to provide early interception of
+hallucinated tool names."
+  (let ((name (plist-get info :name)))
+    (unless (cl-find-if (lambda (ts)
+                          (equal (gptel-tool-name ts) name))
+                        gptel-tools)
+      (list :block
+            (format "Unknown tool '%s'. Check the tool name and use one of the available tools."
+                    name)))))
 
 (defun my-gptel--load-agent-profile (agent-name)
   "Load an agent profile by name from agents.d/<name>/prompt.org.
@@ -184,10 +225,11 @@ STREAM-POS-REF is a symbol holding the stream-pos marker (set dynamically)."
           (set stream-pos-ref stream-pos))))))
 
 (defconst my-gptel--delegate-continue-prompt
-  "You have not used any tools yet. You MUST use the available tools to complete the task. Do not describe what you plan to do — actually call the tools. Read the relevant files, run commands, or delegate as needed. Then provide your final response."
+  "Your last response did not include any tool calls. If the task is complete, provide your final response now. If you still need to take action, call the available tools instead of describing what you plan to do. Read the relevant files, run commands, or delegate as needed."
   "Prompt sent to a delegate when it produces a text-only response
-without calling any tools.  This nudges the model to actually use
-its tools instead of narrating its intentions.")
+without calling any tools in the current turn.  This nudges the model
+to either call its tools (instead of narrating intentions) or produce
+its final response if the task is already complete.")
 
 (defun my-gptel--delegate-completion-fn (buf callback agent completed-sym
                                              timer-sym timeout-secs
@@ -201,9 +243,10 @@ TOOLS-CALLED-SYM is a symbol holding the tool-called flag for the current turn.
 TURN-COUNT-SYM is a symbol holding the turn counter.
 MAX-TURNS is the maximum number of text-only turns before forcing completion.
 
-When the sub-agent produces a text-only response (no tool calls), it is
-re-prompted with `my-gptel--delegate-continue-prompt' to encourage it to
-actually use its tools.  This prevents models that describe tool calls
+When the sub-agent produces a text-only response (no tool calls in
+the current turn), it is re-prompted with `my-gptel--delegate-continue-prompt'
+to encourage it to either call its tools or produce its final response
+if the task is complete.  This prevents models that describe tool calls
 in text from terminating prematurely with a non-result."
   (lambda (start end)
     (unless (symbol-value completed-sym)
@@ -318,27 +361,9 @@ so the user can watch progress in real time."
                   (set tools-called-sym t))
                 nil t)
 
-      ;; Unknown tool guard: when the model calls a tool name that does not
-      ;; exist in gptel-tools, gptel logs a message but does NOT call
-      ;; gptel--process-tool-call for it.  This means :result is never set on
-      ;; the tool-call plist, so the FSM's "remaining" counter never reaches
-      ;; zero and the FSM hangs in TOOL state forever.
-      ;;
-      ;; This hook intercepts unknown tool calls at the TPRE stage (before
-      ;; handle-tool-use runs) and returns (:block ...) which causes gptel
-      ;; to inject an error result via gptel--process-tool-call.  This sets
-      ;; :result on the tool-call, decrements the remaining counter, and
-      ;; lets the FSM progress to TRET -> WAIT, where the model receives
-      ;; the error feedback and can retry with the correct tool name.
+      ;; Unknown tool guard: block hallucinated tool names to prevent FSM hang.
       (add-hook 'gptel-pre-tool-call-functions
-                (lambda (info)
-                  (let ((name (plist-get info :name)))
-                    (unless (cl-find-if (lambda (ts)
-                                          (equal (gptel-tool-name ts) name))
-                                        gptel-tools)
-                      (list :block
-                            (format "Unknown tool '%s'. Check the tool name and use one of the available tools."
-                                    name)))))
+                #'my-gptel--block-unknown-tools
                 nil t)
 
       ;; Stream hook: mirror each chunk into the parent buffer.

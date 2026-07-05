@@ -16,6 +16,9 @@
 (require 'subr-x)
 (require 'fs_tools)
 
+;; Silence byte-compiler warnings for dynamically-bound test variables.
+(defvar my-gptel--fs-read-max-size)
+
 ;;; --- Test fixtures ---
 
 (defvar test-fs--tmpdir nil
@@ -90,6 +93,23 @@ Binds `test-fs--tmpdir' to the temp dir path."
         ;; Lines should be in alphabetical order
         (should (equal lines (sort (copy-sequence lines) #'string-lessp)))))))
 
+(ert-deftest test-fs-list-directory-suffixes-directories ()
+  "list_directory should suffix directory entries with /.
+This helps the AI distinguish directories from files when deciding
+whether to list_directory into a path or read_file from it."
+  (with-fs-fixture
+    (let ((result (my-gptel--fs-list-directory test-fs--tmpdir)))
+      (should (stringp result))
+      ;; Use exact line matching for robustness (reviewer m1)
+      (let ((lines (split-string result "\n")))
+        ;; subdir should be suffixed with /
+        (should (member "subdir/" lines))
+        ;; Regular files should NOT have / suffix
+        (should (member "hello.txt" lines))
+        (should-not (member "hello.txt/" lines))
+        (should (member "empty.txt" lines))
+        (should-not (member "empty.txt/" lines))))))
+
 (ert-deftest test-fs-list-directory-missing-returns-error ()
   "list_directory on nonexistent path should return error string."
   (let ((result (my-gptel--fs-list-directory "/nonexistent/path/xyzzy")))
@@ -97,6 +117,26 @@ Binds `test-fs--tmpdir' to the temp dir path."
     (should (string-match-p "Error" result))
     ;; Error message should contain the path
     (should (string-match-p "/nonexistent/path/xyzzy" result))))
+
+(ert-deftest test-fs-list-directory-error-includes-detail ()
+  "list_directory error should include the actual error message, not a generic string.
+The error handler should capture the condition-case err and include
+(error-message-string err) so the caller can see the real reason
+(e.g., 'Not a directory', 'Permission denied')."
+  ;; Use a path that exists but is a file, not a directory
+  (with-fs-fixture
+    (let ((result (my-gptel--fs-list-directory
+                   (expand-file-name "hello.txt" test-fs--tmpdir))))
+      (should (stringp result))
+      (should (string-match-p "Error" result))
+      ;; Should contain the expanded path
+      (should (string-match-p (regexp-quote (expand-file-name "hello.txt" test-fs--tmpdir)) result))
+      ;; Should contain the actual error detail (not just generic "permission denied")
+      ;; The actual error from directory-files on a file is "Not a directory" or similar
+      (should (string-match-p "not found or cannot be read" result))
+      ;; Should contain the OS-level error detail (the dynamic part from error-message-string)
+      ;; This verifies the condition-case err capture, not just the template string
+      (should (string-match-p "Not a directory" result)))))
 
 ;;; --- read_file tests ---
 
@@ -937,8 +977,7 @@ for a file that doesn't exist.  When insert-file-contents tries to read
 the last byte, it will fail naturally (file not found).  The inner
 condition-case should catch this and default to empty prefix."
   (with-fs-fixture
-    (let* ((target (expand-file-name "toctou.txt" test-fs--tmpdir))
-           (real-file-attributes (symbol-function 'file-attributes)))
+    (let* ((target (expand-file-name "toctou.txt" test-fs--tmpdir)))
       ;; Do NOT create the file -- but mock file-attributes to pretend it exists
       (cl-letf* ((real-fa (symbol-function 'file-attributes))
                  ((symbol-function 'file-attributes)
@@ -956,5 +995,86 @@ condition-case should catch this and default to empty prefix."
                              (insert-file-contents target)
                              (buffer-string))
                            "appended\n")))))))
+
+;;; --- read_file truncation tests ---
+
+(ert-deftest test-fs-read-file-truncates-large-file ()
+  "read_file should truncate files exceeding `my-gptel--fs-read-max-size'.
+When the file has more characters than the limit, only the first
+max-size characters are returned, followed by a truncation notice."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "large-read.txt" test-fs--tmpdir))
+           (content (make-string 200 ?x)))
+      (with-temp-file target (insert content))
+      (let ((my-gptel--fs-read-max-size 100))
+        (let ((result (my-gptel--fs-read-file target)))
+          (should (stringp result))
+          ;; Should contain exact truncation notice with character count
+          (should (string-suffix-p
+                   "\n\n[... file truncated at 100 characters ...]"
+                   result))
+          ;; Should contain the first 100 x's
+          (should (string-match-p (make-string 100 ?x) result))
+          ;; Should NOT contain the 101st x
+          (should-not (string-match-p (make-string 101 ?x) result)))))))
+
+(ert-deftest test-fs-read-file-no-truncation-under-limit ()
+  "read_file should return full content when file is under the limit."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "small-read.txt" test-fs--tmpdir))
+           (content "Small file content\n"))
+      (with-temp-file target (insert content))
+      (let ((my-gptel--fs-read-max-size 100))
+        (let ((result (my-gptel--fs-read-file target)))
+          (should (string= result content))
+          (should-not (string-match-p "truncated" result)))))))
+
+(ert-deftest test-fs-read-file-no-truncation-when-nil ()
+  "read_file should return full content when max-size is nil."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "no-limit.txt" test-fs--tmpdir))
+           (content (make-string 500 ?x)))
+      (with-temp-file target (insert content))
+      (let ((my-gptel--fs-read-max-size nil))
+        (let ((result (my-gptel--fs-read-file target)))
+          (should (string= result content))
+          (should-not (string-match-p "truncated" result)))))))
+
+(ert-deftest test-fs-read-file-truncation-exact-boundary ()
+  "read_file should not truncate when file size equals the limit."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "exact.txt" test-fs--tmpdir))
+           (content (make-string 100 ?x)))
+      (with-temp-file target (insert content))
+      (let ((my-gptel--fs-read-max-size 100))
+        (let ((result (my-gptel--fs-read-file target)))
+          ;; File size equals limit -- should NOT truncate
+          (should (string= result content))
+          (should-not (string-match-p "truncated" result))))))
+
+(ert-deftest test-fs-read-file-truncates-multibyte-file ()
+  "read_file truncation should handle multibyte content correctly.
+Truncation is by character count (not byte count) because
+insert-file-contents decodes the file.  A 100-character file of
+3-byte UTF-8 chars (300 bytes) with a 50-character limit should
+keep exactly 50 characters and truncate the rest."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "multi-trunc.txt" test-fs--tmpdir))
+           ;; 100 characters of CJK, each 3 bytes in UTF-8 = 300 bytes
+           (content (make-string 100 ?\u3042)))  ; Hiragana A
+      (with-temp-file target (insert content))
+      (let ((my-gptel--fs-read-max-size 50))
+        (let ((result (my-gptel--fs-read-file target)))
+          (should (stringp result))
+          ;; Should contain truncation notice
+          (should (string-match-p "truncated" result))
+          ;; Should contain exactly 50 characters of content before notice
+          ;; The result is: 50 chars + "\n\n[... truncated ...]"
+          (should (= (length (substring result 0 50)) 50))
+          ;; The first 50 characters should all be the same CJK char
+          (should (string= (substring result 0 50) (make-string 50 ?\u3042)))
+          ;; Should NOT contain 51 characters of content
+          (should-not (string= (substring result 0 51) (make-string 51 ?\u3042)))))))))
+
 
 (provide 'test-fs)

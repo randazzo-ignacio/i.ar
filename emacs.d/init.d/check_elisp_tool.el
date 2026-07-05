@@ -63,7 +63,8 @@ Captures the *Compile-Log* buffer content."
                 (with-current-buffer log-buf-name
                   (let ((inhibit-read-only t))
                     (erase-buffer))))
-              ;; Compile without loading the result (LOAD defaults to nil)
+              ;; Compile the file to check for warnings and errors.
+              ;; (byte-compile-file no longer accepts a LOAD argument in Emacs 30+)
               (byte-compile-file filepath)
               ;; Capture log content
               (when (get-buffer log-buf-name)

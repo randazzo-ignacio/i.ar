@@ -10,11 +10,10 @@
 ;;; that doesn't exist in the registered tool list (e.g., "read_directory"
 ;;; instead of "list_directory").
 ;;;
-;;; Before the fix: the FSM hangs in the TOOL state forever because
-;;; process-tool-result is never called.
-;;;
-;;; After the fix: process-tool-result is called with an error message,
-;;; the FSM transitions to TRET, and the model gets feedback.
+;;; gptel now handles unknown tool names gracefully: gptel--handle-tool-use
+;;; calls gptel--process-tool-call with an error message, which sets :result
+;;; on the tool-call and transitions the FSM. The model receives the error
+;;; feedback and can retry with the correct tool name.
 
 (defvar test-unknown-tool--callback-result nil
   "Captures the callback response from the FSM for testing.")
@@ -25,15 +24,16 @@
 
 (ert-deftest test-unknown-tool-fsm-recovery ()
   "Test that calling an unknown tool name does not crash or hang.
-In current gptel, unknown tool names are logged but process-tool-result
-is NOT called (the tool-call is silently skipped). The FSM stays in TOOL
-state with no result set. This test documents that behavior: the FSM
-should not crash, and the tool-call should remain without a result.
+Since gptel 20260704.707, unknown tool names are handled gracefully:
+gptel--handle-tool-use calls process-tool-result with an error message,
+which sets :result on the tool-call and transitions the FSM to WAIT.
+The model receives the error feedback and can retry with the correct
+tool name.
 
 This is the raw gptel behavior WITHOUT our pre-tool-call hook guard.
-The hook guard (tested in test-unknown-tool-pre-hook-blocks) is what
-actually prevents the hang in production by injecting an error result
-for unknown tools at the TPRE stage."
+The hook guard (tested in test-unknown-tool-pre-hook-blocks) provides
+an additional layer of protection by blocking unknown tools at the
+TPRE stage before they reach gptel--handle-tool-use."
   (let* ((tool-spec (gptel-make-tool
                      :name "list_directory"
                      :description "List a directory"
@@ -61,46 +61,72 @@ for unknown tools at the TPRE stage."
     (condition-case _err
         (gptel--handle-tool-use fsm)
       (error nil))
-    ;; Document current gptel behavior: unknown tools are logged but
-    ;; not given a :result. The FSM remains in TOOL state. This is a
-    ;; known limitation -- the test documents it rather than asserting
-    ;; incorrect behavior.
-    (should (eq (gptel-fsm-state fsm) 'TOOL))
-    (should-not (plist-get tool-call :result))))
+    ;; gptel now handles unknown tools: it calls process-tool-result
+    ;; with an error message, which sets :result and transitions the FSM.
+    (should (eq (gptel-fsm-state fsm) 'WAIT))
+    (should (plist-get tool-call :result))
+    (should (string-match-p "not available" (plist-get tool-call :result)))
+    ;; Callback should have been called with tool-result
+    (should test-unknown-tool--callback-result)
+    (should (eq (car test-unknown-tool--callback-result) 'tool-result))))
 
 (ert-deftest test-unknown-tool-pre-hook-blocks ()
-  "Test that the pre-tool-call hook guard blocks unknown tools.
-When a model calls a tool name not in gptel-tools, the pre-tool-call
+  "Test that `my-gptel--block-unknown-tools' blocks unknown tool names.
+When a model calls a tool name not in `gptel-tools', the pre-tool-call
 hook should return (:block ...) which causes gptel to inject an error
-result via gptel--process-tool-call.  This sets :result on the tool-call
-plist, preventing the FSM from hanging in TOOL state.
+result via `gptel--process-tool-call'.  This sets :result on the
+tool-call plist, preventing the FSM from hanging in TOOL state.
 
-This test simulates the hook behavior: given an info plist with a
-tool name not found in gptel-tools, the hook function returns a plist
-with :block set to a non-nil error string."
+This test calls the actual `my-gptel--block-unknown-tools' function
+(defined in delegate_tool.el) with a let-bound `gptel-tools' so the
+function reads the test tool list, not the global one."
+  (require 'delegate_tool)
   (let* ((tool-spec (gptel-make-tool
                      :name "list_directory"
                      :description "List a directory"
                      :args (list '(:name "path" :type "string"))
                      :function (lambda (path) (format "contents of %s" path))))
-         (known-tools (list tool-spec))
-         ;; Simulate the hook function used in delegate_tool.el and darwin_cycle.el
-         (hook-fn (lambda (info)
-                    (let ((name (plist-get info :name)))
-                      (unless (cl-find-if (lambda (ts)
-                                            (equal (gptel-tool-name ts) name))
-                                          known-tools)
-                        (list :block
-                              (format "Unknown tool '%s'. Check the tool name and use one of the available tools."
-                                      name)))))))
+         (gptel-tools (list tool-spec)))
     ;; Hook should return (:block ...) for unknown tool
-    (let ((result (funcall hook-fn (list :name "read_directory"))))
+    (let ((result (my-gptel--block-unknown-tools (list :name "read_directory"))))
       (should result)
       (should (plist-get result :block))
-      (should (string-match-p "Unknown tool" (plist-get result :block))))
+      (should (string-match-p "Unknown tool" (plist-get result :block)))
+      ;; Error message should contain the unknown tool name
+      (should (string-match-p "read_directory" (plist-get result :block))))
     ;; Hook should return nil for known tool
-    (let ((result (funcall hook-fn (list :name "list_directory"))))
+    (let ((result (my-gptel--block-unknown-tools (list :name "list_directory"))))
       (should (null result)))))
+
+(ert-deftest test-unknown-tool-pre-hook-blocks-empty-tools ()
+  "Test that `my-gptel--block-unknown-tools' blocks ALL tools when
+`gptel-tools' is empty.  This verifies the function works correctly
+when no tools are registered."
+  (require 'delegate_tool)
+  (let ((gptel-tools nil))
+    (let ((result (my-gptel--block-unknown-tools (list :name "any_tool"))))
+      (should result)
+      (should (plist-get result :block))
+      (should (string-match-p "Unknown tool" (plist-get result :block))))))
+
+(ert-deftest test-unknown-tool-pre-hook-blocks-case-sensitive ()
+  "Test that `my-gptel--block-unknown-tools' is case-sensitive.
+Tool name matching uses `equal' (via `gptel-tool-name'), so
+\"List_Directory\" should NOT match \"list_directory\".
+This documents the design decision to use case-sensitive matching."
+  (require 'delegate_tool)
+  (let* ((tool-spec (gptel-make-tool
+                     :name "list_directory"
+                     :description "List a directory"
+                     :args (list '(:name "path" :type "string"))
+                     :function (lambda (path) (format "contents of %s" path))))
+         ;; gptel-tools is a defcustom (dynamic variable), so let-binding
+         ;; it creates a dynamic binding visible to my-gptel--block-unknown-tools.
+         (gptel-tools (list tool-spec)))
+    (let ((result (my-gptel--block-unknown-tools (list :name "List_Directory"))))
+      (should result)
+      (should (plist-get result :block))
+      (should (string-match-p "Unknown tool" (plist-get result :block))))))
 
 (ert-deftest test-ollama-stream-append-tool-use ()
   "Test that the Ollama streaming parser appends to :tool-use

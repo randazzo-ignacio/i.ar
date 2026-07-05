@@ -481,8 +481,53 @@ mtime, which would pollute sort order and appear in completion lists."
   (should-not (my-gptel--safe-agent-file-p "/root/.emacs.d/agents.d/darwin/MEMORIES.md"))
   ;; Must not contain ..
   (should-not (my-gptel--safe-agent-file-p "../agents.d/darwin/prompt.org"))
-  ;; Multi-line bypass: ends in prompt.org but has embedded newline
-  (should-not (my-gptel--safe-agent-file-p "/root/prompt.org\n/etc/passwd")))
+  ;; Not a bypass: ends in /etc/passwd, rejected by suffix check
+  ;; (kept to document that the old test comment was misleading)
+  (should-not (my-gptel--safe-agent-file-p "/root/prompt.org\n/etc/passwd"))
+  ;; Multi-line bypass: DOES end in prompt.org but has embedded newline
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\n/root/prompt.org"))
+  ;; Carriage return bypass: ends in prompt.org but has embedded \r
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\r/root/prompt.org"))
+  ;; Null byte bypass: ends in prompt.org but has embedded \0
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\0/root/prompt.org"))
+  ;; Vertical tab (U+000B) bypass: ends in prompt.org but has embedded \v
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\v/root/prompt.org"))
+  ;; Form feed (U+000C) bypass: ends in prompt.org but has embedded \f
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\f/root/prompt.org"))
+  ;; Escape (U+001B) bypass: ends in prompt.org but has embedded ESC
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\x1b/root/prompt.org"))
+  ;; DEL (U+007F) bypass: ends in prompt.org but has embedded DEL
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\x7f/root/prompt.org"))
+  ;; Tab (U+0009) is a control char but commonly appears in paths -- test it
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\t/root/prompt.org")))
+
+(ert-deftest test-session-safe-agent-file-p-allowlist-rejects-unicode-separators ()
+  "my-gptel--safe-agent-file-p should reject Unicode line/paragraph separators.
+These bypass the old ASCII control char blocklist but are caught by
+the allowlist regex (not in [a-zA-Z0-9/._-]).
+U+2028 = LINE SEPARATOR, U+2029 = PARAGRAPH SEPARATOR, U+0085 = NEXT LINE."
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\u2028/root/prompt.org"))
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\u2029/root/prompt.org"))
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\u0085/root/prompt.org")))
+
+(ert-deftest test-session-safe-agent-file-p-allowlist-rejects-space-and-backslash ()
+  "my-gptel--safe-agent-file-p should reject spaces and backslashes.
+These are not in the allowed character set [a-zA-Z0-9/._-]."
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd /root/prompt.org"))
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\\root/prompt.org")))
+
+(ert-deftest test-session-safe-agent-file-p-allowlist-accepts-valid-paths ()
+  "my-gptel--safe-agent-file-p should accept paths with only allowed characters."
+  (should (my-gptel--safe-agent-file-p "/root/.emacs.d/agents.d/darwin/prompt.org"))
+  (should (my-gptel--safe-agent-file-p "agents.d/reviewer/prompt.org"))
+  (should (my-gptel--safe-agent-file-p "/a/b/c/d/e-1/f_2/prompt.org"))
+  ;; Bare filename (no directory) is accepted by the predicate.
+  ;; Downstream consumers handle it via their own validation.
+  (should (my-gptel--safe-agent-file-p "prompt.org"))
+  ;; Suffix is anchored to path separator -- "notprompt.org" is rejected.
+  (should-not (my-gptel--safe-agent-file-p "notprompt.org"))
+  ;; Conservative .. rejection: legitimate path with .. in directory name.
+  (should-not (my-gptel--safe-agent-file-p "v1..2/prompt.org")))
 
 ;;; --- Auto-mode-alist ---
 

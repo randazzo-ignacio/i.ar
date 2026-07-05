@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
 ;; Emacboros --- Agent orchestration in Emacs
-;; Copyright (C) 2026 Ignacio Agustín Randoso
+;; Copyright (C) 2026 Ignacio Agustín Randazzo
 ;;
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by
@@ -163,14 +163,10 @@ Returns the sanitized string."
 
 (defvar-local my-gptel--sanitize-exec-output nil
   "When non-nil, output from execute_code_local is sanitized
-before being returned to the AI. Enable for CTF/external operations.")
-
-(defun my-gptel--maybe-sanitize-exec-output (output)
-  "Conditionally sanitize OUTPUT from execute_code_local.
-If `my-gptel--sanitize-exec-output' is non-nil, apply sanitization.
-Otherwise return OUTPUT unchanged."
-  (if my-gptel--sanitize-exec-output
-      (my-gptel--sanitize-external-output output)
-    output))
+before being returned to the AI. Enable for CTF/external operations.
+The flag is captured at call time in code_tools.el (not read in the
+sentinel) because process sentinels run in an unpredictable buffer
+context. code_tools.el calls `my-gptel--sanitize-external-output'
+directly using the captured value.")
 
 (provide 'output_sanitizer)
