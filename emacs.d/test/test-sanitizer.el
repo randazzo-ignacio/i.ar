@@ -233,26 +233,4 @@
     (should-not (string-match-p "\u202e" result))
     (should (string-match-p "helloworld" result))))
 
-;;; --- Conditional exec output wrapper tests ---
-
-(ert-deftest test-maybe-sanitize-disabled ()
-  "my-gptel--maybe-sanitize-exec-output should pass through when disabled."
-  (let ((my-gptel--sanitize-exec-output nil))
-    (should (string= (my-gptel--maybe-sanitize-exec-output "raw output")
-                     "raw output"))))
-
-(ert-deftest test-maybe-sanitize-enabled ()
-  "my-gptel--maybe-sanitize-exec-output should sanitize when enabled."
-  (let ((my-gptel--sanitize-exec-output t))
-    (let ((result (my-gptel--maybe-sanitize-exec-output "raw output")))
-      (should (string-match-p "SANITIZED" result))
-      (should (string-match-p "raw output" result)))))
-
-(ert-deftest test-maybe-sanitize-enabled-strips-ansi ()
-  "my-gptel--maybe-sanitize-exec-output should strip ANSI when enabled."
-  (let ((my-gptel--sanitize-exec-output t))
-    (let ((result (my-gptel--maybe-sanitize-exec-output "\x1b[31mred\x1b[0m")))
-      (should-not (string-match-p "\x1b" result))
-      (should (string-match-p "red" result)))))
-
 (provide 'test-sanitizer)

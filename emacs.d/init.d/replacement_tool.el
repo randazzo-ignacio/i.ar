@@ -80,10 +80,6 @@ with a misleading message."
         (error (format "Error: Could not modify file '%s'. Reason: %s"
                        expanded-path (error-message-string err)))))))
 
-(defun ouroboros-replace-in-file (path search-text replace-text)
-  "Backward-compatible alias for `my-gptel--fs-replace'."
-  (my-gptel--fs-replace path search-text replace-text))
-
 (add-to-list 'gptel-tools
  (gptel-make-tool
   :name "replace_in_file"

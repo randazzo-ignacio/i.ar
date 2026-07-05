@@ -16,7 +16,7 @@
 - [x] **Consider separate reader/actor delegate pattern** — reader delegates can read challenge content but cannot write files; actor delegates decide actions but never see raw challenge content directly
   - Created agents.d/reader/ (read-only reconnaissance: curl, cat, grep, nmap scan — NO file writes, NO delegation). Created agents.d/actor/ (receives sanitized reader findings, decides actions, captures flags — NO direct external access). Pattern: parent delegates to reader for retrieval, then to actor for action decisions.
 - [x] **Sanitize challenge output** — strip or escape control sequences, prompt-like text, and instruction patterns from challenge data before feeding it back to the AI context
-  - Created init.d/output_sanitizer.el: strips ANSI escape sequences, control chars, zero-width/RTL Unicode; neutralizes fake system message wrapper tags ([SYSTEM], <system>, etc.); flags injection-like lines with [INJECTION SUSPECT] prefix (preserves evidence); wraps output in [SANITIZED EXTERNAL DATA] envelope. Integrated into code_tools.el via my-gptel--maybe-sanitize-exec-output, controlled by buffer-local my-gptel--sanitize-exec-output flag.
+  - Created init.d/output_sanitizer.el: strips ANSI escape sequences, control chars, zero-width/RTL Unicode; neutralizes fake system message wrapper tags ([SYSTEM], <system>, etc.); flags injection-like lines with [INJECTION SUSPECT] prefix (preserves evidence); wraps output in [SANITIZED EXTERNAL DATA] envelope. Integrated into code_tools.el via direct call to my-gptel--sanitize-external-output, controlled by buffer-local my-gptel--sanitize-exec-output flag (captured at call time in let* bindings).
 
 ## Network Hardening
 
