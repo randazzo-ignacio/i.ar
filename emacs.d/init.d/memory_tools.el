@@ -306,7 +306,7 @@ memories take effect immediately."
                              (symbol-name gptel-model)
                            gptel-model)))
         (when (< (length (string-trim conversation)) 50)
-          (error "Conversation is too short to summarize. Have a meaningful exchange first."))
+          (user-error "Conversation is too short to summarize. Have a meaningful exchange first."))
         (message "[Summarizing memories with %s... payload: %d chars, conversation: %d chars]"
                  model-name (length payload) (length conversation))
         (let ((result (my-gptel--memory-call-ollama payload my-gptel-memory-timeout)))
@@ -327,6 +327,13 @@ memories take effect immediately."
                           (file-name-nondirectory
                            (directory-file-name agent-dir)))
                 (format "%s. %d entries written." update-result entry-count))))))
+    (user-error
+     ;; Re-signal user-errors unchanged.  These are intentional error
+     ;; messages (e.g., "Error: curl failed") from the body that should
+     ;; not be double-wrapped with "Memory summarization failed:".
+     ;; Without this handler, the outer (error ...) handler catches
+     ;; user-error (a subclass of error) and wraps the message again.
+     (signal (car err) (cdr err)))
     (error
      (message "Memory summarization failed: %s" (error-message-string err))
      (user-error "Memory summarization failed: %s" (error-message-string err)))))

@@ -502,4 +502,98 @@ narrowed region."
         ;; region -- proving widen happened before truncation)
         (should (string-match-p "B" result))))))
 
+;;; --- Summarize-memories user-error passthrough tests ---
+
+(ert-deftest test-memory-summarize-user-error-not-double-wrapped ()
+  "my-gptel-summarize-memories should re-signal user-error without wrapping.
+When the body signals a user-error (e.g., from the curl-error or
+write-error paths), the outer condition-case should NOT catch it
+via the (error ...) handler and wrap the message with 'Memory
+summarization failed:'.  Instead, the user-error handler should
+re-signal it unchanged."
+  (let ((my-gptel--current-agent-name "testagent")
+        (gptel-model "test-model")
+        (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
+        (captured-error nil))
+    ;; Mock my-gptel--memory-get-agent-dir to avoid needing a real agent dir
+    (cl-letf (((symbol-function 'my-gptel--memory-get-agent-dir)
+               (lambda () "/tmp/test-agent-dir")))
+      ;; Mock my-gptel--memory-extract-memories to return some content
+      (cl-letf (((symbol-function 'my-gptel--memory-extract-memories)
+                 (lambda (_dir) "- old memory\n")))
+        ;; We need a buffer with enough text for the conversation-length check
+        (with-temp-buffer
+          (insert (make-string 100 ?A))
+          ;; Mock my-gptel--memory-call-ollama to return an Error: string
+          (cl-letf (((symbol-function 'my-gptel--memory-call-ollama)
+                     (lambda (_payload _timeout) "Error: curl exited with code 7")))
+            (condition-case err
+                (my-gptel-summarize-memories)
+              (user-error
+               (setq captured-error (error-message-string err)))
+              (error
+               (ert-fail "user-error was caught by (error ...) handler -- double-wrapped!")))))
+        ;; The captured error should be the original message, not wrapped
+        (should captured-error)
+        (should (string-prefix-p "Error: curl exited" captured-error))
+        (should-not (string-match-p "Memory summarization failed" captured-error))))))
+
+(ert-deftest test-memory-summarize-write-error-not-double-wrapped ()
+  "my-gptel-summarize-memories should re-signal write user-error without wrapping.
+When the write step returns an Error: string and the body signals
+user-error, the outer condition-case should NOT wrap it."
+  (let ((my-gptel--current-agent-name "testagent")
+        (gptel-model "test-model")
+        (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
+        (captured-error nil))
+    (cl-letf (((symbol-function 'my-gptel--memory-get-agent-dir)
+               (lambda () "/tmp/test-agent-dir"))
+              ((symbol-function 'my-gptel--memory-extract-memories)
+               (lambda (_dir) "- old memory\n"))
+              ((symbol-function 'my-gptel--memory-call-ollama)
+               (lambda (_payload _timeout) "- new memory 1\n- new memory 2"))
+              ((symbol-function 'my-gptel--memory-write-memories)
+               (lambda (_dir _content) "Error: Failed to write MEMORIES.md: permission denied"))
+              ((symbol-function 'my-gptel-tool-reload-agent)
+               (lambda (&optional _name) nil)))
+      (with-temp-buffer
+        (insert (make-string 100 ?A))
+        (condition-case err
+            (my-gptel-summarize-memories)
+          (user-error
+           (setq captured-error (error-message-string err)))
+          (error
+           (ert-fail "user-error was caught by (error ...) handler -- double-wrapped!"))))
+      (should captured-error)
+      (should (string-prefix-p "Error: Failed to write" captured-error))
+      (should-not (string-match-p "Memory summarization failed" captured-error)))))
+
+(ert-deftest test-memory-summarize-generic-error-wrapped ()
+  "my-gptel-summarize-memories should wrap non-user-error errors.
+When the body signals a generic error (not user-error), the outer
+(error ...) handler should catch it and wrap with 'Memory
+summarization failed:'.  This verifies the user-error handler
+does NOT swallow genuine unexpected errors."
+  (let ((my-gptel--current-agent-name "testagent")
+        (gptel-model "test-model")
+        (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
+        (captured-error nil))
+    (cl-letf (((symbol-function 'my-gptel--memory-get-agent-dir)
+               (lambda () "/tmp/test-agent-dir"))
+              ((symbol-function 'my-gptel--memory-extract-memories)
+               (lambda (_dir) "- old memory\n"))
+              ;; Make extract-conversation signal a generic error
+              ((symbol-function 'my-gptel--memory-extract-conversation)
+               (lambda () (error "Unexpected internal error"))))
+      (condition-case err
+          (my-gptel-summarize-memories)
+        (user-error
+         (setq captured-error (error-message-string err)))
+        (error
+         (setq captured-error (error-message-string err))))
+      ;; The generic error should be caught by (error ...) and wrapped
+      (should captured-error)
+      (should (string-match-p "Memory summarization failed" captured-error))
+      (should (string-match-p "Unexpected internal error" captured-error)))))
+
 (provide 'test-memory)
