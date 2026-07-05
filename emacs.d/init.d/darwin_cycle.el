@@ -38,6 +38,7 @@
 (defvar my-gptel--guard-allow-self-modification)
 
 (declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
+(declare-function my-gptel--block-unknown-tools "delegate_tool" (info))
 
 ;;; --- Configuration ---
 
@@ -264,21 +265,8 @@ until it either completes all steps or reaches the turn limit."
                 nil t)
 
       ;; Unknown tool guard: block hallucinated tool names to prevent FSM hang.
-      ;; When the model calls a tool that does not exist in gptel-tools, gptel
-      ;; logs a message but does not set :result on the tool-call, causing the
-      ;; FSM to hang in TOOL state forever.  This hook intercepts unknown tool
-      ;; calls and returns (:block ...) which injects an error result via
-      ;; gptel--process-tool-call, letting the FSM progress.  The model receives
-      ;; the error feedback and can retry with the correct tool name.
       (add-hook 'gptel-pre-tool-call-functions
-                (lambda (info)
-                  (let ((name (plist-get info :name)))
-                    (unless (cl-find-if (lambda (ts)
-                                          (equal (gptel-tool-name ts) name))
-                                        gptel-tools)
-                      (list :block
-                            (format "Unknown tool '%s'. Check the tool name and use one of the available tools."
-                                    name)))))
+                #'my-gptel--block-unknown-tools
                 nil t)
 
       ;; Continuation hook: fires on every DONE/ERRS/ABRT state.

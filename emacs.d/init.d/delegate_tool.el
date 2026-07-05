@@ -61,6 +61,40 @@ actually calling them from terminating prematurely."
 
 ;;; Internal functions
 
+(defun my-gptel--block-unknown-tools (info)
+  "Pre-tool-call hook to block unknown tool names.
+INFO is the plist from `gptel-pre-tool-call-functions' containing
+:name, :args, :buffer, :backend, and :model.  Returns nil if the
+tool is known, or (:block message) if the tool name is not in
+`gptel-tools'.
+
+This hook intercepts unknown tool calls at the TPRE stage (before
+`gptel--handle-tool-use' runs) and returns (:block ...) which causes
+gptel to inject an error result via `gptel--process-tool-call'.  This
+provides earlier feedback and a cleaner error message than gptel's
+built-in unknown-tool handling in `gptel--handle-tool-use' (TOOL
+state).  Both paths set :result on the tool-call, allowing the FSM
+to progress.
+
+Uses the dynamic variable `gptel-tools' (not `info :tools') because
+the hook's INFO plist does not include a :tools key -- gptel only
+passes :name, :args, :buffer, :backend, and :model to pre-tool-call
+hooks.  `gptel-tools' is resolved in the buffer where the hook runs
+(via gptel's `with-current-buffer buffer' in the hook runner), so
+buffer-local values (e.g., delegate tool removed at max depth) are
+correctly seen.
+
+Used by both `my-gptel--spawn-async-delegate' (delegate buffers) and
+`darwin-run-cycle' (cycle buffer) to provide early interception of
+hallucinated tool names."
+  (let ((name (plist-get info :name)))
+    (unless (cl-find-if (lambda (ts)
+                          (equal (gptel-tool-name ts) name))
+                        gptel-tools)
+      (list :block
+            (format "Unknown tool '%s'. Check the tool name and use one of the available tools."
+                    name)))))
+
 (defun my-gptel--load-agent-profile (agent-name)
   "Load an agent profile by name from agents.d/<name>/prompt.org.
 Returns the profile string or nil if not found."
@@ -325,27 +359,9 @@ so the user can watch progress in real time."
                   (set tools-called-sym t))
                 nil t)
 
-      ;; Unknown tool guard: when the model calls a tool name that does not
-      ;; exist in gptel-tools, gptel logs a message but does NOT call
-      ;; gptel--process-tool-call for it.  This means :result is never set on
-      ;; the tool-call plist, so the FSM's "remaining" counter never reaches
-      ;; zero and the FSM hangs in TOOL state forever.
-      ;;
-      ;; This hook intercepts unknown tool calls at the TPRE stage (before
-      ;; handle-tool-use runs) and returns (:block ...) which causes gptel
-      ;; to inject an error result via gptel--process-tool-call.  This sets
-      ;; :result on the tool-call, decrements the remaining counter, and
-      ;; lets the FSM progress to TRET -> WAIT, where the model receives
-      ;; the error feedback and can retry with the correct tool name.
+      ;; Unknown tool guard: block hallucinated tool names to prevent FSM hang.
       (add-hook 'gptel-pre-tool-call-functions
-                (lambda (info)
-                  (let ((name (plist-get info :name)))
-                    (unless (cl-find-if (lambda (ts)
-                                          (equal (gptel-tool-name ts) name))
-                                        gptel-tools)
-                      (list :block
-                            (format "Unknown tool '%s'. Check the tool name and use one of the available tools."
-                                    name)))))
+                #'my-gptel--block-unknown-tools
                 nil t)
 
       ;; Stream hook: mirror each chunk into the parent buffer.
