@@ -212,7 +212,7 @@ this limit, causing execve to fail with E2BIG."
               ;; and no accept-process-output runs between raw-output and
               ;; here, so raw-output is still current.  No need to re-read.
               ;; Note: delete-process fires the sentinel synchronously,
-              ;; setting done/exit-code, but we've already branitched here
+              ;; setting done/exit-code, but we've already branched here
               ;; so it has no effect on the current flow.
               (delete-process proc)
               (if (string-match-p "\\S-" raw-output)

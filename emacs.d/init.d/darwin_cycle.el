@@ -364,31 +364,19 @@ until it either completes all steps or reaches the turn limit."
           ;; Check for dead timers / processes
           (unless (or completed (get-buffer-process cycle-buf) continuation-pending)
             ;; No active process in cycle-buf -- but there might be delegate
-            ;; subprocesses still running. Check for any active gptel requests.
-            ;; Also check for any buffer with "gptel-delegate" in its name that
-            ;; has an active process (sub-agent still working).
-            (let ((active-requests nil)
-                  (delegate-active
+            ;; subprocesses still running. Check if any gptel request has a
+            ;; live buffer -- this covers both the main cycle buffer and any
+            ;; delegate sub-agent buffers.
+            (let ((active-requests
                    (cl-some
                     (lambda (entry)
                       (let* ((fsm (cadr entry))
                              (info (and fsm (gptel-fsm-p fsm)
                                         (gptel-fsm-info fsm)))
                              (req-buf (and info (plist-get info :buffer))))
-                        (and req-buf (buffer-live-p req-buf)
-                             (or (string-match-p "gptel-delegate"
-                                                  (buffer-name req-buf))
-                                 ;; Also check if the request's buffer has
-                                 ;; an active process
-                                 (get-buffer-process req-buf)))))
+                        (and req-buf (buffer-live-p req-buf))))
                     gptel--request-alist)))
-              (dolist (entry gptel--request-alist)
-                (let* ((fsm (cadr entry))
-                       (info (and fsm (gptel-fsm-p fsm) (gptel-fsm-info fsm)))
-                       (req-buf (and info (plist-get info :buffer))))
-                  (when (and req-buf (buffer-live-p req-buf))
-                    (setq active-requests t))))
-              (if (or active-requests delegate-active)
+              (if active-requests
                   (setq idle-count 0) ; Reset: active requests mean we're not idle
                 ;; No active requests at all -- check if the FSM is done
                 (let ((fsm (buffer-local-value 'gptel--fsm-last cycle-buf)))
