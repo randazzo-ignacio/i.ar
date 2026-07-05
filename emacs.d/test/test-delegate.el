@@ -41,8 +41,8 @@ The error from my-gptel--load-agent-profile propagates through the callback."
 
 ;;; --- Depth tracking tests ---
 
-(ert-deftest test-delegate-max-depth-constant ()
-  "my-gptel--delegate-max-depth should be 3."
+(ert-deftest test-delegate-max-depth-default ()
+  "my-gptel--delegate-max-depth should default to 3."
   (should (= my-gptel--delegate-max-depth 3)))
 
 (ert-deftest test-delegate-depth-default ()
