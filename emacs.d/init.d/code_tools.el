@@ -26,8 +26,10 @@
 ;;
 ;; Output sanitization: When my-gptel--sanitize-exec-output is non-nil
 ;; (enabled for CTF/external operations), the output is passed through
-;; my-gptel--maybe-sanitize-exec-output to strip control sequences and
-;; flag prompt injection patterns before returning to the AI.
+;; my-gptel--sanitize-external-output to strip control sequences and
+;; flag prompt injection patterns before returning to the AI.  The flag
+;; is captured at call time (not read in the sentinel) because process
+;; sentinels run in an unpredictable buffer context.
 
 (require 'gptel)
 (require 'output_sanitizer)
@@ -56,7 +58,15 @@ to prevent interactive pagers (less/more) from hanging in batch mode."
              (buf (generate-new-buffer " *gptel-async-shell*"))
              (timed-out nil)
              (timer nil)
-             (proc nil))
+             (proc nil)
+             ;; Capture sanitization flag at call time, not at sentinel
+             ;; fire time.  Process sentinels run in whatever buffer is
+             ;; current when the process exits, NOT the chat buffer that
+             ;; initiated the command.  my-gptel--sanitize-exec-output is
+             ;; buffer-local, so reading it in the sentinel would use the
+             ;; wrong buffer's value (likely nil), silently skipping
+             ;; sanitization even when the agent enabled it.
+             (sanitize-output (bound-and-true-p my-gptel--sanitize-exec-output)))
         (setq proc
               (condition-case err
                   (make-process
@@ -84,7 +94,9 @@ to prevent interactive pagers (less/more) from hanging in batch mode."
                              (if timed-out -1
                                (if (and exit-code (/= exit-code 0)) exit-code 0)))
                            (funcall cb
-                                    (my-gptel--maybe-sanitize-exec-output result)))))))
+                                    (if sanitize-output
+                                        (my-gptel--sanitize-external-output result)
+                                      result)))))))
                 (error
                  ;; Clean up the buffer if make-process fails, then re-signal
                  ;; so the caller's condition-case can handle the error.
