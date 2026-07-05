@@ -214,7 +214,7 @@ args-out-of-range errors from stale positions."
           ;; and a HISTORY reference (two-part check for reliability).
           ;; case-fold-search is bound to t for deterministic matching
           ;; regardless of buffer-local settings.
-          (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished.*cycle\\|cycle is done\\)" text)
+          (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished \\(?:[a-z]+ \\)\\{0,2\\}cycle\\>\\|cycle is done\\)" text)
                (string-match-p "HISTORY" text)
                t)))))
 

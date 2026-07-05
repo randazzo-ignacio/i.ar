@@ -58,7 +58,13 @@
     (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
 
 (ert-deftest test-darwin-cycle-complete-finished-cycle-phrase ()
-  "darwin--cycle-complete-p should match 'finished.*cycle' phrase."
+  "darwin--cycle-complete-p should match 'finished <0-2 words> cycle' phrase.
+The old pattern 'finished.*cycle' matched false positives like 'finished
+the review before the cycle started' and 'finished working on the bicycle'.
+The new bounded pattern allows 0-2 lowercase words between 'finished' and
+'cycle', matching natural completions like 'finished the cycle', 'finished
+this cycle', 'finished the current cycle' while rejecting phrases where
+many words separate 'finished' from 'cycle'."
   (with-temp-buffer
     (insert "Finished the cycle. history log written.\n")
     (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
@@ -448,10 +454,11 @@ Tests the 'cycle is done' alternation which matches the exact phrase
     (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
 
 (ert-deftest test-darwin-cycle-complete-finished-current-cycle ()
-  "darwin--cycle-complete-p should match 'finished.*cycle' with 'c' between.
-Tests that 'finished.*cycle' (using '.' which matches any char except
-newline) handles phrases like 'finished the current cycle' where words
-containing 'c' appear between 'finished' and 'cycle'."
+  "darwin--cycle-complete-p should match 'finished the current cycle'.
+The bounded pattern allows 0-2 words between 'finished' and 'cycle',
+so 'finished the current cycle' (2 words between) should match.
+This test was originally written for the old 'finished.*cycle' pattern
+but still applies under the new bounded pattern."
   (with-temp-buffer
     (insert "I have finished the current cycle. HISTORY.log written.\n")
     (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
@@ -703,4 +710,71 @@ the FAILED path."
     (should (cl-some (lambda (msg) (string-match-p "FAILED" msg))
                      logged-messages))))
 
+;;; --- darwin--cycle-complete-p finished.*cycle tightening tests ---
+
+(ert-deftest test-darwin-cycle-complete-finished-current-cycle-tightened ()
+  "darwin--cycle-complete-p should match 'finished the current cycle'.
+The bounded pattern allows 0-2 words between 'finished' and 'cycle',
+so 'finished the current cycle' (2 words between) should match."
+  (with-temp-buffer
+    (insert "I have finished the current cycle. HISTORY.log written.\n")
+    (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
+
+(ert-deftest test-darwin-cycle-complete-finished-my-cycle ()
+  "darwin--cycle-complete-p should match 'finished my cycle'."
+  (with-temp-buffer
+    (insert "Finished my cycle. HISTORY.log updated.\n")
+    (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
+
+(ert-deftest test-darwin-cycle-complete-finished-this-cycle ()
+  "darwin--cycle-complete-p should match 'finished this cycle'."
+  (with-temp-buffer
+    (insert "I have finished this cycle. history written.\n")
+    (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
+
+(ert-deftest test-darwin-cycle-complete-finished-review-before-cycle-no-false-positive ()
+  "darwin--cycle-complete-p should NOT match 'finished the review before the cycle'.
+The old 'finished.*cycle' pattern matched this false positive because
+'finished' appears before 'cycle' on the same line with .* between them.
+The new bounded pattern allows at most 2 words between 'finished' and
+'cycle', so 'finished the review before the cycle' (4 words between) is
+correctly rejected."
+  (with-temp-buffer
+    (insert "I finished the review before the cycle started. HISTORY.log next.\n")
+    (should (null (darwin--cycle-complete-p (current-buffer))))))
+
+(ert-deftest test-darwin-cycle-complete-finished-bicycle-no-false-positive ()
+  "darwin--cycle-complete-p should NOT match 'finished working on the bicycle'.
+The old 'finished.*cycle' pattern matched 'bicycle' because 'cycle' is
+a substring of 'bicycle'.  The new bounded pattern requires 'cycle' as
+a separate word (preceded by a space after the 0-2 word prefix), so
+'bicycle' is correctly rejected."
+  (with-temp-buffer
+    (insert "I finished working on the bicycle. HISTORY.log updated.\n")
+    (should (null (darwin--cycle-complete-p (current-buffer))))))
+
+(ert-deftest test-darwin-cycle-complete-finished-a-cycle ()
+  "darwin--cycle-complete-p should match 'finished a cycle'.
+Tests that 'a' is accepted as one of the 0-2 lowercase words between
+'finished' and 'cycle'."
+  (with-temp-buffer
+    (insert "Finished a cycle. HISTORY.log written.\n")
+    (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
+
+(ert-deftest test-darwin-cycle-complete-finished-our-cycle ()
+  "darwin--cycle-complete-p should match 'finished our cycle'.
+Tests that 'our' is accepted as one of the 0-2 lowercase words."
+  (with-temp-buffer
+    (insert "Finished our cycle. HISTORY updated.\n")
+    (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
 (provide 'test-darwin-cycle)
+;;; test-darwin-cycle.el ends here
+(ert-deftest test-darwin-cycle-complete-finished-cycles-no-false-positive ()
+  "darwin--cycle-complete-p should NOT match 'finished the cycles'.
+The word-boundary anchor \\\\> after 'cycle' prevents matching 'cycle'
+as a substring of 'cycles'.  'finished the cycles' could appear in
+text like 'I finished the cycles of debugging' which is not a
+completion signal."
+  (with-temp-buffer
+    (insert "I finished the cycles of debugging. HISTORY.log next.\n")
+    (should (null (darwin--cycle-complete-p (current-buffer))))))
