@@ -26,3 +26,4 @@
   (load-file (expand-file-name "metaconfig/gptel.el" user-emacs-directory))
   (setq-default gptel-backend emacboros-gptel-backend)
   (setq-default gptel-model emacboros-gptel-default-model))
+(provide 'gptel_setup)

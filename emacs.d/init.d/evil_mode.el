@@ -34,3 +34,4 @@
   :after evil
   :ensure t
   :config (evil-collection-init))
+(provide 'evil_mode)

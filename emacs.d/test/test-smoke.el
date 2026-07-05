@@ -8,18 +8,17 @@
 (require 'cl-lib)
 (require 'subr-x)
 
-(ert-deftest smoke-all-init-modules-loadable ()
-  "All init.d modules should be loadable without error."
+(ert-deftest smoke-all-init-modules-loaded ()
+  "All init.d modules should be loaded without error.
+Each module has a `provide' form, so we verify via `featurep'
+that the feature is registered in `features'.  If a module fails
+to load (syntax error, missing dependency), its `provide' form
+never executes and `featurep' returns nil."
   :tags '(smoke)
   (let ((init-dir (expand-file-name "init.d" user-emacs-directory)))
     (dolist (file (directory-files init-dir nil "\\.el\\'"))
       (let ((module (file-name-sans-extension file)))
-        ;; Module is either provided via `provide' or loaded via `load'.
-        ;; We verify loadability by checking it's in load-history or
-        ;; featurep. Some modules don't call provide, so we just
-        ;; verify the file exists and was loaded without error (which
-        ;; is implicit in the test runner loading them).
-        (should (file-exists-p (expand-file-name file init-dir)))))))
+        (should (featurep (intern module)))))))
 
 (ert-deftest smoke-gptel-tools-registered ()
   "gptel-tools should contain at least 12 tools after init."
@@ -42,7 +41,9 @@
   :tags '(smoke)
   (let ((agents-dir (expand-file-name "agents.d" user-emacs-directory))
         (expected-agents '("mccarthy" "ouroboros" "coder" "finch"
-                           "reviewer" "researcher" "machine")))
+                           "reviewer" "researcher" "machine"
+                           "darwin" "nacho" "reader" "actor" "auditor"
+                           "ctfwizard")))
     (dolist (agent expected-agents)
       (let ((prompt-path (expand-file-name (format "%s/prompt.org" agent) agents-dir)))
         (should (file-exists-p prompt-path))))))
