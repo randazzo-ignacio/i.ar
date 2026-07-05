@@ -489,7 +489,17 @@ mtime, which would pollute sort order and appear in completion lists."
   ;; Carriage return bypass: ends in prompt.org but has embedded \r
   (should-not (my-gptel--safe-agent-file-p "/etc/passwd\r/root/prompt.org"))
   ;; Null byte bypass: ends in prompt.org but has embedded \0
-  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\0/root/prompt.org")))
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\0/root/prompt.org"))
+  ;; Vertical tab (U+000B) bypass: ends in prompt.org but has embedded \v
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\v/root/prompt.org"))
+  ;; Form feed (U+000C) bypass: ends in prompt.org but has embedded \f
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\f/root/prompt.org"))
+  ;; Escape (U+001B) bypass: ends in prompt.org but has embedded ESC
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\x1b/root/prompt.org"))
+  ;; DEL (U+007F) bypass: ends in prompt.org but has embedded DEL
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\x7f/root/prompt.org"))
+  ;; Tab (U+0009) is a control char but commonly appears in paths -- test it
+  (should-not (my-gptel--safe-agent-file-p "/etc/passwd\t/root/prompt.org")))
 
 ;;; --- Auto-mode-alist ---
 

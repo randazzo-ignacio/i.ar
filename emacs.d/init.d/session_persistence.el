@@ -68,10 +68,10 @@ strings, empty strings, and non-strings."
 (defun my-gptel--safe-agent-file-p (val)
   "Safe-local-variable predicate for `my-gptel--current-agent-file'.
 Returns non-nil if VAL is a string ending in prompt.org that does not
-contain path traversal sequences (..) or embedded control characters
-(newlines, carriage returns, null bytes).  This prevents tampered
-session files from setting the agent file to arbitrary filesystem
-paths or injecting multi-line values.
+contain path traversal sequences (..) or embedded ASCII control
+characters (U+0000-U+001F, U+007F).  This prevents tampered session
+files from setting the agent file to arbitrary filesystem paths or
+injecting multi-line values via control characters.
 
 Note: This rejects any path containing '..' anywhere, not just
 path traversal components.  This is intentionally conservative for
@@ -81,7 +81,7 @@ validate via truename containment checks."
   (and (stringp val)
        (string-suffix-p "prompt.org" val)
        (not (string-match-p "\\.\\." val))
-       (not (string-match-p "[\n\r\0]" val))))
+       (not (string-match-p "[\x00-\x1f\x7f]" val))))
 
 (put 'my-gptel--current-agent-name 'safe-local-variable #'my-gptel--safe-agent-name-p)
 (put 'my-gptel--current-agent-file 'safe-local-variable #'my-gptel--safe-agent-file-p)
