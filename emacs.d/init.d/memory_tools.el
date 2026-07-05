@@ -45,6 +45,7 @@
 The summarizer is instructed to keep at most this many concise bullet points,
 prioritizing the most important and recent information."
   :type 'integer
+  :safe #'integerp
   :group 'gptel)
 
 (defcustom my-gptel-memory-timeout 300
@@ -53,6 +54,7 @@ If the model does not respond within this time, the operation is aborted
 and a partial result (if any) is returned.
 Default is 300 (5 minutes) to accommodate large contexts with slow models."
   :type 'integer
+  :safe #'integerp
   :group 'gptel)
 
 (defcustom my-gptel-memory-max-conversation-chars 100000
@@ -61,6 +63,7 @@ If the conversation exceeds this length, it is truncated to the most recent
 portion. This prevents extremely large payloads that could cause timeouts or
 exceed API limits. 100000 chars is roughly 25K tokens."
   :type 'integer
+  :safe #'integerp
   :group 'gptel)
 
 (defconst my-gptel-memory-system-prompt

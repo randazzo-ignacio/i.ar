@@ -53,7 +53,12 @@ container configuration, and git hooks.  Agent prompt files and
 base_context.org remain protected regardless.
 
 Intended for development sessions.  Do NOT enable for CTF or
-untrusted-content sessions."
+untrusted-content sessions.
+
+This variable intentionally lacks a :safe property so that Emacs
+prompts the user when it is set via file-local variables.  This is a
+security-sensitive flag: silently accepting it from a tampered session
+file would bypass file guard protections without user awareness."
   :type 'boolean
   :group 'gptel)
 
