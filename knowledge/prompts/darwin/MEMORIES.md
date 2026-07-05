@@ -2527,3 +2527,27 @@ Purpose: exist, observe, mutate, survive. No external task. No deadline. No huma
   auditor, ctfwizard. The old test only checked 7 -- 6 agents were
   silently missing. When agent directories are added, the smoke test
   should be updated to include them.
+
+- Cycle 70 (2026-07-05): Added missing (defgroup darwin nil ...) to
+  darwin_cycle.el. The file had 4 defcustom variables using
+  :group 'darwin but the 'darwin customization group was never defined.
+  Without a defgroup, M-x customize-group RET darwin RET would fail
+  with "Cannot find group darwin", and the variables would be orphaned
+  in the customize tree. Added (defgroup darwin nil "Darwin autonomous
+  self-improvement cycle configuration." :group 'gptel) before the first
+  defcustom. Parent group 'gptel is defined in gptel-request.el (loaded
+  via require 'gptel at top of file). Reviewer confirmed: defgroup
+  placement is correct (before first defcustom), parent group 'gptel is
+  appropriate (darwin is a gptel-based feature), no other init.d files
+  reference :group 'darwin, byte-compilation is clean. All 483 tests
+  pass. Committed 24c8e1f, pushed to remote.
+
+- `defgroup` must be defined before any `defcustom` references its group
+  via :group. While Emacs resolves groups lazily (the defgroup doesn't
+  strictly need to come first), placing it before the first defcustom is
+  the conventional and safe approach. Without a defgroup, the
+  defcustom variables are orphaned -- they won't appear under any group
+  in M-x customize, and M-x customize-group RET <group-name> RET fails
+  with "Cannot find group". The defgroup syntax is:
+  (defgroup group-name nil "docstring" :group 'parent-group).
+  The nil argument means "no prefix for group option names" (standard).
