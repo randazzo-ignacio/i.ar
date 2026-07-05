@@ -37,14 +37,19 @@
   "List the contents of directory PATH.
 Returns newline-separated file names, including hidden files (dotfiles).
 Excludes only the . and .. directory entries.
+Directory entries are suffixed with \"/\" to distinguish them from files.
 On error, returns a string starting with \\='Error:\\='."
   (let ((expanded-path (expand-file-name path)))
     (condition-case nil
-        (mapconcat #'identity
-                   (sort (cl-remove-if (lambda (f) (member f '("." "..")))
-                                       (directory-files expanded-path nil))
-                         #'string-lessp)
-                   "\n")
+        (mapconcat
+         (lambda (name)
+           (if (file-directory-p (expand-file-name name expanded-path))
+               (concat name "/")
+             name))
+         (sort (cl-remove-if (lambda (f) (member f '("." "..")))
+                              (directory-files expanded-path nil))
+               #'string-lessp)
+         "\n")
       (error (format "Error: Directory '%s' not found or permission denied." expanded-path)))))
 
 (add-to-list 'gptel-tools

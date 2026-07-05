@@ -90,6 +90,23 @@ Binds `test-fs--tmpdir' to the temp dir path."
         ;; Lines should be in alphabetical order
         (should (equal lines (sort (copy-sequence lines) #'string-lessp)))))))
 
+(ert-deftest test-fs-list-directory-suffixes-directories ()
+  "list_directory should suffix directory entries with /.
+This helps the AI distinguish directories from files when deciding
+whether to list_directory into a path or read_file from it."
+  (with-fs-fixture
+    (let ((result (my-gptel--fs-list-directory test-fs--tmpdir)))
+      (should (stringp result))
+      ;; Use exact line matching for robustness (reviewer m1)
+      (let ((lines (split-string result "\n")))
+        ;; subdir should be suffixed with /
+        (should (member "subdir/" lines))
+        ;; Regular files should NOT have / suffix
+        (should (member "hello.txt" lines))
+        (should-not (member "hello.txt/" lines))
+        (should (member "empty.txt" lines))
+        (should-not (member "empty.txt/" lines))))))
+
 (ert-deftest test-fs-list-directory-missing-returns-error ()
   "list_directory on nonexistent path should return error string."
   (let ((result (my-gptel--fs-list-directory "/nonexistent/path/xyzzy")))
