@@ -10,11 +10,10 @@
 ;;; that doesn't exist in the registered tool list (e.g., "read_directory"
 ;;; instead of "list_directory").
 ;;;
-;;; Before the fix: the FSM hangs in the TOOL state forever because
-;;; process-tool-result is never called.
-;;;
-;;; After the fix: process-tool-result is called with an error message,
-;;; the FSM transitions to TRET, and the model gets feedback.
+;;; gptel now handles unknown tool names gracefully: gptel--handle-tool-use
+;;; calls gptel--process-tool-call with an error message, which sets :result
+;;; on the tool-call and transitions the FSM. The model receives the error
+;;; feedback and can retry with the correct tool name.
 
 (defvar test-unknown-tool--callback-result nil
   "Captures the callback response from the FSM for testing.")
@@ -25,15 +24,16 @@
 
 (ert-deftest test-unknown-tool-fsm-recovery ()
   "Test that calling an unknown tool name does not crash or hang.
-In current gptel, unknown tool names are logged but process-tool-result
-is NOT called (the tool-call is silently skipped). The FSM stays in TOOL
-state with no result set. This test documents that behavior: the FSM
-should not crash, and the tool-call should remain without a result.
+Since gptel 20260704.707, unknown tool names are handled gracefully:
+gptel--handle-tool-use calls process-tool-result with an error message,
+which sets :result on the tool-call and transitions the FSM to WAIT.
+The model receives the error feedback and can retry with the correct
+tool name.
 
 This is the raw gptel behavior WITHOUT our pre-tool-call hook guard.
-The hook guard (tested in test-unknown-tool-pre-hook-blocks) is what
-actually prevents the hang in production by injecting an error result
-for unknown tools at the TPRE stage."
+The hook guard (tested in test-unknown-tool-pre-hook-blocks) provides
+an additional layer of protection by blocking unknown tools at the
+TPRE stage before they reach gptel--handle-tool-use."
   (let* ((tool-spec (gptel-make-tool
                      :name "list_directory"
                      :description "List a directory"
@@ -61,12 +61,14 @@ for unknown tools at the TPRE stage."
     (condition-case _err
         (gptel--handle-tool-use fsm)
       (error nil))
-    ;; Document current gptel behavior: unknown tools are logged but
-    ;; not given a :result. The FSM remains in TOOL state. This is a
-    ;; known limitation -- the test documents it rather than asserting
-    ;; incorrect behavior.
-    (should (eq (gptel-fsm-state fsm) 'TOOL))
-    (should-not (plist-get tool-call :result))))
+    ;; gptel now handles unknown tools: it calls process-tool-result
+    ;; with an error message, which sets :result and transitions the FSM.
+    (should (eq (gptel-fsm-state fsm) 'WAIT))
+    (should (plist-get tool-call :result))
+    (should (string-match-p "not available" (plist-get tool-call :result)))
+    ;; Callback should have been called with tool-result
+    (should test-unknown-tool--callback-result)
+    (should (eq (car test-unknown-tool--callback-result) 'tool-result))))
 
 (ert-deftest test-unknown-tool-pre-hook-blocks ()
   "Test that the pre-tool-call hook guard blocks unknown tools.
