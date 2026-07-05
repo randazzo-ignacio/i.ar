@@ -67,21 +67,27 @@ strings, empty strings, and non-strings."
 
 (defun my-gptel--safe-agent-file-p (val)
   "Safe-local-variable predicate for `my-gptel--current-agent-file'.
-Returns non-nil if VAL is a string ending in prompt.org that does not
-contain path traversal sequences (..) or embedded ASCII control
-characters (U+0000-U+001F, U+007F).  This prevents tampered session
-files from setting the agent file to arbitrary filesystem paths or
-injecting multi-line values via control characters.
+Returns non-nil if VAL is a string ending in prompt.org that contains
+only safe path characters (alphanumeric, slashes, dots, hyphens,
+underscores) and no path traversal sequences (..).
 
-Note: This rejects any path containing '..' anywhere, not just
-path traversal components.  This is intentionally conservative for
+Uses an allowlist approach: only characters in [a-zA-Z0-9/._-] are
+permitted.  This is more robust than blocklisting individual dangerous
+characters -- it catches all ASCII control characters (U+0000-U+001F,
+U+007F), Unicode line separators (U+2028, U+2029, U+0085), spaces,
+backslashes, and any other character that could be used for injection
+or traversal.
+
+Note: The '..' substring check is still needed because dots are in
+the allowed character set.  This is intentionally conservative for
 a safe-local-variable predicate.  Downstream consumers
 \(`my-gptel--get-agent-dir', `my-gptel--load-agent-profile'\) also
 validate via truename containment checks."
   (and (stringp val)
-       (string-suffix-p "prompt.org" val)
+       (or (string= val "prompt.org")
+           (string-suffix-p "/prompt.org" val))
        (not (string-match-p "\\.\\." val))
-       (not (string-match-p "[\x00-\x1f\x7f]" val))))
+       (string-match-p "\\`[a-zA-Z0-9/._-]+\\'" val)))
 
 (put 'my-gptel--current-agent-name 'safe-local-variable #'my-gptel--safe-agent-name-p)
 (put 'my-gptel--current-agent-file 'safe-local-variable #'my-gptel--safe-agent-file-p)

@@ -1,7 +1,7 @@
 == Code coverage text report ==
 tool_display : Percent 96% [Relevant: 32 Covered: 31 Missed: 1]
 task_tools : Percent 98% [Relevant: 77 Covered: 76 Missed: 1]
-session_persistence : Percent 81% [Relevant: 120 Covered: 98 Missed: 22]
+session_persistence : Percent 81% [Relevant: 121 Covered: 99 Missed: 22]
 replacement_tool : Percent 95% [Relevant: 40 Covered: 38 Missed: 2]
 reload_tools : Percent 81% [Relevant: 32 Covered: 26 Missed: 6]
 output_sanitizer : Percent 100% [Relevant: 25 Covered: 25 Missed: 0]
