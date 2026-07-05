@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
 ;; Emacboros --- Agent orchestration in Emacs
-;; Copyright (C) 2026 Ignacio Agustín Randoso
+;; Copyright (C) 2026 Ignacio Agustín Randazzo
 ;;
 ;; This program is free software: you can redistribute it and/or modify
 ;; it under the terms of the GNU General Public License as published by

@@ -49,8 +49,8 @@ Prevents infinite recursion while permitting multi-hop chains.")
 
 (defconst my-gptel--delegate-max-turns 15
   "Maximum number of LLM response turns for a delegate session.
-When the sub-agent produces a text-only response (no tool calls)
-without having used any tools, it is re-prompted to continue.
+When the sub-agent produces a text-only response (no tool calls
+in the current turn), it is re-prompted to continue.
 This prevents models that describe tool calls in text instead of
 actually calling them from terminating prematurely.")
 
@@ -184,10 +184,11 @@ STREAM-POS-REF is a symbol holding the stream-pos marker (set dynamically)."
           (set stream-pos-ref stream-pos))))))
 
 (defconst my-gptel--delegate-continue-prompt
-  "You have not used any tools yet. You MUST use the available tools to complete the task. Do not describe what you plan to do — actually call the tools. Read the relevant files, run commands, or delegate as needed. Then provide your final response."
+  "Your last response did not include any tool calls. If the task is complete, provide your final response now. If you still need to take action, call the available tools instead of describing what you plan to do. Read the relevant files, run commands, or delegate as needed."
   "Prompt sent to a delegate when it produces a text-only response
-without calling any tools.  This nudges the model to actually use
-its tools instead of narrating its intentions.")
+without calling any tools in the current turn.  This nudges the model
+to either call its tools (instead of narrating intentions) or produce
+its final response if the task is already complete.")
 
 (defun my-gptel--delegate-completion-fn (buf callback agent completed-sym
                                              timer-sym timeout-secs
@@ -201,9 +202,10 @@ TOOLS-CALLED-SYM is a symbol holding the tool-called flag for the current turn.
 TURN-COUNT-SYM is a symbol holding the turn counter.
 MAX-TURNS is the maximum number of text-only turns before forcing completion.
 
-When the sub-agent produces a text-only response (no tool calls), it is
-re-prompted with `my-gptel--delegate-continue-prompt' to encourage it to
-actually use its tools.  This prevents models that describe tool calls
+When the sub-agent produces a text-only response (no tool calls in
+the current turn), it is re-prompted with `my-gptel--delegate-continue-prompt'
+to encourage it to either call its tools or produce its final response
+if the task is complete.  This prevents models that describe tool calls
 in text from terminating prematurely with a non-result."
   (lambda (start end)
     (unless (symbol-value completed-sym)
