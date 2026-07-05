@@ -150,8 +150,10 @@ paths are checked against each pattern.  When they are the same
 
 (defun my-gptel--guard-check-replace (filepath)
   "Check if FILEPATH is protected against replace_in_file operations.
-Same restrictions as write -- HISTORY.log is blocked for replace
-just as it is for write (only append is allowed for HISTORY.log)."
+Delegates to `my-gptel--guard-check-write' -- replace has the same
+protections as write.  HISTORY.log is blocked for replace (only
+append is allowed) because it is in `my-gptel--guard-always-protected',
+which `my-gptel--guard-check-write' checks."
   (my-gptel--guard-check-write filepath))
 
 (defun my-gptel--guard-check-append (filepath)
