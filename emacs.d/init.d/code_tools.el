@@ -69,7 +69,9 @@ to prevent interactive pagers (less/more) from hanging in batch mode."
                      (when (memq (process-status proc) '(exit signal))
                        (when timer (cancel-timer timer))
                        (let* ((exit-code (process-exit-status proc))
-                              (output (with-current-buffer buf (buffer-string))))
+                              (output (if (buffer-live-p buf)
+                                          (with-current-buffer buf (buffer-string))
+                                        "[buffer was no longer live — output lost]")))
                          (when (buffer-live-p buf) (kill-buffer buf))
                          (let ((result
                                 (cond
