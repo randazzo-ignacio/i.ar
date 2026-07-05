@@ -80,7 +80,8 @@ Can also be set via DARWIN_TELEGRAM_CHAT_ID env var."
 
 (defvar darwin-cycle-result-message nil
   "Message to send via Telegram when the cycle ends.
-Set this before killing Emacs.  Nil means no notification.")
+Set this before killing Emacs.  Nil or empty string means no
+notification.  Must be a non-empty string to trigger a send.")
 
 (defconst darwin-cycle-prompt
   "You are waking up for a new cycle. Follow your cycle protocol:
@@ -163,8 +164,11 @@ Silently skips if either is empty.  Logs success or failure."
 
 (defun darwin--notify-on-exit ()
   "Send Telegram notification if `darwin-cycle-result-message' is set.
-This is added to `kill-emacs-hook' so it fires automatically on exit."
-  (when darwin-cycle-result-message
+This is added to `kill-emacs-hook' so it fires automatically on exit.
+Only sends when the message is a non-empty string -- empty strings are
+truthy in Emacs Lisp but would send an empty Telegram message."
+  (when (and (stringp darwin-cycle-result-message)
+             (not (string-empty-p darwin-cycle-result-message)))
     (darwin--notify-telegram darwin-cycle-result-message)))
 
 (add-hook 'kill-emacs-hook #'darwin--notify-on-exit)

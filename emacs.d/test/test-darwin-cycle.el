@@ -393,6 +393,45 @@ should not break the JSON payload. Verifies exact round-trip fidelity."
       (darwin--notify-on-exit))
     (should-not notify-called)))
 
+(ert-deftest test-darwin-notify-on-exit-empty-string-no-send ()
+  "darwin--notify-on-exit should NOT send when message is empty string.
+Empty strings are truthy in Emacs Lisp, so a simple (when msg) check
+would send an empty Telegram message.  The function now checks
+stringp and non-empty before sending."
+  (let ((darwin-cycle-result-message "")
+        (notify-called nil))
+    (cl-letf (((symbol-function 'darwin--notify-telegram)
+               (lambda (_msg)
+                 (setq notify-called t))))
+      (darwin--notify-on-exit))
+    (should-not notify-called)))
+
+(ert-deftest test-darwin-notify-on-exit-non-string-no-send ()
+  "darwin--notify-on-exit should NOT send when message is not a string.
+If darwin-cycle-result-message is accidentally set to a non-string value
+(e.g., t, a number, a symbol), the function should not attempt to send.
+Tests integer 42 -- stringp returns nil for all non-strings."
+  (let ((darwin-cycle-result-message 42)
+        (notify-called nil))
+    (cl-letf (((symbol-function 'darwin--notify-telegram)
+               (lambda (_msg)
+                 (setq notify-called t))))
+      (darwin--notify-on-exit))
+    (should-not notify-called)))
+
+(ert-deftest test-darwin-notify-on-exit-boolean-true-no-send ()
+  "darwin--notify-on-exit should NOT send when message is t.
+t is truthy and a common return value from predicates; the old
+guard (when darwin-cycle-result-message) would have passed it to
+darwin--notify-telegram, which would fail inside json-serialize."
+  (let ((darwin-cycle-result-message t)
+        (notify-called nil))
+    (cl-letf (((symbol-function 'darwin--notify-telegram)
+               (lambda (_msg)
+                 (setq notify-called t))))
+      (darwin--notify-on-exit))
+    (should-not notify-called)))
+
 (ert-deftest test-darwin-notify-on-exit-registered-in-hook ()
   "darwin--notify-on-exit should be registered in kill-emacs-hook."
   (should (member 'darwin--notify-on-exit
