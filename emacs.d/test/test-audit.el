@@ -10,6 +10,11 @@
 (require 'subr-x)
 (require 'audit_log)
 
+;; Silence byte-compiler warnings for dynamically-bound test variables.
+(defvar my-gptel--audit-log-max-size)
+(defvar my-gptel--current-agent-name)
+(declare-function my-gptel--audit-maybe-rotate "audit_log" ())
+
 ;;; --- Test fixtures ---
 
 (defvar test-audit--tmpdir nil
@@ -262,6 +267,85 @@ audit log as exit=-1."
       (should (string-match-p "execute_code_local" content))
       (should (string-match-p "exit=-1" content))
       (should (string-match-p "sleep 999" content)))))
+
+;;; --- Log rotation tests ---
+
+(ert-deftest test-audit-rotates-when-exceeding-max-size ()
+  "my-gptel--audit-log should rotate the log when it exceeds max-size.
+After rotation, the old log is renamed to audit.log.1 and a fresh
+log is started with the new entry."
+  (with-audit-fixture
+    (let ((my-gptel--audit-log-max-size 100)) ; 100 bytes -- very small
+      ;; Write enough entries to exceed 100 bytes
+      (my-gptel--audit-log "write_file" "/path/that/is/long/enough/to/trigger/rotation/1")
+      (my-gptel--audit-log "write_file" "/path/that/is/long/enough/to/trigger/rotation/2")
+      (my-gptel--audit-log "write_file" "/path/that/is/long/enough/to/trigger/rotation/3")
+      ;; After the third entry, the log should have been rotated
+      (let ((rotated-path (concat test-audit--log-path ".1")))
+        (should (file-exists-p rotated-path))
+        ;; The rotated file should contain the first two entries
+        (let ((rotated-content
+               (with-temp-buffer
+                 (insert-file-contents rotated-path)
+                 (buffer-string))))
+          (should (string-match-p "rotation/1" rotated-content))
+          (should (string-match-p "rotation/2" rotated-content)))
+        ;; The current log should contain only the third entry
+        (let ((current-content (test-audit--read-log)))
+          (should (string-match-p "rotation/3" current-content))
+          (should-not (string-match-p "rotation/1" current-content))
+          (should-not (string-match-p "rotation/2" current-content)))))))
+
+(ert-deftest test-audit-no-rotation-when-under-max-size ()
+  "my-gptel--audit-log should NOT rotate when the log is under max-size."
+  (with-audit-fixture
+    (let ((my-gptel--audit-log-max-size (* 10 1024 1024))) ; 10MB
+      (my-gptel--audit-log "write_file" "/small/path.txt")
+      (should-not (file-exists-p (concat test-audit--log-path ".1")))
+      (let ((content (test-audit--read-log)))
+        (should (string-match-p "/small/path.txt" content))))))
+
+(ert-deftest test-audit-no-rotation-when-max-size-nil ()
+  "my-gptel--audit-log should NOT rotate when max-size is nil."
+  (with-audit-fixture
+    (let ((my-gptel--audit-log-max-size nil))
+      ;; Write many entries
+      (dotimes (i 10)
+        (my-gptel--audit-log "write_file" (format "/path/number/%d/abcdefghijklmnopqrstuvwxyz" i)))
+      (should-not (file-exists-p (concat test-audit--log-path ".1")))
+      ;; All 10 entries should be in the current log
+      (let ((content (test-audit--read-log)))
+        (should (= (length (split-string content "\n" t)) 10))))))
+
+(ert-deftest test-audit-rotation-overwrites-old-rotated-file ()
+  "my-gptel--audit-log rotation should overwrite any existing .1 file."
+  (with-audit-fixture
+    (let ((my-gptel--audit-log-max-size 50))
+      ;; Create a fake old rotated file with stale content
+      (let ((rotated-path (concat test-audit--log-path ".1")))
+        (with-temp-file rotated-path
+          (insert "STALE CONTENT FROM PREVIOUS ROTATION\n"))
+        (should (file-exists-p rotated-path))
+        ;; Write enough to trigger rotation
+        (my-gptel--audit-log "write_file" "/path/long/enough/to/trigger/rotation/entry1")
+        (my-gptel--audit-log "write_file" "/path/long/enough/to/trigger/rotation/entry2")
+        ;; The rotated file should now contain the first entry, not stale content
+        (let ((rotated-content
+               (with-temp-buffer
+                 (insert-file-contents rotated-path)
+                 (buffer-string))))
+          (should-not (string-match-p "STALE CONTENT" rotated-content))
+          (should (string-match-p "entry1" rotated-content)))))))
+
+(ert-deftest test-audit-rotation-when-log-does-not-exist ()
+  "my-gptel--audit-maybe-rotate should handle non-existent log gracefully.
+When the log file doesn't exist yet, rotation should be a no-op."
+  (with-audit-fixture
+    (let ((my-gptel--audit-log-max-size 100))
+      ;; Log doesn't exist yet -- should not crash
+      (should-not (file-exists-p test-audit--log-path))
+      (my-gptel--audit-maybe-rotate)
+      (should-not (file-exists-p (concat test-audit--log-path ".1"))))))
 
 (provide 'test-audit)
 ;;; test-audit.el ends here

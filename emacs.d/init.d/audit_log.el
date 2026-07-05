@@ -33,6 +33,19 @@
   (expand-file-name "workspace/audit.log" user-emacs-directory)
   "Path to the central audit log for all agent file operations.")
 
+(defcustom my-gptel--audit-log-max-size (* 10 1024 1024)
+  "Maximum size in bytes before the audit log is rotated.
+When the log exceeds this size, it is renamed to `audit.log.1'
+(overwriting any previous rotation) and a fresh log is started.
+Set to nil to disable rotation.
+
+Note: Only one generation of rotated log is retained (audit.log.1).
+Each rotation overwrites the previous .1 file.  For compliance-grade
+retention, configure external log rotation (e.g., logrotate) instead."
+  :type '(choice (integer :tag "Max size in bytes")
+                 (const :tag "No rotation" nil))
+  :group 'gptel)
+
 (defun my-gptel--audit-get-agent-name ()
   "Return the current agent name for audit logging."
   (if (and (boundp 'my-gptel--current-agent-name)
@@ -50,6 +63,22 @@ or command containing newlines could inject fake audit log entries."
     (setq s (replace-regexp-in-string "\r" "\\\\r" s))
     s))
 
+(defun my-gptel--audit-maybe-rotate ()
+  "Rotate the audit log if it exceeds `my-gptel--audit-log-max-size'.
+Renames the current log to `audit.log.1' (overwriting any previous
+rotation) and starts a fresh log.  Rotation is best-effort: errors
+are silently ignored to avoid breaking the operation being audited."
+  (when (and my-gptel--audit-log-max-size
+             (> my-gptel--audit-log-max-size 0)
+             (file-exists-p my-gptel--audit-log-path))
+    (let ((size (file-attribute-size (file-attributes my-gptel--audit-log-path))))
+      (when (and size (> size my-gptel--audit-log-max-size))
+        (condition-case nil
+            (let ((rotated (concat my-gptel--audit-log-path ".1")))
+              ;; rename-file with t overwrites any existing .1 file.
+              (rename-file my-gptel--audit-log-path rotated t))
+          (error nil))))))
+
 (defun my-gptel--audit-log (tool detail)
   "Append an audit entry for TOOL with DETAIL to the audit log.
 Does not signal errors -- audit logging is best-effort and must
@@ -57,12 +86,18 @@ never break the operation it is auditing.
 DETAIL is sanitized to prevent log injection via embedded newlines.
 TOOL is expected to be a hardcoded string literal (e.g. \"write_file\")
 and AGENT comes from `my-gptel--current-agent-name' which is validated
-by `my-gptel--safe-agent-name-p' -- neither is user-controlled, so
-neither is sanitized.  If this invariant changes, sanitize them too."
+by `my-gptel--safe-agent-name-p' in session_persistence.el -- neither
+is user-controlled, so neither is sanitized.  If this invariant changes,
+sanitize them too.
+
+Before writing, checks if the log exceeds `my-gptel--audit-log-max-size'
+and rotates it if so.  This prevents unbounded growth of the audit log."
   (condition-case nil
       (let ((timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
             (agent (my-gptel--audit-get-agent-name))
             (safe-detail (my-gptel--audit-sanitize-detail detail)))
+        ;; Rotate the log if it has grown too large.
+        (my-gptel--audit-maybe-rotate)
         ;; Ensure the workspace directory exists before writing.
         ;; Check file-exists-p first to avoid a stat syscall on every call
         ;; after the directory has been created.
