@@ -44,7 +44,7 @@ Each rotation overwrites the previous .1 file.  For compliance-grade
 retention, configure external log rotation (e.g., logrotate) instead."
   :type '(choice (integer :tag "Max size in bytes")
                  (const :tag "No rotation" nil))
-  :safe (lambda (v) (or (integerp v) (null v)))
+  :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
   :group 'gptel)
 
 (defun my-gptel--audit-get-agent-name ()

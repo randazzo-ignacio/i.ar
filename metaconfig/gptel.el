@@ -42,6 +42,7 @@
                                    "mistral-medium-3.5:128b"
                                    "nemotron-3-super:120b"
                                    "nemotron-3-ultra:cloud"
+                                   "deepseek-v4-pro:cloud"
                                    "glm-5.2:cloud")
                          :request-params '(:options (
                                           :temperature 0.7
@@ -50,5 +51,4 @@
                                           :num_predict 65536
                                         ))))
 
-
-(setq emacboros-gptel-default-model 'glm-5.2:cloud)
+(setq emacboros-gptel-default-model 'deepseek-v4-pro:cloud)
