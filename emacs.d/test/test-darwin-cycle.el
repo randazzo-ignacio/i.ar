@@ -440,8 +440,8 @@ darwin--notify-telegram, which would fail inside json-serialize."
 
 (ert-deftest test-darwin-notify-on-exit-registered-in-hook ()
   "darwin--notify-on-exit should be registered in kill-emacs-hook."
-  (should (member 'darwin--notify-on-exit
-                  (default-value 'kill-emacs-hook))))
+  (should (memq 'darwin--notify-on-exit
+                (default-value 'kill-emacs-hook))))
 
 ;;; --- darwin--cycle-complete-p expanded phrase tests ---
 
