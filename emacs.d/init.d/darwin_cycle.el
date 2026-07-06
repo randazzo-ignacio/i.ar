@@ -157,18 +157,23 @@ Silently skips if either is empty.  Logs success or failure."
           (if (null result)
               ;; curl error already logged by condition-case above
               nil
-            (let ((ok nil))
-              (condition-case nil
+            (let ((ok nil)
+                  (parse-error nil))
+              (condition-case err
                   (let ((parsed (with-temp-buffer
                                   (insert result)
                                   (goto-char (point-min))
                                   (let ((json-object-type 'plist))
                                     (json-read)))))
                     (setq ok (eq (plist-get parsed :ok) t)))
-                (error nil))
+                (error
+                 (setq parse-error (error-message-string err))))
               (if ok
                   (message "[darwin] Telegram notification sent successfully")
-                (message "[darwin] Telegram notification FAILED: %s" result)))))))))
+                (if parse-error
+                    (message "[darwin] Telegram notification FAILED (JSON parse error: %s): %.500s"
+                             parse-error result)
+                  (message "[darwin] Telegram notification FAILED: %.500s" result))))))))))
 
 (defun darwin--notify-on-exit ()
   "Send Telegram notification if `darwin-cycle-result-message' is set.

@@ -799,6 +799,38 @@ detail, and return without crashing.  The error message should contain
                            (string-match-p "sent successfully" msg))
                          logged-messages))))
 
+;;; --- darwin--notify-telegram JSON parse error test ---
+
+(ert-deftest test-darwin-notify-telegram-logs-json-parse-error ()
+  "darwin--notify-telegram should log JSON parse errors with detail.
+When curl returns a non-JSON response (e.g., an HTML error page),
+json-read signals an error. The condition-case should catch it and
+log a FAILED message that includes 'JSON parse error' and the actual
+error message, making the failure observable and distinguishable from
+an API-level failure (ok=false)."
+  (let ((darwin-telegram-bot-token "test-token")
+        (darwin-telegram-chat-id "123")
+        (logged-messages nil))
+    (cl-letf (((symbol-function 'call-process)
+               (test-darwin--mock-call-process "<html>Not Found</html>"))
+              ((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) logged-messages))))
+      (darwin--notify-telegram "test"))
+    ;; Should log a FAILED message with JSON parse error detail
+    (should (cl-some (lambda (msg)
+                       (and (string-match-p "FAILED" msg)
+                            (string-match-p "JSON parse error" msg)))
+                     logged-messages))
+    ;; The raw response should be included in the FAILED message
+    (should (cl-some (lambda (msg)
+                       (string-match-p "Not Found" msg))
+                     logged-messages))
+    ;; Should NOT log success
+    (should-not (cl-some (lambda (msg)
+                           (string-match-p "sent successfully" msg))
+                         logged-messages))))
+
 ;;; --- darwin--cycle-complete-p word-boundary test ---
 
 (ert-deftest test-darwin-cycle-complete-finished-cycles-no-false-positive ()
