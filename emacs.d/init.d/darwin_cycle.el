@@ -205,26 +205,28 @@ searches the entire buffer (backward compatibility).
 START and END are clamped to buffer boundaries to prevent
 args-out-of-range errors from stale positions."
   (with-current-buffer buf
-    (let ((case-fold-search t)
-          (text (if (and (integerp start) (integerp end) (< start end))
-                    (buffer-substring-no-properties
-                     (min (max start (point-min)) (point-max))
-                     (min (max end (point-min)) (point-max)))
-                  (buffer-substring-no-properties (point-min) (point-max)))))
-      ;; Check for structured sentinel first (unambiguous, no HISTORY needed).
-      ;; The sentinel must appear on its own line (line-anchored) to avoid
-      ;; matching the substring inside the prompt text or tool output.
-      ;; Case-sensitive: the prompt asks for "exact text CYCLE_COMPLETE".
-      (or (and (let ((case-fold-search nil))
-                 (string-match-p "\\(^\\|\n\\)CYCLE_COMPLETE\\(\n\\|\\'\\)" text))
-               t)
-          ;; Natural language completion: requires both a completion phrase
-          ;; and a HISTORY reference (two-part check for reliability).
-          ;; case-fold-search is bound to t for deterministic matching
-          ;; regardless of buffer-local settings.
-          (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished \\(?:[a-z]+ \\)\\{0,2\\}cycle\\>\\|cycle is done\\)" text)
-               (string-match-p "HISTORY" text)
-               t)))))
+    (save-restriction
+      (widen)
+      (let ((case-fold-search t)
+            (text (if (and (integerp start) (integerp end) (< start end))
+                      (buffer-substring-no-properties
+                       (min (max start (point-min)) (point-max))
+                       (min (max end (point-min)) (point-max)))
+                    (buffer-substring-no-properties (point-min) (point-max)))))
+        ;; Check for structured sentinel first (unambiguous, no HISTORY needed).
+        ;; The sentinel must appear on its own line (line-anchored) to avoid
+        ;; matching the substring inside the prompt text or tool output.
+        ;; Case-sensitive: the prompt asks for "exact text CYCLE_COMPLETE".
+        (or (and (let ((case-fold-search nil))
+                   (string-match-p "\\(^\\|\n\\)CYCLE_COMPLETE\\(\n\\|\\'\\)" text))
+                 t)
+            ;; Natural language completion: requires both a completion phrase
+            ;; and a HISTORY reference (two-part check for reliability).
+            ;; case-fold-search is bound to t for deterministic matching
+            ;; regardless of buffer-local settings.
+            (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished \\(?:[a-z]+ \\)\\{0,2\\}cycle\\>\\|cycle is done\\)" text)
+                 (string-match-p "HISTORY" text)
+                 t))))))
 
 (defun darwin-run-cycle (&rest args)
   "Run one darwin cycle in batch mode.

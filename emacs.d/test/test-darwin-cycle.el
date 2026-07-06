@@ -811,5 +811,75 @@ completion signal."
     (insert "I finished the cycles of debugging. HISTORY.log next.\n")
     (should (null (darwin--cycle-complete-p (current-buffer))))))
 
+;;; --- darwin--cycle-complete-p narrowing tests ---
+
+(ert-deftest test-darwin-cycle-complete-widens-narrowed-buffer ()
+  "darwin--cycle-complete-p should widen before searching.
+When the cycle buffer is narrowed (e.g., during streaming or by user
+action), the function should widen to search the full buffer content.
+Without widening, completion markers outside the narrowed region would
+be missed, causing a false negative that prevents cycle termination."
+  (with-temp-buffer
+    (insert "Let me look at the codebase.\n")
+    (insert "---\n")
+    (insert "Cycle complete. HISTORY.log updated.\n")
+    ;; Narrow to just the first line (excluding the completion markers)
+    (narrow-to-region (point-min) (save-excursion
+                                    (goto-char (point-min))
+                                    (line-end-position)))
+    (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
+
+(ert-deftest test-darwin-cycle-complete-restores-narrowing ()
+  "darwin--cycle-complete-p should restore narrowing after searching.
+save-restriction should restore the original narrowing state so the
+caller's buffer state is not affected.  Without save-restriction, a
+bare widen would permanently remove the narrowing as a side effect."
+  (with-temp-buffer
+    (insert "Some text.\n")
+    (insert "Cycle complete. HISTORY.log updated.\n")
+    (narrow-to-region (point-min) (save-excursion
+                                    (goto-char (point-min))
+                                    (line-end-position)))
+    (let ((narrow-start (point-min))
+          (narrow-end (point-max)))
+      (darwin--cycle-complete-p (current-buffer))
+      ;; Narrowing should be restored
+      (should (= (point-min) narrow-start))
+      (should (= (point-max) narrow-end)))))
+
+(ert-deftest test-darwin-cycle-complete-sentinel-widens-narrowed-buffer ()
+  "darwin--cycle-complete-p should detect CYCLE_COMPLETE sentinel even when narrowed.
+The sentinel may be outside the narrowed region.  The save-restriction
++ widen ensures it is found."
+  (with-temp-buffer
+    (insert "Working on things.\n")
+    (insert "CYCLE_COMPLETE\n")
+    ;; Narrow to just the first line
+    (narrow-to-region (point-min) (save-excursion
+                                    (goto-char (point-min))
+                                    (line-end-position)))
+    (should (eq (darwin--cycle-complete-p (current-buffer)) t))))
+
+(ert-deftest test-darwin-cycle-complete-region-with-narrowed-buffer ()
+  "darwin--cycle-complete-p should handle START/END with narrowed buffer.
+When the buffer is narrowed and START/END are provided, the function
+should widen first, then apply the region bounds.  The region bounds
+are character positions in the full (widened) buffer, not the narrowed
+region."
+  (with-temp-buffer
+    (insert "Let me look at the codebase.\n")
+    (insert "---\n")
+    (insert "Cycle complete. HISTORY.log updated.\n")
+    (let* ((sep-end (save-excursion
+                      (goto-char (point-min))
+                      (search-forward "---\n")))
+           (region-start sep-end)
+           (region-end (point-max)))
+      ;; Narrow to just the first line
+      (narrow-to-region (point-min) (save-excursion
+                                      (goto-char (point-min))
+                                      (line-end-position)))
+      (should (eq (darwin--cycle-complete-p (current-buffer) region-start region-end) t)))))
+
 (provide 'test-darwin-cycle)
 ;;; test-darwin-cycle.el ends here
