@@ -712,4 +712,24 @@ Returns a plist: (:parent-buf :delegate-buf :stream-fn)."
              (with-current-buffer buf
                (should (null gptel-confirm-tool-calls))))
         (when (buffer-live-p buf) (kill-buffer buf))))))
+(ert-deftest test-delegate-spawn-clamps-negative-parent-depth ()
+  "spawn-async-delegate should clamp negative parent-depth to 0.
+A tampered session file could set my-gptel--delegate-depth to a
+negative value via file-local variables (if the user accepts the
+Emacs safety prompt).  The safe-local-variable predicate rejects
+negatives, but this is defense-in-depth at the consumer level."
+  (with-temp-buffer
+    (setq-local my-gptel--delegate-depth -100)
+    (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
+      (let ((buf nil))
+        (unwind-protect
+             (progn
+               (setq buf (my-gptel--spawn-async-delegate
+                          (lambda (_r)) "testagent" "do something" "ctx" 30
+                          "You are a test agent."))
+               (with-current-buffer buf
+                 ;; Depth should be 1 (0 + 1), not -99 (-100 + 1)
+                 (should (= my-gptel--delegate-depth 1))))
+          (when (buffer-live-p buf) (kill-buffer buf)))))))
+
 (provide 'test-delegate)

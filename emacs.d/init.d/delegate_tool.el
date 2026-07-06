@@ -317,8 +317,8 @@ in text from terminating prematurely with a non-result."
   "Spawn an async delegate buffer and send the task.
 The sub-agent's streaming output is mirrored into the parent buffer
 so the user can watch progress in real time."
-  (let* ((parent-depth (if (boundp 'my-gptel--delegate-depth)
-                           my-gptel--delegate-depth 0))
+  (let* ((parent-depth (max 0 (if (boundp 'my-gptel--delegate-depth)
+                                   my-gptel--delegate-depth 0)))
          (task-id (format "delegate-%s-%d-%d" agent (emacs-pid) (float-time)))
          (buf (get-buffer-create (format "*gptel-delegate-%s*" task-id)))
          (full-prompt (format "DELEGATED TASK FROM PARENT AGENT\n==============================\n\nCONTEXT:\n%s\n\nTASK:\n%s"
