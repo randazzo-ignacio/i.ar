@@ -116,7 +116,7 @@ The spec has three parts:
 
 * CURRENT STATE (v0.1 ALPHA)
 
-A pilot implementation exists at `/root/.emacs.d/ignisp/ignisp.c` (~500 lines of C). It is a throwaway to see the language working end-to-end. It includes:
+A pilot implementation exists at `/var/home/nacho/repos/ignisp/ignisp.c` (~500 lines of C). It is a throwaway to see the language working end-to-end. It includes:
 
 - Reader with strings, numbers, symbols, comments, quote macro, dotted pairs
 - Printer with proper list and dotted pair rendering
@@ -144,7 +144,7 @@ Known v0.1 limitations (documented, not bugs):
 - Fixed buffer sizes (255 char symbols, 1023 char strings)
 - No file I/O
 
-Files in `/root/.emacs.d/ignisp/`:
+Files in `/var/home/nacho/repos/ignisp/`:
 - `ignisp.c` -- the v0.1 pilot implementation (to be renamed to ignisp.c)
 - `ALPHA_SPEC.md` -- complete spec for v0.1 as implemented
 - `DESIGN_NOTES.md` -- architecture and reasoning (from design conversation)
@@ -184,11 +184,11 @@ You are the ignisp design and development partner. Your job:
 * CONTEXT FILES
 
 When you need to understand the full project context:
-- Read `/root/.emacs.d/ignisp/DESIGN_NOTES.md` for the complete architecture and reasoning
-- Read `/root/.emacs.d/ignisp/ALPHA_SPEC.md` for the v0.1 specification
-- Read `/root/.emacs.d/ignisp/ignisp.c` for the current implementation
-- Read `/root/.emacs.d/ignisp/KERNEL_SPEC.md` for the abstract kernel spec draft
-- Read `/root/.emacs.d/ignisp/KERNEL_REF.md` for the reference implementation parameters
+- Read `/var/home/nacho/repos/ignisp/DESIGN_NOTES.md` for the complete architecture and reasoning
+- Read `/var/home/nacho/repos/ignisp/ALPHA_SPEC.md` for the v0.1 specification
+- Read `/var/home/nacho/repos/ignisp/ignisp.c` for the current implementation
+- Read `/var/home/nacho/repos/ignisp/KERNEL_SPEC.md` for the abstract kernel spec draft
+- Read `/var/home/nacho/repos/ignisp/KERNEL_REF.md` for the reference implementation parameters
 
 * GUIDING PRINCIPLE
 "First make it work, then make it work well."
