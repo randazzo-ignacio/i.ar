@@ -39,7 +39,7 @@
 After this many repetitions, the tool call is blocked and a
 correction message is sent to the LLM instead of executing."
   :type 'integer
-  :safe #'integerp
+  :safe (lambda (v) (and (integerp v) (> v 0)))
   :group 'gptel)
 
 (defcustom my-gptel-loop-hard-threshold 6
@@ -51,13 +51,13 @@ If set <= `my-gptel-loop-soft-threshold', the effective hard
 threshold is automatically raised to soft+1 to ensure at least
 one soft warning before hard-stopping."
   :type 'integer
-  :safe #'integerp
+  :safe (lambda (v) (and (integerp v) (> v 0)))
   :group 'gptel)
 
 (defcustom my-gptel-loop-history-size 20
   "Maximum number of tool calls to keep in the history ring."
   :type 'integer
-  :safe #'integerp
+  :safe (lambda (v) (and (integerp v) (> v 0)))
   :group 'gptel)
 
 ;;; --- State ---

@@ -49,7 +49,7 @@
 (defcustom darwin-cycle-timeout 7200
   "Default timeout for a darwin cycle in seconds (120 minutes)."
   :type 'integer
-  :safe #'integerp
+  :safe (lambda (v) (and (integerp v) (> v 0)))
   :group 'darwin)
 
 (defcustom darwin-cycle-max-turns 40
@@ -57,7 +57,7 @@
 Each turn is one model response (with or without tool calls).
 This prevents infinite loops."
   :type 'integer
-  :safe #'integerp
+  :safe (lambda (v) (and (integerp v) (> v 0)))
   :group 'darwin)
 
 (defcustom darwin-telegram-bot-token
