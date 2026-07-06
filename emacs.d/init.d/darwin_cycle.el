@@ -49,7 +49,7 @@
 (defcustom darwin-cycle-timeout 7200
   "Default timeout for a darwin cycle in seconds (120 minutes)."
   :type 'integer
-  :safe #'integerp
+  :safe (lambda (v) (and (integerp v) (> v 0)))
   :group 'darwin)
 
 (defcustom darwin-cycle-max-turns 40
@@ -57,7 +57,7 @@
 Each turn is one model response (with or without tool calls).
 This prevents infinite loops."
   :type 'integer
-  :safe #'integerp
+  :safe (lambda (v) (and (integerp v) (> v 0)))
   :group 'darwin)
 
 (defcustom darwin-telegram-bot-token
@@ -136,31 +136,44 @@ Silently skips if either is empty.  Logs success or failure."
                         :text ,message
                         :parse_mode "Markdown"))))
         (message "[darwin] Sending Telegram notification...")
-        (let ((result (with-temp-buffer
-                        (call-process "curl" nil t nil
-                                       "-s" "-m" "10"
-                                       "-X" "POST"
-                                       "-H" "Content-Type: application/json"
-                                       "-d" payload
-                                       url)
-                        (buffer-string))))
+        (let ((result (condition-case err
+                          (with-temp-buffer
+                            (call-process "curl" nil t nil
+                                           "-s" "-m" "10"
+                                           "-X" "POST"
+                                           "-H" "Content-Type: application/json"
+                                           "-d" payload
+                                           url)
+                            (buffer-string))
+                        (error
+                         (message "[darwin] Telegram notification FAILED: curl error: %s"
+                                  (error-message-string err))
+                         nil))))
           ;; Parse the JSON response to check the :ok field rather than
           ;; using substring matching.  This is more robust: a substring
           ;; check like "\"ok\":true" could false-positive if the literal
           ;; string appears inside an error message, and would false-negative
           ;; if the API returns whitespace like "\"ok\": true".
-          (let ((ok nil))
-            (condition-case nil
-                (let ((parsed (with-temp-buffer
-                                (insert result)
-                                (goto-char (point-min))
-                                (let ((json-object-type 'plist))
-                                  (json-read)))))
-                  (setq ok (eq (plist-get parsed :ok) t)))
-              (error nil))
-            (if ok
-                (message "[darwin] Telegram notification sent successfully")
-              (message "[darwin] Telegram notification FAILED: %s" result))))))))
+          (if (null result)
+              ;; curl error already logged by condition-case above
+              nil
+            (let ((ok nil)
+                  (parse-error nil))
+              (condition-case err
+                  (let ((parsed (with-temp-buffer
+                                  (insert result)
+                                  (goto-char (point-min))
+                                  (let ((json-object-type 'plist))
+                                    (json-read)))))
+                    (setq ok (eq (plist-get parsed :ok) t)))
+                (error
+                 (setq parse-error (error-message-string err))))
+              (if ok
+                  (message "[darwin] Telegram notification sent successfully")
+                (if parse-error
+                    (message "[darwin] Telegram notification FAILED (JSON parse error: %s): %.500s"
+                             parse-error result)
+                  (message "[darwin] Telegram notification FAILED: %.500s" result))))))))))
 
 (defun darwin--notify-on-exit ()
   "Send Telegram notification if `darwin-cycle-result-message' is set.
@@ -197,26 +210,28 @@ searches the entire buffer (backward compatibility).
 START and END are clamped to buffer boundaries to prevent
 args-out-of-range errors from stale positions."
   (with-current-buffer buf
-    (let ((case-fold-search t)
-          (text (if (and (integerp start) (integerp end) (< start end))
-                    (buffer-substring-no-properties
-                     (min (max start (point-min)) (point-max))
-                     (min (max end (point-min)) (point-max)))
-                  (buffer-substring-no-properties (point-min) (point-max)))))
-      ;; Check for structured sentinel first (unambiguous, no HISTORY needed).
-      ;; The sentinel must appear on its own line (line-anchored) to avoid
-      ;; matching the substring inside the prompt text or tool output.
-      ;; Case-sensitive: the prompt asks for "exact text CYCLE_COMPLETE".
-      (or (and (let ((case-fold-search nil))
-                 (string-match-p "\\(^\\|\n\\)CYCLE_COMPLETE\\(\n\\|\\'\\)" text))
-               t)
-          ;; Natural language completion: requires both a completion phrase
-          ;; and a HISTORY reference (two-part check for reliability).
-          ;; case-fold-search is bound to t for deterministic matching
-          ;; regardless of buffer-local settings.
-          (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished \\(?:[a-z]+ \\)\\{0,2\\}cycle\\>\\|cycle is done\\)" text)
-               (string-match-p "HISTORY" text)
-               t)))))
+    (save-restriction
+      (widen)
+      (let ((case-fold-search t)
+            (text (if (and (integerp start) (integerp end) (< start end))
+                      (buffer-substring-no-properties
+                       (min (max start (point-min)) (point-max))
+                       (min (max end (point-min)) (point-max)))
+                    (buffer-substring-no-properties (point-min) (point-max)))))
+        ;; Check for structured sentinel first (unambiguous, no HISTORY needed).
+        ;; The sentinel must appear on its own line (line-anchored) to avoid
+        ;; matching the substring inside the prompt text or tool output.
+        ;; Case-sensitive: the prompt asks for "exact text CYCLE_COMPLETE".
+        (or (and (let ((case-fold-search nil))
+                   (string-match-p "\\(^\\|\n\\)CYCLE_COMPLETE\\(\n\\|\\'\\)" text))
+                 t)
+            ;; Natural language completion: requires both a completion phrase
+            ;; and a HISTORY reference (two-part check for reliability).
+            ;; case-fold-search is bound to t for deterministic matching
+            ;; regardless of buffer-local settings.
+            (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished \\(?:[a-z]+ \\)\\{0,2\\}cycle\\>\\|cycle is done\\)" text)
+                 (string-match-p "HISTORY" text)
+                 t))))))
 
 (defun darwin-run-cycle (&rest args)
   "Run one darwin cycle in batch mode.
@@ -290,10 +305,12 @@ until it either completes all steps or reaches the turn limit."
                  (message "[darwin] Turn #%d completed (tool calls so far: %d)"
                           turn-count tool-call-count)
                  (when (and (integerp start) (integerp end) (< start end))
-                   (let ((response (buffer-substring-no-properties
-                                    (min (max start (point-min)) (point-max))
-                                    (min (max end (point-min)) (point-max)))))
-                     (message "[darwin] Response: %.300s" response)))
+                   (save-restriction
+                     (widen)
+                     (let ((response (buffer-substring-no-properties
+                                      (min (max start (point-min)) (point-max))
+                                      (min (max end (point-min)) (point-max)))))
+                       (message "[darwin] Response: %.300s" response))))
 
                  ;; Check if we've hit the turn limit
                  (if (>= turn-count darwin-cycle-max-turns)
@@ -343,8 +360,10 @@ until it either completes all steps or reaches the turn limit."
              ;; Capture partial response
              (when (buffer-live-p cycle-buf)
                (with-current-buffer cycle-buf
-                 (let ((partial (buffer-substring-no-properties (point-min) (point-max))))
-                   (message "[darwin] Partial response: %.500s" partial))))
+                 (save-restriction
+                   (widen)
+                   (let ((partial (buffer-substring-no-properties (point-min) (point-max))))
+                     (message "[darwin] Partial response: %.500s" partial)))))
              (setq darwin-cycle-result-message
                    (format "*Darwin Cycle: Timed Out*\nTimeout: %ds\nTool calls: %d\nTurns: %d\nThe cycle exceeded its time limit."
                            timeout tool-call-count turn-count))

@@ -372,4 +372,17 @@ we prove the message reads the actual counter."
           (should-not (string-match-p "blocked 3 attempts"
                                       (plist-get result :stop-reason))))))))
 
+;;; --- Hook registration test ---
+
+(ert-deftest test-loop-guard-registered-in-hook ()
+  "my-gptel--loop-guard should be registered in `gptel-pre-tool-call-functions'.
+The top-level call to `my-gptel--loop-guard-setup' in loop_guard.el
+adds the hook at load time.  If that call is accidentally removed,
+the loop guard would silently stop working -- no other test would
+catch this because all other tests call `my-gptel--loop-guard'
+directly rather than through the hook mechanism."
+  (should (memq #'my-gptel--loop-guard
+                (default-value 'gptel-pre-tool-call-functions))))
+
 (provide 'test-loop)
+;;; test-loop.el ends here

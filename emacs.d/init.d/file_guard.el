@@ -108,14 +108,6 @@ These protections are skipped when `my-gptel--guard-allow-self-modification'
 is non-nil.  Each predicate takes an expanded file path and returns non-nil
 if the path is protected.")
 
-(defconst my-gptel--guard-protected-patterns
-  (append my-gptel--guard-always-protected
-          my-gptel--guard-conditional-protected)
-  "Complete list of (predicate . reason) cons cells defining protected paths.
-Computed by concatenating `my-gptel--guard-always-protected' and
-`my-gptel--guard-conditional-protected'.  Maintained for backward
-compatibility with code that references the full list.")
-
 ;;; --- Internal ---
 
 (defun my-gptel--guard--active-patterns ()
@@ -125,7 +117,8 @@ only `my-gptel--guard-always-protected' (prompts, context, history).
 Otherwise returns the full list (always + conditional)."
   (if my-gptel--guard-allow-self-modification
       my-gptel--guard-always-protected
-    my-gptel--guard-protected-patterns))
+    (append my-gptel--guard-always-protected
+            my-gptel--guard-conditional-protected)))
 
 ;;; --- Public API ---
 

@@ -131,9 +131,8 @@ The error handler should capture the condition-case err and include
       (should (string-match-p "Error" result))
       ;; Should contain the expanded path
       (should (string-match-p (regexp-quote (expand-file-name "hello.txt" test-fs--tmpdir)) result))
-      ;; Should contain the actual error detail (not just generic "permission denied")
-      ;; The actual error from directory-files on a file is "Not a directory" or similar
-      (should (string-match-p "not found or cannot be read" result))
+      ;; Should contain the normalized error template text
+      (should (string-match-p "Failed to list directory" result))
       ;; Should contain the OS-level error detail (the dynamic part from error-message-string)
       ;; This verifies the condition-case err capture, not just the template string
       (should (string-match-p "Not a directory" result)))))
@@ -175,7 +174,7 @@ The error handler should capture the condition-case err and include
     (should (stringp result))
     (should (string-match-p "Error" result))
     ;; Error should NOT contain the raw relative path
-    (should-not (string-match-p "\\`Error: File 'nonexistent-relative-file.txt'" result))
+    (should-not (string-match-p "\\`Error: Failed to read file 'nonexistent-relative-file.txt'" result))
     ;; Error SHOULD contain the expanded (absolute) path
     (should (string-match-p (regexp-quote (expand-file-name "nonexistent-relative-file.txt")) result))))
 

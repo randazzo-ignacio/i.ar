@@ -45,13 +45,12 @@
   "Execute BODY with a temporary audit log path and test agent name.
 Temporarily rebinds `my-gptel--audit-log-path' to a temp file."
   (declare (indent 0))
-  `(let ((old-log-path (bound-and-true-p my-gptel--audit-log-path)))
-     (unwind-protect
-         (progn
-           (test-audit--setup)
-           (let ((my-gptel--audit-log-path test-audit--log-path))
-             ,@body))
-       (test-audit--teardown))))
+  `(unwind-protect
+       (progn
+         (test-audit--setup)
+         (let ((my-gptel--audit-log-path test-audit--log-path))
+           ,@body))
+     (test-audit--teardown)))
 
 (defun test-audit--read-log ()
   "Read the current audit log file contents."
@@ -187,12 +186,16 @@ Temporarily rebinds `my-gptel--audit-log-path' to a temp file."
 ;;; --- Error resilience test ---
 
 (ert-deftest test-audit-log-does-not-crash-on-error ()
-  "my-gptel--audit-log should not signal errors even if logging fails."
+  "my-gptel--audit-log should not signal errors even if logging fails.
+The condition-case should catch the error and log it via `message'
+instead of propagating it.  The function returns the result of the
+`message' call (a string) on error, not nil."
   ;; Bind to an unwritable path -- the condition-case should swallow the error
   (let ((my-gptel--audit-log-path "/proc/cannot/write/audit.log")
         (my-gptel--current-agent-name "testagent"))
-    ;; This should not signal an error
-    (should (eq (my-gptel--audit-log "write_file" "/test.txt") nil))))
+    ;; This should not signal an error.  The condition-case catches it
+    ;; and the error handler calls `message', which returns a string.
+    (should (stringp (my-gptel--audit-log "write_file" "/test.txt")))))
 
 ;;; --- Log injection prevention tests ---
 
@@ -346,6 +349,46 @@ When the log file doesn't exist yet, rotation should be a no-op."
       (should-not (file-exists-p test-audit--log-path))
       (my-gptel--audit-maybe-rotate)
       (should-not (file-exists-p (concat test-audit--log-path ".1"))))))
+
+;;; --- Error observability tests ---
+
+(ert-deftest test-audit-log-error-logs-warning ()
+  "my-gptel--audit-log should log a warning message when write fails.
+The condition-case should catch the error and log it via `message'
+instead of silently swallowing it.  This makes audit log failures
+observable in *Messages*."
+  (let ((my-gptel--audit-log-path "/proc/cannot/write/audit.log")
+        (my-gptel--current-agent-name "testagent")
+        (logged-messages nil))
+    (cl-letf (((symbol-function 'message)
+               (lambda (fmt &rest args)
+                 (push (apply #'format fmt args) logged-messages))))
+      (my-gptel--audit-log "write_file" "/test.txt")
+      ;; At least one message should contain "audit log write failed"
+      (should (cl-some (lambda (m) (string-match-p "audit log write failed" m))
+                       logged-messages)))))
+
+(ert-deftest test-audit-rotation-error-logs-warning ()
+  "my-gptel--audit-maybe-rotate should log a warning when rotation fails.
+If rename-file fails (e.g., permissions), the error should be logged
+via `message' instead of silently swallowed."
+  (with-audit-fixture
+    (let ((my-gptel--audit-log-max-size 1) ; tiny -- triggers rotation
+          (logged-messages nil))
+      ;; Write an entry to create the log file
+      (my-gptel--audit-log "write_file" "/test.txt")
+      ;; Mock rename-file to signal an error
+      (cl-letf* (((symbol-function 'message)
+                  (lambda (fmt &rest args)
+                    (push (apply #'format fmt args) logged-messages)))
+                 ((symbol-function 'rename-file)
+                  (lambda (_src _dst &optional _ok)
+                    (signal 'file-error "Mocked rename failure"))))
+        ;; This should trigger rotation which fails, logging a warning
+        (my-gptel--audit-log "write_file" "/test2.txt")
+        ;; At least one message should contain "rotation failed"
+        (should (cl-some (lambda (m) (string-match-p "rotation failed" m))
+                         logged-messages))))))
 
 (provide 'test-audit)
 ;;; test-audit.el ends here

@@ -29,7 +29,6 @@
 (require 'task_tools)
 
 (declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
-(declare-function my-gptel--validate-agent-name "task_tools" (name))
 
 ;;; --- reload_os ---
 

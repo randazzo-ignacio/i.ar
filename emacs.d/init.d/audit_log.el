@@ -44,7 +44,7 @@ Each rotation overwrites the previous .1 file.  For compliance-grade
 retention, configure external log rotation (e.g., logrotate) instead."
   :type '(choice (integer :tag "Max size in bytes")
                  (const :tag "No rotation" nil))
-  :safe (lambda (v) (or (integerp v) (null v)))
+  :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
   :group 'gptel)
 
 (defun my-gptel--audit-get-agent-name ()
@@ -68,17 +68,20 @@ or command containing newlines could inject fake audit log entries."
   "Rotate the audit log if it exceeds `my-gptel--audit-log-max-size'.
 Renames the current log to `audit.log.1' (overwriting any previous
 rotation) and starts a fresh log.  Rotation is best-effort: errors
-are silently ignored to avoid breaking the operation being audited."
+are logged via `message' but do not signal, to avoid breaking the
+operation being audited."
   (when (and my-gptel--audit-log-max-size
              (> my-gptel--audit-log-max-size 0)
              (file-exists-p my-gptel--audit-log-path))
     (let ((size (file-attribute-size (file-attributes my-gptel--audit-log-path))))
       (when (and size (> size my-gptel--audit-log-max-size))
-        (condition-case nil
+        (condition-case err
             (let ((rotated (concat my-gptel--audit-log-path ".1")))
               ;; rename-file with t overwrites any existing .1 file.
               (rename-file my-gptel--audit-log-path rotated t))
-          (error nil))))))
+          (error
+           (message "Warning: audit log rotation failed: %s"
+                    (error-message-string err))))))))
 
 (defun my-gptel--audit-log (tool detail)
   "Append an audit entry for TOOL with DETAIL to the audit log.
@@ -93,7 +96,7 @@ sanitize them too.
 
 Before writing, checks if the log exceeds `my-gptel--audit-log-max-size'
 and rotates it if so.  This prevents unbounded growth of the audit log."
-  (condition-case nil
+  (condition-case err
       (let ((timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
             (agent (my-gptel--audit-get-agent-name))
             (safe-detail (my-gptel--audit-sanitize-detail detail)))
@@ -108,7 +111,9 @@ and rotates it if so.  This prevents unbounded growth of the audit log."
         ;; write-region accepts a string directly -- no temp buffer needed.
         (write-region (format "[%s] %s | %s | %s\n" timestamp agent tool safe-detail)
                       nil my-gptel--audit-log-path t 'silent))
-    (error nil)))
+    (error
+     (message "Warning: audit log write failed: %s"
+              (error-message-string err)))))
 
 (defun my-gptel--audit-log-write (filepath)
   "Audit log entry for write_file to FILEPATH."

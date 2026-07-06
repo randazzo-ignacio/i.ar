@@ -22,8 +22,6 @@
 (require 'audit_log)
 (require 'fs_tools)  ; my-gptel--with-suppressed-save-hooks macro
 
-(declare-function my-gptel--with-suppressed-save-hooks "fs_tools" (&rest body))
-
 (defun my-gptel--fs-replace (path search-text replace-text)
   "Find SEARCH-TEXT in PATH and replace it with REPLACE-TEXT.
 SEARCH-TEXT is matched exactly as provided -- whitespace is significant.
@@ -77,7 +75,7 @@ with a misleading message."
                       (my-gptel--audit-log-replace expanded-path)
                       (format "Success: Replaced text in '%s'" expanded-path))
                   (format "Error: Target string not found in '%s'" expanded-path)))))
-        (error (format "Error: Could not modify file '%s'. Reason: %s"
+        (error (format "Error: Failed to replace text in '%s'. Emacs says: %s"
                        expanded-path (error-message-string err)))))))
 
 (add-to-list 'gptel-tools

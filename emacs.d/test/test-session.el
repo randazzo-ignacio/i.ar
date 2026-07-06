@@ -447,6 +447,26 @@ mtime, which would pollute sort order and appear in completion lists."
   (should (get 'my-gptel--current-agent-file 'safe-local-variable))
   (should (get 'my-gptel--delegate-depth 'safe-local-variable)))
 
+(ert-deftest test-session-safe-delegate-depth-rejects-negative ()
+  "my-gptel--delegate-depth safe-local-variable predicate should reject
+negative integers.  A negative depth is semantically meaningless and
+could bypass the delegation recursion limit: a tampered session file
+setting depth to -100 would require 103 delegations before the
+max-depth check triggers, allowing excessive recursion."
+  (let ((pred (get 'my-gptel--delegate-depth 'safe-local-variable)))
+    (should (functionp pred))
+    ;; Valid values accepted
+    (should (funcall pred 0))
+    (should (funcall pred 1))
+    (should (funcall pred 5))
+    ;; Negative values rejected
+    (should-not (funcall pred -1))
+    (should-not (funcall pred -100))
+    ;; Non-integers rejected
+    (should-not (funcall pred nil))
+    (should-not (funcall pred "0"))
+    (should-not (funcall pred 1.5))))
+
 (ert-deftest test-session-safe-agent-name-p-accepts-valid ()
   "my-gptel--safe-agent-name-p should accept valid agent names."
   (should (my-gptel--safe-agent-name-p "darwin"))
@@ -671,5 +691,30 @@ handle nil attrs gracefully (skip with warning, not crash)."
       ;; Clean up ghost file
       (when (file-exists-p ghost-path)
         (delete-file ghost-path)))))
+
+;;; --- Hook registration tests ---
+
+(ert-deftest test-session-save-custom-state-registered-in-hook ()
+  "my-gptel--session-save-custom-state should be registered in
+`gptel-save-state-hook'.  Without this hook, custom agent variables
+(agent name, agent file, delegate depth) are never saved to session
+files -- gptel's own state save runs but our custom variables are
+silently omitted.  All unit tests call the function directly, so
+none would catch a missing hook registration if the top-level
+`add-hook' call were accidentally removed."
+  (should (memq #'my-gptel--session-save-custom-state
+                (default-value 'gptel-save-state-hook))))
+
+(ert-deftest test-session-restore-custom-state-registered-in-hook ()
+  "my-gptel--session-restore-custom-state should be registered in
+`gptel-mode-hook'.  Without this hook, custom agent variables are
+never restored when a session file is opened -- the function is
+effectively a no-op (as documented in its docstring), but the hook
+registration is still the integration point that ensures it runs.
+All unit tests call the function directly, so none would catch a
+missing hook registration if the top-level `add-hook' call were
+accidentally removed."
+  (should (memq #'my-gptel--session-restore-custom-state
+                (default-value 'gptel-mode-hook))))
 
 (provide 'test-session)

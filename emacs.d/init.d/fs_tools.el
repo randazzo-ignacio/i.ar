@@ -67,7 +67,7 @@ On error, returns a string starting with \\='Error:\\='."
                               (directory-files expanded-path nil))
                #'string-lessp)
          "\n")
-      (error (format "Error: Directory '%s' not found or cannot be read: %s"
+      (error (format "Error: Failed to list directory '%s'. Emacs says: %s"
                      expanded-path (error-message-string err))))))
 
 (add-to-list 'gptel-tools
@@ -102,7 +102,7 @@ file, and token consumption correlates with characters."
                 (insert (format "\n\n[... file truncated at %d characters ...]" max))
                 (buffer-string))
             (buffer-string)))
-      (error (format "Error: File '%s' not found or cannot be read: %s"
+      (error (format "Error: Failed to read file '%s'. Emacs says: %s"
                       expanded-path (error-message-string err))))))
 
 (add-to-list 'gptel-tools

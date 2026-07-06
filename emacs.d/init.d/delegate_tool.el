@@ -34,7 +34,6 @@
 (require 'task_tools)
 
 (declare-function my-gptel-read-agent-profile "agent_loader" (file))
-(declare-function my-gptel--validate-agent-name "task_tools" (name))
 
 ;;; Buffer-local state for tracking delegation depth
 
@@ -48,7 +47,7 @@
 Prevents infinite recursion while permitting multi-hop chains.
 Depth 0 = top-level agent, 1 = first delegate, etc."
   :type 'integer
-  :safe #'integerp
+  :safe (lambda (v) (and (integerp v) (> v 0)))
   :group 'gptel)
 
 (defcustom my-gptel--delegate-max-turns 15
@@ -58,7 +57,7 @@ in the current turn), it is re-prompted to continue.
 This prevents models that describe tool calls in text instead of
 actually calling them from terminating prematurely."
   :type 'integer
-  :safe #'integerp
+  :safe (lambda (v) (and (integerp v) (> v 0)))
   :group 'gptel)
 
 ;;; Internal functions
@@ -145,9 +144,11 @@ and avoids a double-callback race."
          (let ((partial
                 (when (buffer-live-p buf)
                   (with-current-buffer buf
-                    (if (and resp-start (< resp-start (point-max)))
-                        (buffer-substring-no-properties resp-start (point-max))
-                      "")))))
+                    (save-restriction
+                      (widen)
+                      (if (and resp-start (< resp-start (point-max)))
+                          (buffer-substring-no-properties resp-start (point-max))
+                        ""))))))
            ;; Delay buffer kill to avoid "Selecting deleted buffer" in sentinel
            (run-with-timer
             3 nil
@@ -206,23 +207,29 @@ STREAM-POS-REF is a symbol holding the stream-pos marker (set dynamically)."
       (when (and (buffer-live-p parent-buf)
                  stream-pos
                  (marker-position stream-pos))
-        (let ((new-text
-               (buffer-substring-no-properties
-                (marker-position stream-pos) (point-max))))
-          (when (and new-text (string-match-p "\\S-" new-text))
-            (with-current-buffer parent-buf
-              (save-excursion
-                (unless stream-marker
-                  (goto-char parent-marker)
-                  (insert (format "--- Delegate '%s' streaming... ---\n" agent))
-                  (setq stream-marker (point-marker))
-                  (set-marker-insertion-type stream-marker t)
-                  (set stream-marker-ref stream-marker))
-                (goto-char stream-marker)
-                (insert new-text)
-                (set-marker stream-marker (point)))))
-          (set-marker stream-pos (point-max))
-          (set stream-pos-ref stream-pos))))))
+        (save-restriction
+          (widen)
+          (let ((new-text
+                 (buffer-substring-no-properties
+                  (marker-position stream-pos) (point-max))))
+            (when (and new-text (string-match-p "\\S-" new-text))
+              (with-current-buffer parent-buf
+                (save-excursion
+                  (unless stream-marker
+                    (goto-char parent-marker)
+                    (insert (format "--- Delegate '%s' streaming... ---\n" agent))
+                    (setq stream-marker (point-marker))
+                    (set-marker-insertion-type stream-marker t)
+                    (set stream-marker-ref stream-marker))
+                  (goto-char stream-marker)
+                  (insert new-text)
+                  (set-marker stream-marker (point)))))
+            ;; set-marker must be inside save-restriction so (point-max)
+            ;; returns the widened end, not the narrowed end.  Otherwise
+            ;; stream-pos would be set behind the actual buffer end,
+            ;; causing text duplication on the next stream hook call.
+            (set-marker stream-pos (point-max))
+            (set stream-pos-ref stream-pos)))))))
 
 (defconst my-gptel--delegate-continue-prompt
   "Your last response did not include any tool calls. If the task is complete, provide your final response now. If you still need to take action, call the available tools instead of describing what you plan to do. Read the relevant files, run commands, or delegate as needed."
@@ -259,11 +266,13 @@ in text from terminating prematurely with a non-result."
           (when (symbol-value timer-sym)
             (cancel-timer (symbol-value timer-sym)))
           (let ((response
-                 (if (and (integerp start) (integerp end) (< start end))
-                     (buffer-substring-no-properties
-                      (min (max start (point-min)) (point-max))
-                      (min (max end (point-min)) (point-max)))
-                   "")))
+                 (save-restriction
+                   (widen)
+                   (if (and (integerp start) (integerp end) (< start end))
+                       (buffer-substring-no-properties
+                        (min (max start (point-min)) (point-max))
+                        (min (max end (point-min)) (point-max)))
+                     ""))))
             (run-with-timer
              5 nil
              (lambda ()
@@ -296,11 +305,13 @@ in text from terminating prematurely with a non-result."
           (when (symbol-value timer-sym)
             (cancel-timer (symbol-value timer-sym)))
           (let ((response
-                 (if (and (integerp start) (integerp end) (< start end))
-                     (buffer-substring-no-properties
-                      (min (max start (point-min)) (point-max))
-                      (min (max end (point-min)) (point-max)))
-                   "")))
+                 (save-restriction
+                   (widen)
+                   (if (and (integerp start) (integerp end) (< start end))
+                       (buffer-substring-no-properties
+                        (min (max start (point-min)) (point-max))
+                        (min (max end (point-min)) (point-max)))
+                     ""))))
             (message "[delegate] %s reached max text-only turns (%d), returning last response."
                      agent max-turns)
             (run-with-timer
@@ -318,8 +329,8 @@ in text from terminating prematurely with a non-result."
   "Spawn an async delegate buffer and send the task.
 The sub-agent's streaming output is mirrored into the parent buffer
 so the user can watch progress in real time."
-  (let* ((parent-depth (if (boundp 'my-gptel--delegate-depth)
-                           my-gptel--delegate-depth 0))
+  (let* ((parent-depth (max 0 (if (boundp 'my-gptel--delegate-depth)
+                                   my-gptel--delegate-depth 0)))
          (task-id (format "delegate-%s-%d-%d" agent (emacs-pid) (float-time)))
          (buf (get-buffer-create (format "*gptel-delegate-%s*" task-id)))
          (full-prompt (format "DELEGATED TASK FROM PARENT AGENT\n==============================\n\nCONTEXT:\n%s\n\nTASK:\n%s"
