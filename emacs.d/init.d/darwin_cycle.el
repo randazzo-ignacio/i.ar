@@ -300,10 +300,12 @@ until it either completes all steps or reaches the turn limit."
                  (message "[darwin] Turn #%d completed (tool calls so far: %d)"
                           turn-count tool-call-count)
                  (when (and (integerp start) (integerp end) (< start end))
-                   (let ((response (buffer-substring-no-properties
-                                    (min (max start (point-min)) (point-max))
-                                    (min (max end (point-min)) (point-max)))))
-                     (message "[darwin] Response: %.300s" response)))
+                   (save-restriction
+                     (widen)
+                     (let ((response (buffer-substring-no-properties
+                                      (min (max start (point-min)) (point-max))
+                                      (min (max end (point-min)) (point-max)))))
+                       (message "[darwin] Response: %.300s" response))))
 
                  ;; Check if we've hit the turn limit
                  (if (>= turn-count darwin-cycle-max-turns)
@@ -353,8 +355,10 @@ until it either completes all steps or reaches the turn limit."
              ;; Capture partial response
              (when (buffer-live-p cycle-buf)
                (with-current-buffer cycle-buf
-                 (let ((partial (buffer-substring-no-properties (point-min) (point-max))))
-                   (message "[darwin] Partial response: %.500s" partial))))
+                 (save-restriction
+                   (widen)
+                   (let ((partial (buffer-substring-no-properties (point-min) (point-max))))
+                     (message "[darwin] Partial response: %.500s" partial)))))
              (setq darwin-cycle-result-message
                    (format "*Darwin Cycle: Timed Out*\nTimeout: %ds\nTool calls: %d\nTurns: %d\nThe cycle exceeded its time limit."
                            timeout tool-call-count turn-count))
