@@ -118,7 +118,21 @@ Called from `gptel-save-state-hook'."
 
 (defun my-gptel--session-restore-custom-state ()
   "Restore custom agent variables from file-local variables.
-Called from `gptel-mode-hook' when a session file is opened."
+Called from `gptel-mode-hook' when a session file is opened.
+
+Note: This function is effectively a no-op in the normal case.
+`find-file' (via `hack-local-variables') already creates buffer-local
+bindings for all variables in the Local Variables block using
+`(set (make-local-variable var) val)'.  By the time this function
+runs (via `gptel-mode-hook'), the variables are already buffer-local
+with the correct values.  Each `setq-local' here sets a variable to
+its own buffer-local value -- a no-op.
+
+The `local-variable-p' guards are correct but unnecessary: they
+prevent creating buffer-local bindings for variables not in the file,
+but the bodies they guard are themselves no-ops.  The function is
+kept for documentation purposes and as a hook point for future
+extensions."
   (when (buffer-file-name)
     ;; Restore agent name if present in file-local variables
     (when (local-variable-p 'my-gptel--current-agent-name)
