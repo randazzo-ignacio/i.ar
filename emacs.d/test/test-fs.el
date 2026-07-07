@@ -800,6 +800,46 @@ mutating content during programmatic saves."
           (when (buffer-live-p buf)
             (kill-buffer buf)))))))
 
+(ert-deftest test-fs-append-file-suppresses-after-save-hook ()
+  "append_file to an open buffer should NOT run user-configured after-save-hook."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "append-after-hook-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'after-save-hook
+                          (lambda () (setq hook-called t))
+                          nil t))
+              (let ((result (my-gptel--fs-append-file target "appended\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-suppresses-write-region-annotate-functions ()
+  "append_file should suppress write-region-annotate-functions during save.
+This hook runs inside write-region (called by save-buffer) and can
+annotate or alter the content being written."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "append-annotate-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-region-annotate-functions
+                          (lambda (_start _end) (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-append-file target "appended\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
 (ert-deftest test-fs-write-file-prevents-content-mutation-hook ()
   "write_file should prevent a before-save-hook that mutates content.
 This tests the actual threat model: a hook like delete-trailing-whitespace
