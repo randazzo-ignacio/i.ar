@@ -246,7 +246,7 @@ via a symlink should find and update the buffer opened with the real path."
           (when (file-exists-p link)
             (delete-file link)))))))
 
-;;; --- Save hook isolation test ---
+;;; --- Save hook isolation tests ---
 
 (ert-deftest test-replace-suppresses-before-save-hook ()
   "replace_in_file to an open buffer should NOT run user-configured before-save-hook."
@@ -271,4 +271,74 @@ via a symlink should find and update the buffer opened with the real path."
           (with-current-buffer buf (set-buffer-modified-p nil))
           (kill-buffer buf))))))
 
+(ert-deftest test-replace-suppresses-after-save-hook ()
+  "replace_in_file to an open buffer should NOT run user-configured after-save-hook."
+  (with-replace-fixture
+    (let* ((target (expand-file-name "after-hook-test.txt" test-replace--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (let ((buf (find-file-noselect target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'after-save-hook
+                          (lambda () (setq hook-called t))
+                          nil t))
+              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf))))))
+
+(ert-deftest test-replace-prevents-content-mutation-hook ()
+  "replace_in_file should prevent a before-save-hook that mutates content.
+This tests the actual threat model: a hook like delete-trailing-whitespace
+or format-on-save that modifies buffer content after the replacement
+but before the save completes."
+  (with-replace-fixture
+    (let* ((target (expand-file-name "mutation-test.txt" test-replace--tmpdir)))
+      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (let ((buf (find-file-noselect target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                ;; Add a hook that mutates content (replaces "new text" with "MUTATED")
+                (add-hook 'before-save-hook
+                          (lambda ()
+                            (save-excursion
+                              (goto-char (point-min))
+                              (when (search-forward "new text" nil t)
+                                (replace-match "MUTATED" nil t))))
+                          nil t))
+              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+                (should (string-match-p "Success" result))
+                ;; Content should be exactly what we replaced, NOT mutated by the hook
+                (with-current-buffer buf
+                  (should (string= (buffer-string) "new text\nkeep this\n"))
+                  (should-not (string-match-p "MUTATED" (buffer-string))))))
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf))))))
+
+(ert-deftest test-replace-suppresses-write-region-annotate-functions ()
+  "replace_in_file should suppress write-region-annotate-functions during save.
+This hook runs inside write-region (called by save-buffer) and can
+annotate or alter the content being written."
+  (with-replace-fixture
+    (let* ((target (expand-file-name "annotate-test.txt" test-replace--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (let ((buf (find-file-noselect target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-region-annotate-functions
+                          (lambda (_start _end) (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf))))))
+
 (provide 'test-replace)
+;;; test-replace.el ends here
