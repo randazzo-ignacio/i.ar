@@ -708,6 +708,49 @@ to capture the timeout value passed to it."
             (user-error nil)))
         (should (eq captured-timeout 120))))))
 
+;;; --- Defensive guard test for max-conversation-chars ---
+
+(ert-deftest test-memory-extract-conversation-guards-non-positive-max-chars ()
+  "my-gptel--memory-extract-conversation should skip truncation when
+max-conversation-chars is non-positive or non-integer.  The :safe
+predicate rejects bad values at the file-local-variable level, but a
+direct setq bypasses it.  Without the guard, a nil value would crash
+`>' with wrong-type-argument, and a negative value would cause
+args-out-of-range in `substring'.  When the guard fails, the full
+text is returned without truncation."
+  ;; nil -- should return full text, no truncation
+  (let ((my-gptel-memory-max-conversation-chars nil))
+    (with-temp-buffer
+      (insert (make-string 200 ?A))
+      (let ((result (my-gptel--memory-extract-conversation)))
+        (should (stringp result))
+        (should-not (string-match-p "truncated" result))
+        (should (= (length result) 200)))))
+  ;; zero -- should return full text, no truncation
+  (let ((my-gptel-memory-max-conversation-chars 0))
+    (with-temp-buffer
+      (insert (make-string 200 ?A))
+      (let ((result (my-gptel--memory-extract-conversation)))
+        (should (stringp result))
+        (should-not (string-match-p "truncated" result))
+        (should (= (length result) 200)))))
+  ;; negative -- should return full text, no truncation
+  (let ((my-gptel-memory-max-conversation-chars -10))
+    (with-temp-buffer
+      (insert (make-string 200 ?A))
+      (let ((result (my-gptel--memory-extract-conversation)))
+        (should (stringp result))
+        (should-not (string-match-p "truncated" result))
+        (should (= (length result) 200)))))
+  ;; non-integer (string) -- should return full text, no truncation
+  (let ((my-gptel-memory-max-conversation-chars "foo"))
+    (with-temp-buffer
+      (insert (make-string 200 ?A))
+      (let ((result (my-gptel--memory-extract-conversation)))
+        (should (stringp result))
+        (should-not (string-match-p "truncated" result))
+        (should (= (length result) 200))))))
+
 ;;; --- Keybinding registration test ---
 
 (ert-deftest test-memory-keybinding-registered ()
