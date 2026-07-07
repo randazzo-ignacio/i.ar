@@ -121,12 +121,19 @@ Uses `save-restriction' + `widen' to ensure the full buffer content
 is extracted even when the buffer is narrowed."
   (save-restriction
     (widen)
-    (let ((text (buffer-substring-no-properties (point-min) (point-max))))
-      (if (> (length text) my-gptel-memory-max-conversation-chars)
+    (let ((text (buffer-substring-no-properties (point-min) (point-max)))
+          (max-chars my-gptel-memory-max-conversation-chars))
+      ;; Guard against non-positive max-chars: the :safe predicate rejects
+      ;; non-positive values at the file-local-variable level, but a user
+      ;; can setq a bad value directly.  A negative value would cause
+      ;; args-out-of-range in substring.  When max-chars is not a positive
+      ;; integer, skip truncation entirely (return full text).
+      (if (and (integerp max-chars) (> max-chars 0)
+               (> (length text) max-chars))
           (let ((truncated
-                 (substring text (- (length text) my-gptel-memory-max-conversation-chars))))
+                 (substring text (- (length text) max-chars))))
             (format "[...conversation truncated to last %d chars...]\n%s"
-                    my-gptel-memory-max-conversation-chars truncated))
+                    max-chars truncated))
         text))))
 
 (defun my-gptel--memory-build-payload (current-memories conversation)
