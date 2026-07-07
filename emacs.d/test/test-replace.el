@@ -340,5 +340,47 @@ annotate or alter the content being written."
           (with-current-buffer buf (set-buffer-modified-p nil))
           (kill-buffer buf))))))
 
+(ert-deftest test-replace-suppresses-write-file-functions ()
+  "replace_in_file should suppress write-file-functions during save.
+This hook runs during save-buffer and can intercept or alter the
+file writing process."
+  (with-replace-fixture
+    (let* ((target (expand-file-name "wff-test.txt" test-replace--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (let ((buf (find-file-noselect target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-file-functions
+                          (lambda () (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf))))))
+
+(ert-deftest test-replace-suppresses-write-contents-functions ()
+  "replace_in_file should suppress write-contents-functions during save.
+This hook runs during save-buffer and can modify or intercept the
+buffer contents being written to disk."
+  (with-replace-fixture
+    (let* ((target (expand-file-name "wcf-test.txt" test-replace--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (let ((buf (find-file-noselect target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-contents-functions
+                          (lambda () (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (with-current-buffer buf (set-buffer-modified-p nil))
+          (kill-buffer buf))))))
+
 (provide 'test-replace)
 ;;; test-replace.el ends here

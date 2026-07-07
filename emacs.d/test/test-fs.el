@@ -849,6 +849,86 @@ annotate or alter the content being written."
           (when (buffer-live-p buf)
             (kill-buffer buf)))))))
 
+(ert-deftest test-fs-write-file-suppresses-write-file-functions ()
+  "write_file should suppress write-file-functions during save.
+This hook runs during save-buffer and can intercept or alter the
+file writing process."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "wff-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-file-functions
+                          (lambda () (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-write-file target "new content\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-write-file-suppresses-write-contents-functions ()
+  "write_file should suppress write-contents-functions during save.
+This hook runs during save-buffer and can modify or intercept the
+buffer contents being written to disk."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "wcf-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-contents-functions
+                          (lambda () (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-write-file target "new content\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-suppresses-write-file-functions ()
+  "append_file should suppress write-file-functions during save."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "append-wff-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-file-functions
+                          (lambda () (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-append-file target "appended\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-suppresses-write-contents-functions ()
+  "append_file should suppress write-contents-functions during save."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "append-wcf-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-contents-functions
+                          (lambda () (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-append-file target "appended\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
 ;;; --- append_file direct-to-disk optimization tests ---
 
 (ert-deftest test-fs-append-file-large-file-partial-read ()
