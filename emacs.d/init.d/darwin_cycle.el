@@ -366,14 +366,19 @@ until it either completes all steps or reaches the turn limit."
                      (run-with-timer
                       1 nil
                       (lambda ()
-                        (when (and (not completed) (buffer-live-p cycle-buf))
-                          (with-current-buffer cycle-buf
-                            (save-restriction
-                              (widen)
-                              (goto-char (point-max))
-                              (insert darwin-cycle-continue-prompt)
-                              (setq continuation-pending nil)
-                              (gptel-send)))))))))))))
+                        (if (and (not completed) (buffer-live-p cycle-buf))
+                            (with-current-buffer cycle-buf
+                              (save-restriction
+                                (widen)
+                                (goto-char (point-max))
+                                (insert darwin-cycle-continue-prompt)
+                                (setq continuation-pending nil)
+                                (gptel-send)))
+                          ;; Buffer is dead or cycle completed -- clear the
+                          ;; pending flag so the event loop can exit instead
+                          ;; of spinning for 1800s waiting for a re-prompt
+                          ;; that will never come.
+                          (setq continuation-pending nil)))))))))))
         (add-hook 'gptel-post-response-functions cont-hook nil t)
 
         ;; Timeout handler
