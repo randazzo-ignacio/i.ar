@@ -623,4 +623,89 @@ interpolates at call time so Customize changes take effect immediately."
   (should (fboundp 'my-gptel--memory-build-system-prompt))
   (should-not (boundp 'my-gptel-memory-system-prompt)))
 
+;;; --- Defensive guard tests for defcustom values ---
+
+(ert-deftest test-memory-build-system-prompt-guards-non-positive-max-entries ()
+  "my-gptel--memory-build-system-prompt should fall back to 20 when
+max-entries is non-positive or non-integer.  The :safe predicate rejects
+bad values at the file-local-variable level, but a direct setq bypasses
+it.  Without the guard, (format \"%d\" nil) or (format \"%d\" -1) would
+crash or produce a nonsensical prompt."
+  ;; nil
+  (let ((my-gptel-memory-max-entries nil))
+    (let ((prompt (my-gptel--memory-build-system-prompt)))
+      (should (stringp prompt))
+      (should (string-match-p "20 bullet points" prompt))))
+  ;; zero
+  (let ((my-gptel-memory-max-entries 0))
+    (let ((prompt (my-gptel--memory-build-system-prompt)))
+      (should (stringp prompt))
+      (should (string-match-p "20 bullet points" prompt))))
+  ;; negative
+  (let ((my-gptel-memory-max-entries -5))
+    (let ((prompt (my-gptel--memory-build-system-prompt)))
+      (should (stringp prompt))
+      (should (string-match-p "20 bullet points" prompt))))
+  ;; non-integer (string)
+  (let ((my-gptel-memory-max-entries "foo"))
+    (let ((prompt (my-gptel--memory-build-system-prompt)))
+      (should (stringp prompt))
+      (should (string-match-p "20 bullet points" prompt)))))
+
+(ert-deftest test-memory-summarize-guards-non-positive-timeout ()
+  "my-gptel-summarize-memories should fall back to 300 when timeout is
+non-positive or non-integer.  The :safe predicate rejects bad values at
+the file-local-variable level, but a direct setq bypasses it.  Without
+the guard, a nil timeout would crash time-add with wrong-type-argument.
+This test verifies the guard by mocking my-gptel--memory-call-ollama
+to capture the timeout value passed to it."
+  (let ((my-gptel--current-agent-name "testagent")
+        (gptel-model "test-model")
+        (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
+        (captured-timeout nil))
+    (cl-letf (((symbol-function 'my-gptel--memory-get-agent-dir)
+               (lambda () "/tmp/test-agent-dir"))
+              ((symbol-function 'my-gptel--memory-extract-memories)
+               (lambda (_dir) "- old memory\n"))
+              ((symbol-function 'my-gptel--memory-call-ollama)
+               (lambda (_payload timeout)
+                 (setq captured-timeout timeout)
+                 "Error: test done")))
+      (with-temp-buffer
+        (insert (make-string 100 ?A))
+        ;; nil timeout should fall back to 300
+        (let ((my-gptel-memory-timeout nil))
+          (condition-case _err
+              (my-gptel-summarize-memories)
+            (user-error nil)))
+        (should (eq captured-timeout 300))
+        ;; zero timeout should fall back to 300
+        (setq captured-timeout nil)
+        (let ((my-gptel-memory-timeout 0))
+          (condition-case _err
+              (my-gptel-summarize-memories)
+            (user-error nil)))
+        (should (eq captured-timeout 300))
+        ;; negative timeout should fall back to 300
+        (setq captured-timeout nil)
+        (let ((my-gptel-memory-timeout -10))
+          (condition-case _err
+              (my-gptel-summarize-memories)
+            (user-error nil)))
+        (should (eq captured-timeout 300))
+        ;; non-integer timeout should fall back to 300
+        (setq captured-timeout nil)
+        (let ((my-gptel-memory-timeout "foo"))
+          (condition-case _err
+              (my-gptel-summarize-memories)
+            (user-error nil)))
+        (should (eq captured-timeout 300))
+        ;; valid timeout should pass through
+        (setq captured-timeout nil)
+        (let ((my-gptel-memory-timeout 120))
+          (condition-case _err
+              (my-gptel-summarize-memories)
+            (user-error nil)))
+        (should (eq captured-timeout 120))))))
+
 (provide 'test-memory)

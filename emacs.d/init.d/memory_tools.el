@@ -72,7 +72,14 @@ Instructs the model to produce a concise rolling summary of the
 agent's memory.  The max-entries limit is interpolated at call time
 from `my-gptel-memory-max-entries' so that Customize changes take
 effect without reloading the module."
-  (concat
+  (let ((max-entries my-gptel-memory-max-entries))
+    ;; Guard against non-positive max-entries: the :safe predicate rejects
+    ;; non-positive values at the file-local-variable level, but a user
+    ;; can setq a bad value directly.  A nil or non-integer would crash
+    ;; format with wrong-type-argument.  Fall back to default 20.
+    (unless (and (integerp max-entries) (> max-entries 0))
+      (setq max-entries 20))
+    (concat
    "You are a memory summarization engine for an AI agent system.\n"
    "Your job is to maintain a concise, rolling memory log for an agent.\n\n"
    "You will receive:\n"
@@ -82,12 +89,12 @@ effect without reloading the module."
    "- Retains all critical facts: agent identity, capabilities, key decisions, persistent notes.\n"
    "- Adds new important information from the conversation: tasks completed, files modified, bugs found, architecture decisions, tool changes.\n"
    (format "- Drops or merges obsolete entries to keep the total under %d bullet points.\n"
-           my-gptel-memory-max-entries)
+           max-entries)
    "- Each entry is a single line starting with '- ' (markdown bullet).\n"
    "- Entries are factual, concise, and specific (no vague statements).\n"
    "- Do NOT include operational logs -- those go to HISTORY.log separately.\n"
    "- Do NOT include a header or any text outside the bullet list.\n\n"
-   "Output ONLY the bullet-point memory entries. No preamble, no explanation."))
+   "Output ONLY the bullet-point memory entries. No preamble, no explanation.")))
 
 ;;; --- Internal functions ---
 
@@ -322,7 +329,9 @@ memories take effect immediately."
           (user-error "Conversation is too short to summarize. Have a meaningful exchange first."))
         (message "[Summarizing memories with %s... payload: %d chars, conversation: %d chars]"
                  model-name (length payload) (length conversation))
-        (let ((result (my-gptel--memory-call-ollama payload my-gptel-memory-timeout)))
+        (let* ((timeout (let ((v my-gptel-memory-timeout))
+                          (if (and (integerp v) (> v 0)) v 300)))
+               (result (my-gptel--memory-call-ollama payload timeout)))
           (if (string-prefix-p "Error:" result)
               (progn
                 (message "%s" result)
