@@ -64,18 +64,26 @@ This prevents infinite loops."
   (or (getenv "DARWIN_TELEGRAM_BOT_TOKEN") "")
   "Telegram bot token for cycle notifications.
 Get this from @BotFather on Telegram.
-Can also be set via DARWIN_TELEGRAM_BOT_TOKEN env var."
+Can also be set via DARWIN_TELEGRAM_BOT_TOKEN env var.
+
+This variable intentionally lacks a :safe property so that Emacs
+prompts the user when it is set via file-local variables.  The bot
+token is a secret credential: silently accepting it from a tampered
+session file could redirect notifications to an attacker's bot."
   :type 'string
-  :safe #'stringp
   :group 'darwin)
 
 (defcustom darwin-telegram-chat-id
   (or (getenv "DARWIN_TELEGRAM_CHAT_ID") "")
   "Telegram chat ID to send notifications to.
 Message @userinfobot on Telegram to get your chat ID.
-Can also be set via DARWIN_TELEGRAM_CHAT_ID env var."
+Can also be set via DARWIN_TELEGRAM_CHAT_ID env var.
+
+This variable intentionally lacks a :safe property so that Emacs
+prompts the user when it is set via file-local variables.  The chat
+ID controls where notifications are sent: silently accepting it from
+a tampered session file could redirect notifications to an attacker."
   :type 'string
-  :safe #'stringp
   :group 'darwin)
 
 (defvar darwin-cycle-result-message nil
@@ -247,7 +255,14 @@ The cycle uses a continuation mechanism: when the model produces a
 text-only response (no tool calls), it is re-prompted to continue
 until it either completes all steps or reaches the turn limit."
   (interactive)
-  (let* ((timeout (or (plist-get args :timeout) darwin-cycle-timeout))
+  (let* ((raw-timeout (or (plist-get args :timeout) darwin-cycle-timeout))
+         ;; Defense-in-depth: :safe rejects non-positive values at the
+         ;; file-local-variable level, but a direct setq bypasses it.
+         ;; nil causes run-with-timer to signal wrong-type-argument;
+         ;; 0 or negative causes immediate timeout.  Fall back to 7200.
+         (timeout (if (and (integerp raw-timeout) (> raw-timeout 0))
+                      raw-timeout
+                    7200))
          (prompt (or (plist-get args :prompt) darwin-cycle-prompt))
          (profile (darwin--load-profile))
          (cycle-buf (get-buffer-create "*darwin-cycle*"))
@@ -287,7 +302,9 @@ until it either completes all steps or reaches the turn limit."
                              (if (stringp result) result (prin1-to-string result)))))
                 nil t)
 
-      ;; Unknown tool guard: block hallucinated tool names to prevent FSM hang.
+      ;; Unknown tool guard: provide early interception of hallucinated tool
+      ;; names at TPRE stage with a cleaner error message than gptel's
+      ;; built-in handling in gptel--handle-tool-use (TOOL state).
       (add-hook 'gptel-pre-tool-call-functions
                 #'my-gptel--block-unknown-tools
                 nil t)
@@ -313,13 +330,21 @@ until it either completes all steps or reaches the turn limit."
                        (message "[darwin] Response: %.300s" response))))
 
                  ;; Check if we've hit the turn limit
-                 (if (>= turn-count darwin-cycle-max-turns)
+                 ;; Defense-in-depth: :safe rejects non-positive values at the
+                 ;; file-local-variable level, but a direct setq bypasses it.
+                 ;; nil causes wrong-type-argument in >=; 0 causes immediate
+                 ;; exit on the first turn.  Fall back to 40.
+                 (let ((max-turns (if (and (integerp darwin-cycle-max-turns)
+                                           (> darwin-cycle-max-turns 0))
+                                     darwin-cycle-max-turns
+                                   40)))
+                   (if (>= turn-count max-turns)
                      (progn
                        (setq completed t)
-                       (message "[darwin] Reached max turns (%d), ending cycle" darwin-cycle-max-turns)
+                       (message "[darwin] Reached max turns (%d), ending cycle" max-turns)
                        (setq darwin-cycle-result-message
                              (format "*Darwin Cycle: Max Turns Reached*\nTurns: %d (limit %d)\nTool calls: %d\nThe cycle hit the turn limit without completing."
-                                     turn-count darwin-cycle-max-turns tool-call-count))
+                                     turn-count max-turns tool-call-count))
                        (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
 
                    ;; Check if the cycle is truly complete.
@@ -341,12 +366,19 @@ until it either completes all steps or reaches the turn limit."
                      (run-with-timer
                       1 nil
                       (lambda ()
-                        (when (and (not completed) (buffer-live-p cycle-buf))
-                          (with-current-buffer cycle-buf
-                            (goto-char (point-max))
-                            (insert darwin-cycle-continue-prompt)
-                            (setq continuation-pending nil)
-                            (gptel-send)))))))))))
+                        (if (and (not completed) (buffer-live-p cycle-buf))
+                            (with-current-buffer cycle-buf
+                              (save-restriction
+                                (widen)
+                                (goto-char (point-max))
+                                (insert "\n\n" darwin-cycle-continue-prompt)
+                                (setq continuation-pending nil)
+                                (gptel-send)))
+                          ;; Buffer is dead or cycle completed -- clear the
+                          ;; pending flag so the event loop can exit instead
+                          ;; of spinning for 1800s waiting for a re-prompt
+                          ;; that will never come.
+                          (setq continuation-pending nil)))))))))))
         (add-hook 'gptel-post-response-functions cont-hook nil t)
 
         ;; Timeout handler

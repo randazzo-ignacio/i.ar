@@ -215,15 +215,17 @@ STREAM-POS-REF is a symbol holding the stream-pos marker (set dynamically)."
             (when (and new-text (string-match-p "\\S-" new-text))
               (with-current-buffer parent-buf
                 (save-excursion
-                  (unless stream-marker
-                    (goto-char parent-marker)
-                    (insert (format "--- Delegate '%s' streaming... ---\n" agent))
-                    (setq stream-marker (point-marker))
-                    (set-marker-insertion-type stream-marker t)
-                    (set stream-marker-ref stream-marker))
-                  (goto-char stream-marker)
-                  (insert new-text)
-                  (set-marker stream-marker (point)))))
+                  (save-restriction
+                    (widen)
+                    (unless stream-marker
+                      (goto-char parent-marker)
+                      (insert (format "--- Delegate '%s' streaming... ---\n" agent))
+                      (setq stream-marker (point-marker))
+                      (set-marker-insertion-type stream-marker t)
+                      (set stream-marker-ref stream-marker))
+                    (goto-char stream-marker)
+                    (insert new-text)
+                    (set-marker stream-marker (point))))))
             ;; set-marker must be inside save-restriction so (point-max)
             ;; returns the widened end, not the narrowed end.  Otherwise
             ;; stream-pos would be set behind the actual buffer end,
@@ -295,9 +297,11 @@ in text from terminating prematurely with a non-result."
              (when (and (not (symbol-value completed-sym))
                         (buffer-live-p buf))
                (with-current-buffer buf
-                 (goto-char (point-max))
-                 (insert "\n\n" my-gptel--delegate-continue-prompt)
-                 (gptel-send))))))
+                 (save-restriction
+                   (widen)
+                   (goto-char (point-max))
+                   (insert "\n\n" my-gptel--delegate-continue-prompt)
+                   (gptel-send)))))))
 
          ;; Case 3: No tools called and max turns reached — return whatever we have.
          (t
@@ -372,7 +376,9 @@ so the user can watch progress in real time."
                   (set tools-called-sym t))
                 nil t)
 
-      ;; Unknown tool guard: block hallucinated tool names to prevent FSM hang.
+      ;; Unknown tool guard: provide early interception of hallucinated tool
+      ;; names at TPRE stage with a cleaner error message than gptel's
+      ;; built-in handling in gptel--handle-tool-use (TOOL state).
       (add-hook 'gptel-pre-tool-call-functions
                 #'my-gptel--block-unknown-tools
                 nil t)

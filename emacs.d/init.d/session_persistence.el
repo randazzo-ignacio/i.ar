@@ -28,6 +28,7 @@
 ;; Keybindings:
 ;;   C-c s  -- Save current session (prompts for name)
 ;;   C-c o  -- Open (restore) a saved session
+;;   M-x my-gptel-list-sessions -- List saved sessions with metadata
 ;;
 ;; Sessions are stored as text files in ~/.emacs.d/sessions/
 ;; Each file contains the full conversation text plus file-local variables
@@ -203,13 +204,15 @@ alphanumeric characters, dots, hyphens, and underscores are allowed."
     ;; after it). add-file-local-variable would create a SECOND block at
     ;; the end instead of updating the old one. We remove all old blocks
     ;; first so only one clean block is written.
-    (save-excursion
-      (goto-char (point-min))
-      (while (re-search-forward "^;; Local Variables:" nil t)
-        (let ((start (line-beginning-position))
-              (end (re-search-forward "^;; End:" nil t)))
-          (when end
-            (delete-region start (min (1+ end) (point-max)))))))
+    (save-restriction
+      (widen)
+      (save-excursion
+        (goto-char (point-min))
+        (while (re-search-forward "^;; Local Variables:" nil t)
+          (let ((start (line-beginning-position))
+                (end (re-search-forward "^;; End:" nil t)))
+            (when end
+              (delete-region start (min (1+ end) (point-max))))))))
     ;; Set the buffer's file name. This triggers gptel--save-state via
     ;; before-save-hook when we save. Our gptel-save-state-hook then
     ;; adds custom variables in the same pass -- no second save needed.
@@ -309,7 +312,7 @@ Shows session name, size, and last modified time."
       (insert "====================\n\n")
       (dolist (entry entries)
         (insert entry "\n"))
-      (insert "\nPress C-c o to open a session.\n")
+      (insert "\nSwitch to a gptel chat buffer and press C-c o to open a session.\n")
       (goto-char (point-min))
       (display-buffer (current-buffer)))))
 

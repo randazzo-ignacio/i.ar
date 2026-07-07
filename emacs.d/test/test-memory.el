@@ -9,6 +9,7 @@
 (require 'subr-x)
 (require 'json)
 (require 'memory_tools)
+(declare-function my-gptel--memory-build-system-prompt "memory_tools" ())
 
 ;;; --- Test fixtures ---
 
@@ -595,5 +596,168 @@ does NOT swallow genuine unexpected errors."
       (should captured-error)
       (should (string-match-p "Memory summarization failed" captured-error))
       (should (string-match-p "Unexpected internal error" captured-error)))))
+
+;;; --- System prompt dynamic generation tests ---
+
+(ert-deftest test-memory-build-system-prompt-reflects-max-entries ()
+  "my-gptel--memory-build-system-prompt should interpolate the current
+max-entries value at call time, not at load time.  When
+`my-gptel-memory-max-entries' is let-bound to a different value,
+the prompt should contain that value, not the default."
+  (let ((my-gptel-memory-max-entries 42))
+    (let ((prompt (my-gptel--memory-build-system-prompt)))
+      (should (stringp prompt))
+      (should (string-match-p "42 bullet points" prompt))
+      (should-not (string-match-p "20 bullet points" prompt))))
+  ;; Also verify with the default value
+  (let ((prompt (my-gptel--memory-build-system-prompt)))
+    (should (stringp prompt))
+    (should (string-match-p "memory summarization engine" prompt))
+    (should (string-match-p "20 bullet points" prompt))))
+
+(ert-deftest test-memory-build-system-prompt-is-a-function ()
+  "my-gptel--memory-build-system-prompt should be a function, not a defconst.
+This is a regression test: the old defconst `my-gptel-memory-system-prompt'
+captured the max-entries value at load time.  The function version
+interpolates at call time so Customize changes take effect immediately."
+  (should (fboundp 'my-gptel--memory-build-system-prompt))
+  (should-not (boundp 'my-gptel-memory-system-prompt)))
+
+;;; --- Defensive guard tests for defcustom values ---
+
+(ert-deftest test-memory-build-system-prompt-guards-non-positive-max-entries ()
+  "my-gptel--memory-build-system-prompt should fall back to 20 when
+max-entries is non-positive or non-integer.  The :safe predicate rejects
+bad values at the file-local-variable level, but a direct setq bypasses
+it.  Without the guard, (format \"%d\" nil) or (format \"%d\" -1) would
+crash or produce a nonsensical prompt."
+  ;; nil
+  (let ((my-gptel-memory-max-entries nil))
+    (let ((prompt (my-gptel--memory-build-system-prompt)))
+      (should (stringp prompt))
+      (should (string-match-p "20 bullet points" prompt))))
+  ;; zero
+  (let ((my-gptel-memory-max-entries 0))
+    (let ((prompt (my-gptel--memory-build-system-prompt)))
+      (should (stringp prompt))
+      (should (string-match-p "20 bullet points" prompt))))
+  ;; negative
+  (let ((my-gptel-memory-max-entries -5))
+    (let ((prompt (my-gptel--memory-build-system-prompt)))
+      (should (stringp prompt))
+      (should (string-match-p "20 bullet points" prompt))))
+  ;; non-integer (string)
+  (let ((my-gptel-memory-max-entries "foo"))
+    (let ((prompt (my-gptel--memory-build-system-prompt)))
+      (should (stringp prompt))
+      (should (string-match-p "20 bullet points" prompt)))))
+
+(ert-deftest test-memory-summarize-guards-non-positive-timeout ()
+  "my-gptel-summarize-memories should fall back to 300 when timeout is
+non-positive or non-integer.  The :safe predicate rejects bad values at
+the file-local-variable level, but a direct setq bypasses it.  Without
+the guard, a nil timeout would crash time-add with wrong-type-argument.
+This test verifies the guard by mocking my-gptel--memory-call-ollama
+to capture the timeout value passed to it."
+  (let ((my-gptel--current-agent-name "testagent")
+        (gptel-model "test-model")
+        (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
+        (captured-timeout nil))
+    (cl-letf (((symbol-function 'my-gptel--memory-get-agent-dir)
+               (lambda () "/tmp/test-agent-dir"))
+              ((symbol-function 'my-gptel--memory-extract-memories)
+               (lambda (_dir) "- old memory\n"))
+              ((symbol-function 'my-gptel--memory-call-ollama)
+               (lambda (_payload timeout)
+                 (setq captured-timeout timeout)
+                 "Error: test done")))
+      (with-temp-buffer
+        (insert (make-string 100 ?A))
+        ;; nil timeout should fall back to 300
+        (let ((my-gptel-memory-timeout nil))
+          (condition-case _err
+              (my-gptel-summarize-memories)
+            (user-error nil)))
+        (should (eq captured-timeout 300))
+        ;; zero timeout should fall back to 300
+        (setq captured-timeout nil)
+        (let ((my-gptel-memory-timeout 0))
+          (condition-case _err
+              (my-gptel-summarize-memories)
+            (user-error nil)))
+        (should (eq captured-timeout 300))
+        ;; negative timeout should fall back to 300
+        (setq captured-timeout nil)
+        (let ((my-gptel-memory-timeout -10))
+          (condition-case _err
+              (my-gptel-summarize-memories)
+            (user-error nil)))
+        (should (eq captured-timeout 300))
+        ;; non-integer timeout should fall back to 300
+        (setq captured-timeout nil)
+        (let ((my-gptel-memory-timeout "foo"))
+          (condition-case _err
+              (my-gptel-summarize-memories)
+            (user-error nil)))
+        (should (eq captured-timeout 300))
+        ;; valid timeout should pass through
+        (setq captured-timeout nil)
+        (let ((my-gptel-memory-timeout 120))
+          (condition-case _err
+              (my-gptel-summarize-memories)
+            (user-error nil)))
+        (should (eq captured-timeout 120))))))
+
+;;; --- Defensive guard test for max-conversation-chars ---
+
+(ert-deftest test-memory-extract-conversation-guards-non-positive-max-chars ()
+  "my-gptel--memory-extract-conversation should skip truncation when
+max-conversation-chars is non-positive or non-integer.  The :safe
+predicate rejects bad values at the file-local-variable level, but a
+direct setq bypasses it.  Without the guard, a nil value would crash
+`>' with wrong-type-argument, and a negative value would cause
+args-out-of-range in `substring'.  When the guard fails, the full
+text is returned without truncation."
+  ;; nil -- should return full text, no truncation
+  (let ((my-gptel-memory-max-conversation-chars nil))
+    (with-temp-buffer
+      (insert (make-string 200 ?A))
+      (let ((result (my-gptel--memory-extract-conversation)))
+        (should (stringp result))
+        (should-not (string-match-p "truncated" result))
+        (should (= (length result) 200)))))
+  ;; zero -- should return full text, no truncation
+  (let ((my-gptel-memory-max-conversation-chars 0))
+    (with-temp-buffer
+      (insert (make-string 200 ?A))
+      (let ((result (my-gptel--memory-extract-conversation)))
+        (should (stringp result))
+        (should-not (string-match-p "truncated" result))
+        (should (= (length result) 200)))))
+  ;; negative -- should return full text, no truncation
+  (let ((my-gptel-memory-max-conversation-chars -10))
+    (with-temp-buffer
+      (insert (make-string 200 ?A))
+      (let ((result (my-gptel--memory-extract-conversation)))
+        (should (stringp result))
+        (should-not (string-match-p "truncated" result))
+        (should (= (length result) 200)))))
+  ;; non-integer (string) -- should return full text, no truncation
+  (let ((my-gptel-memory-max-conversation-chars "foo"))
+    (with-temp-buffer
+      (insert (make-string 200 ?A))
+      (let ((result (my-gptel--memory-extract-conversation)))
+        (should (stringp result))
+        (should-not (string-match-p "truncated" result))
+        (should (= (length result) 200))))))
+
+;;; --- Keybinding registration test ---
+
+(ert-deftest test-memory-keybinding-registered ()
+  "C-c m should be bound to my-gptel-summarize-memories in gptel-mode-map.
+Without this keybinding, the summarize command is only accessible via M-x,
+which is a discoverability regression.  Only C-c a (agent_loader) had a
+keybinding test (test-agent.el); session and memory keybindings lacked tests."
+  (should (eq (keymap-lookup gptel-mode-map "C-c m") 'my-gptel-summarize-memories)))
 
 (provide 'test-memory)

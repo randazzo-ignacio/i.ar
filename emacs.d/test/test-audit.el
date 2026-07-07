@@ -390,5 +390,58 @@ via `message' instead of silently swallowed."
         (should (cl-some (lambda (m) (string-match-p "rotation failed" m))
                          logged-messages))))))
 
+;;; --- Defensive guard tests for max-size ---
+
+(ert-deftest test-audit-rotation-guards-nil-max-size ()
+  "my-gptel--audit-maybe-rotate should skip rotation when max-size is nil.
+nil is the documented 'disable rotation' value, but the guard must
+also handle it gracefully without crashing on (> nil 0)."
+  (with-audit-fixture
+    (let ((my-gptel--audit-log-max-size nil))
+      ;; Write an entry to create the log
+      (my-gptel--audit-log "write_file" "/test.txt")
+      ;; Should not crash, should not rotate
+      (should-not (file-exists-p (concat test-audit--log-path ".1")))
+      ;; Log should contain the entry
+      (let ((content (test-audit--read-log)))
+        (should (string-match-p "/test.txt" content))))))
+
+(ert-deftest test-audit-rotation-guards-zero-max-size ()
+  "my-gptel--audit-maybe-rotate should skip rotation when max-size is 0.
+Zero is not a positive integer.  Without the guard, (> size 0) would
+be true for any non-empty log, causing rotation on every write."
+  (with-audit-fixture
+    (let ((my-gptel--audit-log-max-size 0))
+      (my-gptel--audit-log "write_file" "/test.txt")
+      ;; Should not crash, should not rotate
+      (should-not (file-exists-p (concat test-audit--log-path ".1")))
+      (let ((content (test-audit--read-log)))
+        (should (string-match-p "/test.txt" content))))))
+
+(ert-deftest test-audit-rotation-guards-negative-max-size ()
+  "my-gptel--audit-maybe-rotate should skip rotation when max-size is negative.
+A negative value would cause (> size negative) to always be true,
+triggering rotation on every write."
+  (with-audit-fixture
+    (let ((my-gptel--audit-log-max-size -1))
+      (my-gptel--audit-log "write_file" "/test.txt")
+      ;; Should not crash, should not rotate
+      (should-not (file-exists-p (concat test-audit--log-path ".1")))
+      (let ((content (test-audit--read-log)))
+        (should (string-match-p "/test.txt" content))))))
+
+(ert-deftest test-audit-rotation-guards-non-integer-max-size ()
+  "my-gptel--audit-maybe-rotate should skip rotation when max-size is a string.
+A non-integer value (e.g., string) would crash > with wrong-type-argument
+without the guard.  The :safe predicate rejects non-integers at the
+file-local-variable level, but a direct setq bypasses it."
+  (with-audit-fixture
+    (let ((my-gptel--audit-log-max-size "100"))
+      (my-gptel--audit-log "write_file" "/test.txt")
+      ;; Should not crash, should not rotate
+      (should-not (file-exists-p (concat test-audit--log-path ".1")))
+      (let ((content (test-audit--read-log)))
+        (should (string-match-p "/test.txt" content))))))
+
 (provide 'test-audit)
 ;;; test-audit.el ends here

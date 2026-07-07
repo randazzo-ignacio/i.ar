@@ -202,4 +202,38 @@ where the regex (requires at least one char) rejects it."
            (expand-file-name "agents.d/testagent/prompt.org" test-task--tmpdir)))
       (should-error (my-gptel--get-agent-dir)))))
 
+;;; --- valid-agent-name-p and validate-agent-name tests ---
+
+(ert-deftest test-task-valid-agent-name-p-accepts-valid ()
+  "valid-agent-name-p should accept alphanumeric, hyphens, underscores."
+  (should (my-gptel--valid-agent-name-p "darwin"))
+  (should (my-gptel--valid-agent-name-p "my-agent"))
+  (should (my-gptel--valid-agent-name-p "agent_123"))
+  (should (my-gptel--valid-agent-name-p "A-B_C"))
+  (should (my-gptel--valid-agent-name-p "a"))
+  (should (my-gptel--valid-agent-name-p "123")))
+
+(ert-deftest test-task-valid-agent-name-p-rejects-invalid ()
+  "valid-agent-name-p should reject nil, non-strings, empty, and special chars."
+  (should-not (my-gptel--valid-agent-name-p nil))
+  (should-not (my-gptel--valid-agent-name-p 42))
+  (should-not (my-gptel--valid-agent-name-p ""))
+  (should-not (my-gptel--valid-agent-name-p "foo/bar"))
+  (should-not (my-gptel--valid-agent-name-p "foo.bar"))
+  (should-not (my-gptel--valid-agent-name-p "foo bar"))
+  (should-not (my-gptel--valid-agent-name-p "../../etc"))
+  (should-not (my-gptel--valid-agent-name-p "valid\nmalicious")))
+
+(ert-deftest test-task-validate-agent-name-returns-name-on-success ()
+  "validate-agent-name should return the name when valid."
+  (should (equal "darwin" (my-gptel--validate-agent-name "darwin")))
+  (should (equal "my-agent" (my-gptel--validate-agent-name "my-agent"))))
+
+(ert-deftest test-task-validate-agent-name-errors-on-invalid ()
+  "validate-agent-name should signal error on invalid names."
+  (should-error (my-gptel--validate-agent-name ""))
+  (should-error (my-gptel--validate-agent-name "foo/bar"))
+  (should-error (my-gptel--validate-agent-name "../../etc"))
+  (should-error (my-gptel--validate-agent-name "valid\nmalicious")))
+
 (provide 'test-task)

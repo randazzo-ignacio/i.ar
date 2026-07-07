@@ -78,4 +78,64 @@
     (should-not (file-exists-p (concat tmpfile "c")))
     (delete-file tmpfile)))
 
+;;; --- Internal function tests ---
+
+(ert-deftest test-check-parens-in-buffer-balanced ()
+  "my-gptel--check-parens-in-buffer returns nil for balanced parens."
+  (with-temp-buffer
+    (insert "(defun foo ()\n  (message \"hello\"))\n")
+    (emacs-lisp-mode)
+    (should (null (my-gptel--check-parens-in-buffer)))))
+
+(ert-deftest test-check-parens-in-buffer-unbalanced ()
+  "my-gptel--check-parens-in-buffer returns error string for unbalanced parens."
+  (with-temp-buffer
+    (insert "(defun foo ()\n  (message \"hello\"\n") ; missing close paren
+    (emacs-lisp-mode)
+    (let ((result (my-gptel--check-parens-in-buffer)))
+      (should (stringp result))
+      (should (string-match-p "[Pp]aren" result)))))
+
+(ert-deftest test-check-parens-in-buffer-empty ()
+  "my-gptel--check-parens-in-buffer returns nil for empty buffer."
+  (with-temp-buffer
+    (emacs-lisp-mode)
+    (should (null (my-gptel--check-parens-in-buffer)))))
+
+(ert-deftest test-check-byte-compile-clean ()
+  "my-gptel--byte-compile-check returns nil for a clean file."
+  (let ((tmpfile (test-check--write-temp-el
+                  ";; -*- lexical-binding: t; -*-\n(defun foo () 1)\n")))
+    (unwind-protect
+        (should (null (my-gptel--byte-compile-check tmpfile)))
+      (delete-file tmpfile))))
+
+(ert-deftest test-check-byte-compile-warnings ()
+  "my-gptel--byte-compile-check returns warnings string for a file with issues.
+The byte-compiler produces a 'reference to free variable' warning for
+undefined-free-var, which we match on.  This depends on the byte-compiler's
+warning text format, which has been stable across Emacs versions."
+  (let ((tmpfile (test-check--write-temp-el
+                  ";; -*- lexical-binding: t; -*-\n(defun foo ()\n  undefined-free-var)\n")))
+    (unwind-protect
+        (let ((result (my-gptel--byte-compile-check tmpfile)))
+          (should (stringp result))
+          (should (string-match-p "free variable" result)))
+      (delete-file tmpfile))))
+
+(ert-deftest test-check-byte-compile-cleans-up-elc ()
+  "my-gptel--byte-compile-check should not leave .elc artifacts.
+The function uses a separate temp .elc (via make-temp-file elc-check-),
+not tmpfile+c.  We verify neither the source .elc nor any elc-check-
+temp files remain after the call."
+  (let ((tmpfile (test-check--write-temp-el "(defun foo () 1)\n")))
+    (unwind-protect
+        (progn
+          (my-gptel--byte-compile-check tmpfile)
+          ;; Source .elc should not exist (function uses temp .elc)
+          (should-not (file-exists-p (concat tmpfile "c")))
+          ;; Internal temp .elc should also be cleaned up
+          (should-not (directory-files temporary-file-directory nil "^elc-check-")))
+      (delete-file tmpfile))))
+
 (provide 'test-check)

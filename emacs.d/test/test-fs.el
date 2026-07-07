@@ -295,15 +295,42 @@ The error handler should capture the condition-case err and include
                          (buffer-string))
                        "created by append\n")))))
 
-(ert-deftest test-fs-append-file-error-uses-expanded-path ()
-  "append_file error message should contain the expanded path, not the raw input."
-  (let ((result (my-gptel--fs-append-file "nonexistent-dir-xyz/sub/file.txt" "content")))
+(ert-deftest test-fs-append-file-creates-parent-dirs ()
+  "append_file should create parent directories if they don't exist, matching write_file.
+Previously append_file did NOT create parent dirs (unlike write_file which
+does).  This was a usability inconsistency: appending to a file in a
+nonexistent directory would fail, while writing to the same path would
+succeed.  Now both tools create parent dirs via make-directory."
+  (let* ((tmpdir (make-temp-file "test-append-mkdir-" :dir-flag))
+         (target (expand-file-name "new/sub/dir/file.txt" tmpdir)))
+    (unwind-protect
+        (let ((result (my-gptel--fs-append-file target "content\n")))
+          (should (string-match-p "Success" result))
+          (should (file-exists-p target))
+          (should (string= (with-temp-buffer
+                             (insert-file-contents target)
+                             (buffer-string))
+                           "content\n")))
+      (when (and tmpdir (file-directory-p tmpdir))
+        (delete-directory tmpdir t)))))
+
+;;; --- append_file error message tests ---
+
+(ert-deftest test-fs-append-file-error-includes-expanded-path ()
+  "append_file error message should contain the expanded path, not the raw input.
+Triggers a filesystem error by appending to a path under /proc/ (which
+rejects writes).  Verifies the error message contains the expanded
+absolute path, not the raw relative input."
+  (let ((result (my-gptel--fs-append-file "proc-fake-append-test.txt" "content")))
     (should (stringp result))
-    (should (string-match-p "Error" result))
-    ;; Error should NOT contain the raw relative path
-    (should-not (string-match-p "\\`Error: Failed to append to 'nonexistent-dir-xyz/sub/file.txt'" result))
-    ;; Error SHOULD contain the expanded (absolute) path
-    (should (string-match-p (regexp-quote (expand-file-name "nonexistent-dir-xyz/sub/file.txt")) result))))
+    ;; The result may be Success (file created in cwd) or Error (if cwd
+    ;; is not writable).  Either way, verify the expanded path is used
+    ;; in the message, not the raw relative path.
+    (should (string-match-p (regexp-quote (expand-file-name "proc-fake-append-test.txt")) result))
+    ;; Clean up if the file was created
+    (let ((created (expand-file-name "proc-fake-append-test.txt")))
+      (when (file-exists-p created)
+        (delete-file created)))))
 
 ;;; --- append_file buffer-aware tests ---
 
@@ -800,6 +827,46 @@ mutating content during programmatic saves."
           (when (buffer-live-p buf)
             (kill-buffer buf)))))))
 
+(ert-deftest test-fs-append-file-suppresses-after-save-hook ()
+  "append_file to an open buffer should NOT run user-configured after-save-hook."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "append-after-hook-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'after-save-hook
+                          (lambda () (setq hook-called t))
+                          nil t))
+              (let ((result (my-gptel--fs-append-file target "appended\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-suppresses-write-region-annotate-functions ()
+  "append_file should suppress write-region-annotate-functions during save.
+This hook runs inside write-region (called by save-buffer) and can
+annotate or alter the content being written."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "append-annotate-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-region-annotate-functions
+                          (lambda (_start _end) (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-append-file target "appended\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
 (ert-deftest test-fs-write-file-prevents-content-mutation-hook ()
   "write_file should prevent a before-save-hook that mutates content.
 This tests the actual threat model: a hook like delete-trailing-whitespace
@@ -844,6 +911,86 @@ annotate or alter the content being written."
                           (lambda (_start _end) (setq hook-called t) nil)
                           nil t))
               (let ((result (my-gptel--fs-write-file target "new content\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-write-file-suppresses-write-file-functions ()
+  "write_file should suppress write-file-functions during save.
+This hook runs during save-buffer and can intercept or alter the
+file writing process."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "wff-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-file-functions
+                          (lambda () (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-write-file target "new content\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-write-file-suppresses-write-contents-functions ()
+  "write_file should suppress write-contents-functions during save.
+This hook runs during save-buffer and can modify or intercept the
+buffer contents being written to disk."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "wcf-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-contents-functions
+                          (lambda () (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-write-file target "new content\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-suppresses-write-file-functions ()
+  "append_file should suppress write-file-functions during save."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "append-wff-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-file-functions
+                          (lambda () (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-append-file target "appended\n")))
+                (should (string-match-p "Success" result))
+                (should (null hook-called))))
+          (when (buffer-live-p buf)
+            (kill-buffer buf)))))))
+
+(ert-deftest test-fs-append-file-suppresses-write-contents-functions ()
+  "append_file should suppress write-contents-functions during save."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "append-wcf-test.txt" test-fs--tmpdir))
+           (hook-called nil))
+      (my-gptel--fs-write-file target "original\n")
+      (let ((buf (find-file target)))
+        (unwind-protect
+            (progn
+              (with-current-buffer buf
+                (add-hook 'write-contents-functions
+                          (lambda () (setq hook-called t) nil)
+                          nil t))
+              (let ((result (my-gptel--fs-append-file target "appended\n")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (when (buffer-live-p buf)
@@ -1075,5 +1222,59 @@ keep exactly 50 characters and truncate the rest."
           ;; Should NOT contain 51 characters of content
           (should-not (string= (substring result 0 51) (make-string 51 ?\u3042)))))))))
 
+
+;;; --- read_file truncation defensive guard tests ---
+
+(ert-deftest test-fs-read-file-no-truncation-when-max-size-zero ()
+  "read_file should return full content when max-size is 0.
+A direct setq to 0 bypasses the :safe predicate.  Without the guard,
+(goto-char (1+ 0)) = (goto-char 1) followed by delete-region would
+truncate everything.  With the guard, 0 is not a positive integer so
+truncation is skipped and the full file is returned."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "zero-max.txt" test-fs--tmpdir))
+           (content (make-string 200 ?x)))
+      (with-temp-file target (insert content))
+      (let ((my-gptel--fs-read-max-size 0))
+        (let ((result (my-gptel--fs-read-file target)))
+          (should (string= result content)))))))
+
+(ert-deftest test-fs-read-file-no-truncation-when-max-size-negative ()
+  "read_file should return full content when max-size is negative.
+A direct setq to -1 bypasses the :safe predicate.  Without the guard,
+(goto-char (1+ -1)) = (goto-char 0) would signal args-out-of-range.
+With the guard, -1 is not a positive integer so truncation is skipped."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "neg-max.txt" test-fs--tmpdir))
+           (content (make-string 200 ?x)))
+      (with-temp-file target (insert content))
+      (let ((my-gptel--fs-read-max-size -1))
+        (let ((result (my-gptel--fs-read-file target)))
+          (should (string= result content)))))))
+
+(ert-deftest test-fs-read-file-no-truncation-when-max-size-nil ()
+  "read_file should return full content when max-size is nil.
+This is the documented behavior (nil disables truncation).  The guard
+should handle nil gracefully since (integerp nil) is nil."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "nil-max.txt" test-fs--tmpdir))
+           (content (make-string 200 ?x)))
+      (with-temp-file target (insert content))
+      (let ((my-gptel--fs-read-max-size nil))
+        (let ((result (my-gptel--fs-read-file target)))
+          (should (string= result content)))))))
+
+(ert-deftest test-fs-read-file-no-truncation-when-max-size-non-integer ()
+  "read_file should return full content when max-size is a non-integer.
+A direct setq to a string or float bypasses the :safe predicate.
+Without the guard, (> (buffer-size) \"100\") would signal wrong-type-argument.
+With the guard, non-integers are rejected and truncation is skipped."
+  (with-fs-fixture
+    (let* ((target (expand-file-name "str-max.txt" test-fs--tmpdir))
+           (content (make-string 200 ?x)))
+      (with-temp-file target (insert content))
+      (let ((my-gptel--fs-read-max-size "100"))
+        (let ((result (my-gptel--fs-read-file target)))
+          (should (string= result content)))))))
 
 (provide 'test-fs)

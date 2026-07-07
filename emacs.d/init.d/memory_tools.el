@@ -66,8 +66,20 @@ exceed API limits. 100000 chars is roughly 25K tokens."
   :safe (lambda (v) (and (integerp v) (> v 0)))
   :group 'gptel)
 
-(defconst my-gptel-memory-system-prompt
-  (concat
+(defun my-gptel--memory-build-system-prompt ()
+  "Build the system prompt for the summarizer.
+Instructs the model to produce a concise rolling summary of the
+agent's memory.  The max-entries limit is interpolated at call time
+from `my-gptel-memory-max-entries' so that Customize changes take
+effect without reloading the module."
+  (let ((max-entries my-gptel-memory-max-entries))
+    ;; Guard against non-positive max-entries: the :safe predicate rejects
+    ;; non-positive values at the file-local-variable level, but a user
+    ;; can setq a bad value directly.  A nil or non-integer would crash
+    ;; format with wrong-type-argument.  Fall back to default 20.
+    (unless (and (integerp max-entries) (> max-entries 0))
+      (setq max-entries 20))
+    (concat
    "You are a memory summarization engine for an AI agent system.\n"
    "Your job is to maintain a concise, rolling memory log for an agent.\n\n"
    "You will receive:\n"
@@ -77,14 +89,12 @@ exceed API limits. 100000 chars is roughly 25K tokens."
    "- Retains all critical facts: agent identity, capabilities, key decisions, persistent notes.\n"
    "- Adds new important information from the conversation: tasks completed, files modified, bugs found, architecture decisions, tool changes.\n"
    (format "- Drops or merges obsolete entries to keep the total under %d bullet points.\n"
-           my-gptel-memory-max-entries)
+           max-entries)
    "- Each entry is a single line starting with '- ' (markdown bullet).\n"
    "- Entries are factual, concise, and specific (no vague statements).\n"
    "- Do NOT include operational logs -- those go to HISTORY.log separately.\n"
    "- Do NOT include a header or any text outside the bullet list.\n\n"
-   "Output ONLY the bullet-point memory entries. No preamble, no explanation.")
-  "System prompt for the summarizer. Instructs the model to produce
-a concise rolling summary of the agent's memory.")
+   "Output ONLY the bullet-point memory entries. No preamble, no explanation.")))
 
 ;;; --- Internal functions ---
 
@@ -118,19 +128,26 @@ Uses `save-restriction' + `widen' to ensure the full buffer content
 is extracted even when the buffer is narrowed."
   (save-restriction
     (widen)
-    (let ((text (buffer-substring-no-properties (point-min) (point-max))))
-      (if (> (length text) my-gptel-memory-max-conversation-chars)
+    (let ((text (buffer-substring-no-properties (point-min) (point-max)))
+          (max-chars my-gptel-memory-max-conversation-chars))
+      ;; Guard against non-positive max-chars: the :safe predicate rejects
+      ;; non-positive values at the file-local-variable level, but a user
+      ;; can setq a bad value directly.  A negative value would cause
+      ;; args-out-of-range in substring.  When max-chars is not a positive
+      ;; integer, skip truncation entirely (return full text).
+      (if (and (integerp max-chars) (> max-chars 0)
+               (> (length text) max-chars))
           (let ((truncated
-                 (substring text (- (length text) my-gptel-memory-max-conversation-chars))))
+                 (substring text (- (length text) max-chars))))
             (format "[...conversation truncated to last %d chars...]\n%s"
-                    my-gptel-memory-max-conversation-chars truncated))
+                    max-chars truncated))
         text))))
 
 (defun my-gptel--memory-build-payload (current-memories conversation)
   "Build the JSON payload string for the Ollama /api/chat endpoint.
 CURRENT-MEMORIES is the existing memory text.
 CONVERSATION is the conversation text to summarize."
-  (let* ((system-prompt my-gptel-memory-system-prompt)
+  (let* ((system-prompt (my-gptel--memory-build-system-prompt))
          (user-message (format "CURRENT MEMORIES:\n%s\n\nCONVERSATION:\n%s"
                                 (if (string-empty-p current-memories)
                                     "(none yet)"
@@ -312,7 +329,9 @@ memories take effect immediately."
           (user-error "Conversation is too short to summarize. Have a meaningful exchange first."))
         (message "[Summarizing memories with %s... payload: %d chars, conversation: %d chars]"
                  model-name (length payload) (length conversation))
-        (let ((result (my-gptel--memory-call-ollama payload my-gptel-memory-timeout)))
+        (let* ((timeout (let ((v my-gptel-memory-timeout))
+                          (if (and (integerp v) (> v 0)) v 300)))
+               (result (my-gptel--memory-call-ollama payload timeout)))
           (if (string-prefix-p "Error:" result)
               (progn
                 (message "%s" result)

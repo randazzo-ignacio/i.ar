@@ -70,18 +70,25 @@ Renames the current log to `audit.log.1' (overwriting any previous
 rotation) and starts a fresh log.  Rotation is best-effort: errors
 are logged via `message' but do not signal, to avoid breaking the
 operation being audited."
-  (when (and my-gptel--audit-log-max-size
-             (> my-gptel--audit-log-max-size 0)
-             (file-exists-p my-gptel--audit-log-path))
-    (let ((size (file-attribute-size (file-attributes my-gptel--audit-log-path))))
-      (when (and size (> size my-gptel--audit-log-max-size))
-        (condition-case err
-            (let ((rotated (concat my-gptel--audit-log-path ".1")))
-              ;; rename-file with t overwrites any existing .1 file.
-              (rename-file my-gptel--audit-log-path rotated t))
-          (error
-           (message "Warning: audit log rotation failed: %s"
-                    (error-message-string err))))))))
+  (let ((max-size my-gptel--audit-log-max-size))
+    ;; Guard against non-integer max-size: the :safe predicate rejects
+    ;; non-positive/non-integer values at the file-local-variable level,
+    ;; but a direct setq to a string or other non-integer bypasses it.
+    ;; A string would crash > with wrong-type-argument.  nil disables
+    ;; rotation (intentional).  Skip rotation when max-size is not a
+    ;; positive integer.  Matches the defense-in-depth pattern from
+    ;; cycles 112-115 (memory_tools, fs_tools, loop_guard defcustom guards).
+    (when (and (integerp max-size) (> max-size 0)
+               (file-exists-p my-gptel--audit-log-path))
+      (let ((size (file-attribute-size (file-attributes my-gptel--audit-log-path))))
+        (when (and size (> size max-size))
+          (condition-case err
+              (let ((rotated (concat my-gptel--audit-log-path ".1")))
+                ;; rename-file with t overwrites any existing .1 file.
+                (rename-file my-gptel--audit-log-path rotated t))
+            (error
+             (message "Warning: audit log rotation failed: %s"
+                      (error-message-string err)))))))))
 
 (defun my-gptel--audit-log (tool detail)
   "Append an audit entry for TOOL with DETAIL to the audit log.

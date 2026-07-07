@@ -83,25 +83,34 @@ On error, returns a string starting with \\='Error:\\='."
   "Read the text contents of FILEPATH into a string.
 On error, returns a string starting with \\='Error:\\='.
 
-When `my-gptel--fs-read-max-size' is non-nil and the file has more
-characters than that limit, only the first `my-gptel--fs-read-max-size'
-characters are returned, followed by a truncation notice.  This
-prevents loading huge files into the AI context.  Uses character
-count (not byte count) because insert-file-contents decodes the
-file, and token consumption correlates with characters."
+When `my-gptel--fs-read-max-size' is a positive integer and the file
+has more characters than that limit, only the first
+`my-gptel--fs-read-max-size' characters are returned, followed by a
+truncation notice.  This prevents loading huge files into the AI
+context.  Uses character count (not byte count) because
+insert-file-contents decodes the file, and token consumption
+correlates with characters."
   (let ((expanded-path (expand-file-name filepath)))
     (condition-case err
         (with-temp-buffer
           (insert-file-contents expanded-path)
-          (if (and my-gptel--fs-read-max-size
-                   (> (buffer-size) my-gptel--fs-read-max-size))
-              (let ((max my-gptel--fs-read-max-size))
-                (goto-char (1+ max))
-                (delete-region (point) (point-max))
-                (goto-char (point-max))
-                (insert (format "\n\n[... file truncated at %d characters ...]" max))
-                (buffer-string))
-            (buffer-string)))
+          (let ((max my-gptel--fs-read-max-size))
+            ;; Guard against non-positive max-size: the :safe predicate
+            ;; rejects non-positive values at the file-local-variable
+            ;; level, but a direct setq to 0, -1, or nil bypasses it.
+            ;; A negative value would cause (goto-char 0) -> args-out-of-range.
+            ;; When max is not a positive integer, skip truncation (return
+            ;; full file).  Matches the defense-in-depth pattern from
+            ;; cycles 112-113 (memory_tools defcustom guards).
+            (if (and (integerp max) (> max 0)
+                     (> (buffer-size) max))
+                (progn
+                  (goto-char (1+ max))
+                  (delete-region (point) (point-max))
+                  (goto-char (point-max))
+                  (insert (format "\n\n[... file truncated at %d characters ...]" max))
+                  (buffer-string))
+              (buffer-string))))
       (error (format "Error: Failed to read file '%s'. Emacs says: %s"
                       expanded-path (error-message-string err))))))
 
@@ -187,7 +196,8 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
 If the file is open in an Emacs buffer, appends to that buffer and saves.
 Otherwise, appends directly to the file on disk.
 If the file exists and does not end with a newline, one is prepended.
-If the file does not exist, it is created.
+If the file does not exist, it is created.  Parent directories are
+created if needed, matching `my-gptel--fs-write-file' behavior.
 Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
   (let* ((expanded-path (expand-file-name filepath))
          (guard-reason (my-gptel--guard-check-append expanded-path)))
@@ -195,57 +205,64 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
         (format "Error: %s" guard-reason)
       (let ((buf (find-buffer-visiting expanded-path)))
         (condition-case err
-            (if buf
-                ;; Buffer-aware path: append in-buffer and save
-                (with-current-buffer buf
-                  (cond
-                   (buffer-read-only
-                    (format "Error: Buffer for '%s' is read-only" expanded-path))
-                   ((buffer-modified-p)
-                    (format "Error: Buffer for '%s' has unsaved modifications. Save or revert the buffer first."
-                            expanded-path))
-                   (t
-                    (save-restriction
-                      (widen)
-                      (goto-char (point-max))
-                      ;; Determine if a newline prefix is needed
-                      (unless (or (= (point-min) (point-max))
-                                  (string-suffix-p "\n" (buffer-substring-no-properties
-                                                         (max (point-min) (1- (point-max)))
-                                                         (point-max))))
-                        (insert "\n"))
-                      (insert content))
-                    (my-gptel--with-suppressed-save-hooks
-                      (save-buffer))
-                    (my-gptel--audit-log-append expanded-path)
-                    (format "Success: Content appended to '%s'" expanded-path))))
-              ;; Direct-to-disk path: no buffer visiting this file
-              ;; Read only the last byte to check for trailing newline,
-              ;; instead of reading the entire file into memory.  This is
-              ;; a significant optimization for large files (e.g., a 10MB
-              ;; audit log would be fully read just to check 1 byte).
-              ;; Also guards against nil attrs (TOCTOU: file could vanish
-              ;; between file-attributes and insert-file-contents).
-              (let* ((attrs (file-attributes expanded-path))
-                     (size (and attrs (file-attribute-size attrs)))
-                     (prefix
-                      (if (and size (> size 0))
-                          ;; Wrap in condition-case to handle TOCTOU: file
-                          ;; could vanish between file-attributes and
-                          ;; insert-file-contents.  On error, treat as
-                          ;; no prefix needed (write-region will create
-                          ;; the file fresh).
-                          (condition-case nil
-                              (with-temp-buffer
-                                (insert-file-contents expanded-path nil (1- size) size)
-                                (if (string-suffix-p "\n" (buffer-string))
-                                    ""
-                                  "\n"))
-                            (error ""))
-                        "")))
-                (write-region (concat prefix content) nil expanded-path t 'silent)
-                (my-gptel--audit-log-append expanded-path)
-                (format "Success: Content appended to '%s'" expanded-path)))
+            (progn
+              ;; Create parent directories if needed, matching write_file's pattern.
+              ;; Without this, appending to a file in a nonexistent directory
+              ;; fails, while write_file to the same path succeeds (it creates
+              ;; parent dirs).  This is a usability inconsistency that could
+              ;; confuse the agent.
+              (make-directory (file-name-directory expanded-path) t)
+              (if buf
+                  ;; Buffer-aware path: append in-buffer and save
+                  (with-current-buffer buf
+                    (cond
+                     (buffer-read-only
+                      (format "Error: Buffer for '%s' is read-only" expanded-path))
+                     ((buffer-modified-p)
+                      (format "Error: Buffer for '%s' has unsaved modifications. Save or revert the buffer first."
+                              expanded-path))
+                     (t
+                      (save-restriction
+                        (widen)
+                        (goto-char (point-max))
+                        ;; Determine if a newline prefix is needed
+                        (unless (or (= (point-min) (point-max))
+                                    (string-suffix-p "\n" (buffer-substring-no-properties
+                                                           (max (point-min) (1- (point-max)))
+                                                           (point-max))))
+                          (insert "\n"))
+                        (insert content))
+                      (my-gptel--with-suppressed-save-hooks
+                        (save-buffer))
+                      (my-gptel--audit-log-append expanded-path)
+                      (format "Success: Content appended to '%s'" expanded-path))))
+                ;; Direct-to-disk path: no buffer visiting this file
+                ;; Read only the last byte to check for trailing newline,
+                ;; instead of reading the entire file into memory.  This is
+                ;; a significant optimization for large files (e.g., a 10MB
+                ;; audit log would be fully read just to check 1 byte).
+                ;; Also guards against nil attrs (TOCTOU: file could vanish
+                ;; between file-attributes and insert-file-contents).
+                (let* ((attrs (file-attributes expanded-path))
+                       (size (and attrs (file-attribute-size attrs)))
+                       (prefix
+                        (if (and size (> size 0))
+                            ;; Wrap in condition-case to handle TOCTOU: file
+                            ;; could vanish between file-attributes and
+                            ;; insert-file-contents.  On error, treat as
+                            ;; no prefix needed (write-region will create
+                            ;; the file fresh).
+                            (condition-case nil
+                                (with-temp-buffer
+                                  (insert-file-contents expanded-path nil (1- size) size)
+                                  (if (string-suffix-p "\n" (buffer-string))
+                                      ""
+                                    "\n"))
+                              (error ""))
+                          "")))
+                  (write-region (concat prefix content) nil expanded-path t 'silent)
+                  (my-gptel--audit-log-append expanded-path)
+                  (format "Success: Content appended to '%s'" expanded-path))))
           (error (format "Error: Failed to append to '%s'. Emacs says: %s"
                          expanded-path (error-message-string err))))))))
 
