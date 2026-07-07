@@ -708,4 +708,13 @@ to capture the timeout value passed to it."
             (user-error nil)))
         (should (eq captured-timeout 120))))))
 
+;;; --- Keybinding registration test ---
+
+(ert-deftest test-memory-keybinding-registered ()
+  "C-c m should be bound to my-gptel-summarize-memories in gptel-mode-map.
+Without this keybinding, the summarize command is only accessible via M-x,
+which is a discoverability regression.  Only C-c a (agent_loader) had a
+keybinding test (test-agent.el); session and memory keybindings lacked tests."
+  (should (eq (keymap-lookup gptel-mode-map "C-c m") 'my-gptel-summarize-memories)))
+
 (provide 'test-memory)

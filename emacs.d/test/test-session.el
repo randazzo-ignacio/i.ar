@@ -754,4 +754,16 @@ accidentally removed."
   (should (memq #'my-gptel--session-restore-custom-state
                 (default-value 'gptel-mode-hook))))
 
+;;; --- Keybinding registration tests ---
+
+(ert-deftest test-session-keybindings-registered ()
+  "Session commands should be bound in gptel-mode-map.
+C-c s -> save-session, C-c o -> open-session.
+Without these keybindings, the interactive commands are only
+accessible via M-x, which is a discoverability regression.
+Only C-c a (agent_loader) had a keybinding test (test-agent.el);
+session and memory keybindings lacked tests."
+  (should (eq (keymap-lookup gptel-mode-map "C-c s") 'my-gptel-save-session))
+  (should (eq (keymap-lookup gptel-mode-map "C-c o") 'my-gptel-open-session)))
+
 (provide 'test-session)

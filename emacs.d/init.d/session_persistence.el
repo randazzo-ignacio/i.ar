@@ -28,6 +28,7 @@
 ;; Keybindings:
 ;;   C-c s  -- Save current session (prompts for name)
 ;;   C-c o  -- Open (restore) a saved session
+;;   M-x my-gptel-list-sessions -- List saved sessions with metadata
 ;;
 ;; Sessions are stored as text files in ~/.emacs.d/sessions/
 ;; Each file contains the full conversation text plus file-local variables
@@ -311,7 +312,7 @@ Shows session name, size, and last modified time."
       (insert "====================\n\n")
       (dolist (entry entries)
         (insert entry "\n"))
-      (insert "\nPress C-c o to open a session.\n")
+      (insert "\nSwitch to a gptel chat buffer and press C-c o to open a session.\n")
       (goto-char (point-min))
       (display-buffer (current-buffer)))))
 
