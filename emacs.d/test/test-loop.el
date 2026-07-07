@@ -372,6 +372,130 @@ we prove the message reads the actual counter."
           (should-not (string-match-p "blocked 3 attempts"
                                       (plist-get result :stop-reason))))))))
 
+;;; --- History size guard test ---
+
+(ert-deftest test-loop-push-guards-non-positive-history-size ()
+  "my-gptel--loop-push should fall back to 20 when history-size is non-positive.
+The :safe predicate rejects non-positive values at the file-local-variable
+level, but a direct setq to 0 or negative bypasses it.  A negative value
+would cause cl-subseq to signal args-out-of-range.  Zero would silently
+disable loop detection (history always trimmed to empty)."
+  (with-temp-buffer
+    (let ((my-gptel-loop-history-size 0))
+      (setq-local my-gptel--loop-history nil)
+      (my-gptel--loop-push '("foo" . "abc"))
+      ;; With the guard, history-size=0 falls back to 20, so the entry
+      ;; is NOT trimmed (1 <= 20).  Without the guard, cl-subseq with
+      ;; end=0 would produce an empty list, silently disabling detection.
+      (should (= (length my-gptel--loop-history) 1))
+      (should (equal (car my-gptel--loop-history) '("foo" . "abc"))))))
+
+(ert-deftest test-loop-push-guards-negative-history-size ()
+  "my-gptel--loop-push should fall back to 20 when history-size is negative."
+  (with-temp-buffer
+    (let ((my-gptel-loop-history-size -5))
+      (setq-local my-gptel--loop-history nil)
+      (my-gptel--loop-push '("foo" . "abc"))
+      ;; With the guard, -5 falls back to 20.  Without the guard,
+      ;; cl-subseq with end=-5 would signal args-out-of-range.
+      (should (= (length my-gptel--loop-history) 1)))))
+
+(ert-deftest test-loop-push-guards-nil-history-size ()
+  "my-gptel--loop-push should fall back to 20 when history-size is nil."
+  (with-temp-buffer
+    (let ((my-gptel-loop-history-size nil))
+      (setq-local my-gptel--loop-history nil)
+      (my-gptel--loop-push '("foo" . "abc"))
+      ;; With the guard, nil falls back to 20.  Without the guard,
+      ;; (> length nil) would signal wrong-type-argument.
+      (should (= (length my-gptel--loop-history) 1)))))
+
+(ert-deftest test-loop-push-guards-non-integer-history-size ()
+  "my-gptel--loop-push should fall back to 20 when history-size is non-integer."
+  (with-temp-buffer
+    (let ((my-gptel-loop-history-size "20"))
+      (setq-local my-gptel--loop-history nil)
+      (my-gptel--loop-push '("foo" . "abc"))
+      ;; With the guard, "20" (string) falls back to 20.
+      ;; Without the guard, (> length "20") would signal wrong-type-argument.
+      (should (= (length my-gptel--loop-history) 1)))))
+
+(ert-deftest test-loop-push-fallback-trims-to-20 ()
+  "Fallback to 20 should actually trim when history exceeds 20.
+With history-size=0 (invalid), the guard falls back to 20.  Pushing
+25 entries should trim to 20, keeping the most recent."
+  (with-temp-buffer
+    (let ((my-gptel-loop-history-size 0))
+      (setq-local my-gptel--loop-history nil)
+      (dotimes (i 25)
+        (my-gptel--loop-push (cons "tool" (number-to-string i))))
+      (should (= (length my-gptel--loop-history) 20))
+      (should (equal (car my-gptel--loop-history) '("tool" . "24"))))))
+
+;;; --- Threshold defcustom guard tests ---
+
+(ert-deftest test-loop-guard-guards-nil-soft-threshold ()
+  "my-gptel--loop-guard should fall back to 3 when soft-threshold is nil.
+Without the guard, (1+ nil) and (>= total nil) would signal
+wrong-type-argument, crashing the hook on every tool call."
+  (with-temp-buffer
+    (let ((my-gptel-loop-soft-threshold nil)
+          (my-gptel-loop-hard-threshold 6))
+      (setq-local my-gptel--loop-history nil)
+      (setq-local my-gptel--loop-block-count 0)
+      (let ((result (my-gptel--loop-guard
+                     (list :name "read_file"
+                           :args '(:filepath "/tmp/foo")
+                           :buffer (current-buffer)))))
+        ;; First call: total=1, effective-soft=3 (fallback), no block
+        (should (null result))))))
+
+(ert-deftest test-loop-guard-guards-zero-soft-threshold ()
+  "my-gptel--loop-guard should fall back to 3 when soft-threshold is 0.
+Without the guard, soft-threshold=0 would cause every call (total>=1>=0)
+to soft-block immediately, preventing any tool from ever executing."
+  (with-temp-buffer
+    (let ((my-gptel-loop-soft-threshold 0)
+          (my-gptel-loop-hard-threshold 6))
+      (setq-local my-gptel--loop-history nil)
+      (setq-local my-gptel--loop-block-count 0)
+      (let ((result (my-gptel--loop-guard
+                     (list :name "read_file"
+                           :args '(:filepath "/tmp/foo")
+                           :buffer (current-buffer)))))
+        ;; With guard: effective-soft=3, total=1, no block
+        (should (null result))))))
+
+(ert-deftest test-loop-guard-guards-nil-hard-threshold ()
+  "my-gptel--loop-guard should fall back to 6 when hard-threshold is nil.
+Without the guard, (max nil ...) would signal wrong-type-argument."
+  (with-temp-buffer
+    (let ((my-gptel-loop-soft-threshold 3)
+          (my-gptel-loop-hard-threshold nil))
+      (setq-local my-gptel--loop-history nil)
+      (setq-local my-gptel--loop-block-count 0)
+      (let ((result (my-gptel--loop-guard
+                     (list :name "read_file"
+                           :args '(:filepath "/tmp/foo")
+                           :buffer (current-buffer)))))
+        ;; First call: total=1, effective-soft=3, final-hard=6, no block
+        (should (null result))))))
+
+(ert-deftest test-loop-guard-guards-non-integer-thresholds ()
+  "my-gptel--loop-guard should fall back to defaults for non-integer thresholds.
+Without the guard, (>= total \"3\") would signal wrong-type-argument."
+  (with-temp-buffer
+    (let ((my-gptel-loop-soft-threshold "3")
+          (my-gptel-loop-hard-threshold "6"))
+      (setq-local my-gptel--loop-history nil)
+      (setq-local my-gptel--loop-block-count 0)
+      (let ((result (my-gptel--loop-guard
+                     (list :name "read_file"
+                           :args '(:filepath "/tmp/foo")
+                           :buffer (current-buffer)))))
+        ;; With guard: effective-soft=3, final-hard=6, total=1, no block
+        (should (null result))))))
+
 ;;; --- Hook registration test ---
 
 (ert-deftest test-loop-guard-registered-in-hook ()

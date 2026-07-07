@@ -93,11 +93,19 @@ SIG is (name . args-hash).  Counts backwards from the head of
     count))
 
 (defun my-gptel--loop-push (sig)
-  "Push SIG onto the history ring, trimming to max size."
+  "Push SIG onto the history ring, trimming to max size.
+Guards against non-positive `my-gptel-loop-history-size': the :safe
+predicate rejects non-positive values at the file-local-variable level,
+but a direct setq to 0 or negative bypasses it.  A negative value would
+cause cl-subseq to signal args-out-of-range.  Zero would silently disable
+loop detection (history always trimmed to empty).  Falls back to 20."
   (push sig my-gptel--loop-history)
-  (when (> (length my-gptel--loop-history) my-gptel-loop-history-size)
-    (setq my-gptel--loop-history
-          (cl-subseq my-gptel--loop-history 0 my-gptel-loop-history-size))))
+  (let ((max-size my-gptel-loop-history-size))
+    (unless (and (integerp max-size) (> max-size 0))
+      (setq max-size 20))
+    (when (> (length my-gptel--loop-history) max-size)
+      (setq my-gptel--loop-history
+            (cl-subseq my-gptel--loop-history 0 max-size)))))
 
 (defun my-gptel--loop-soft-message (name repeat-count)
   "Build the correction message for a soft block.
@@ -147,7 +155,19 @@ Returns:
     (my-gptel--loop-push sig)
 
     ;; Total identical calls including this one
-    (let ((total (1+ repeat-count))
+    (let* ((total (1+ repeat-count))
+          ;; Guard threshold defcustoms: the :safe predicates reject
+          ;; non-positive values at the file-local-variable level, but
+          ;; a direct setq to nil, 0, negative, or non-integer bypasses
+          ;; them.  nil/non-integer would crash max/1+/>= with
+          ;; wrong-type-argument.  Zero would cause every call to
+          ;; soft-block immediately.  Falls back to defaults (3, 6).
+          (effective-soft
+           (let ((s my-gptel-loop-soft-threshold))
+             (if (and (integerp s) (> s 0)) s 3)))
+          (effective-hard
+           (let ((h my-gptel-loop-hard-threshold))
+             (if (and (integerp h) (> h 0)) h 6)))
           ;; Ensure hard threshold is always > soft threshold.  If
           ;; misconfigured (hard <= soft), use soft + 1 as the effective
           ;; hard threshold so the model always gets at least one soft
@@ -155,17 +175,17 @@ Returns:
           ;; values).  Without this, the cond checks hard first and
           ;; the soft block is never reached, denying the model a
           ;; chance to self-correct.
-          (effective-hard (max my-gptel-loop-hard-threshold
-                               (1+ my-gptel-loop-soft-threshold))))
+          (final-hard (max effective-hard
+                           (1+ effective-soft))))
       (cond
        ;; Hard stop: model didn't self-correct after soft blocks
-       ((>= total effective-hard)
+       ((>= total final-hard)
         (let ((reason (my-gptel--loop-hard-message name total my-gptel--loop-block-count)))
           (message "[loop-guard] HARD STOP: %s called %d times identically" name total)
           (list :stop t :stop-reason reason)))
 
        ;; Soft block: warn the model and prevent execution
-       ((>= total my-gptel-loop-soft-threshold)
+       ((>= total effective-soft)
         (let ((msg (my-gptel--loop-soft-message name total)))
           (message "[loop-guard] SOFT BLOCK: %s called %d times identically, sending correction"
                    name total)
