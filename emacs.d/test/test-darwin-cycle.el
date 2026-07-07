@@ -953,5 +953,37 @@ to 40 (the defcustom default) when the guard fails."
   ;; Verify the defcustom default matches the guard fallback value
   (should (eq (default-value 'darwin-cycle-max-turns) 40)))
 
+;;; --- Telegram credential :safe removal tests ---
+;; These tests verify that darwin-telegram-bot-token and
+;; darwin-telegram-chat-id intentionally lack :safe predicates.
+;; Without :safe, Emacs prompts the user when these variables are set
+;; via file-local variables -- a security measure that prevents a
+;; tampered session file from silently redirecting notifications to
+;; an attacker's bot/chat.  The prompt is a safety feature, not a
+;; nuisance.  See the pattern in file_guard.el
+;; (my-gptel--guard-allow-self-modification) for the same principle:
+;; security-sensitive variables should NOT have :safe.
+
+(ert-deftest test-darwin-telegram-bot-token-no-safe-predicate ()
+  "darwin-telegram-bot-token should NOT have a :safe predicate.
+The bot token is a secret credential.  Without :safe, Emacs prompts
+the user when it is set via file-local variables, preventing a tampered
+session file from silently redirecting notifications to an attacker's bot."
+  ;; safe-local-variable-p returns nil when there is no :safe predicate
+  ;; OR when the :safe predicate rejects the value.  Since we removed
+  ;; :safe, it should return nil for ALL values, including valid strings.
+  (should-not (safe-local-variable-p 'darwin-telegram-bot-token "some-token"))
+  (should-not (safe-local-variable-p 'darwin-telegram-bot-token ""))
+  (should-not (safe-local-variable-p 'darwin-telegram-bot-token 12345)))
+
+(ert-deftest test-darwin-telegram-chat-id-no-safe-predicate ()
+  "darwin-telegram-chat-id should NOT have a :safe predicate.
+The chat ID controls where notifications are sent.  Without :safe,
+Emacs prompts the user when it is set via file-local variables,
+preventing a tampered session file from silently redirecting notifications."
+  (should-not (safe-local-variable-p 'darwin-telegram-chat-id "123456"))
+  (should-not (safe-local-variable-p 'darwin-telegram-chat-id ""))
+  (should-not (safe-local-variable-p 'darwin-telegram-chat-id 123456)))
+
 (provide 'test-darwin-cycle)
 ;;; test-darwin-cycle.el ends here

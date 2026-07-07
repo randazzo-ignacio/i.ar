@@ -64,18 +64,26 @@ This prevents infinite loops."
   (or (getenv "DARWIN_TELEGRAM_BOT_TOKEN") "")
   "Telegram bot token for cycle notifications.
 Get this from @BotFather on Telegram.
-Can also be set via DARWIN_TELEGRAM_BOT_TOKEN env var."
+Can also be set via DARWIN_TELEGRAM_BOT_TOKEN env var.
+
+This variable intentionally lacks a :safe property so that Emacs
+prompts the user when it is set via file-local variables.  The bot
+token is a secret credential: silently accepting it from a tampered
+session file could redirect notifications to an attacker's bot."
   :type 'string
-  :safe #'stringp
   :group 'darwin)
 
 (defcustom darwin-telegram-chat-id
   (or (getenv "DARWIN_TELEGRAM_CHAT_ID") "")
   "Telegram chat ID to send notifications to.
 Message @userinfobot on Telegram to get your chat ID.
-Can also be set via DARWIN_TELEGRAM_CHAT_ID env var."
+Can also be set via DARWIN_TELEGRAM_CHAT_ID env var.
+
+This variable intentionally lacks a :safe property so that Emacs
+prompts the user when it is set via file-local variables.  The chat
+ID controls where notifications are sent: silently accepting it from
+a tampered session file could redirect notifications to an attacker."
   :type 'string
-  :safe #'stringp
   :group 'darwin)
 
 (defvar darwin-cycle-result-message nil
