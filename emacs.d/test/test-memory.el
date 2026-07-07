@@ -9,6 +9,7 @@
 (require 'subr-x)
 (require 'json)
 (require 'memory_tools)
+(declare-function my-gptel--memory-build-system-prompt "memory_tools" ())
 
 ;;; --- Test fixtures ---
 
@@ -595,5 +596,31 @@ does NOT swallow genuine unexpected errors."
       (should captured-error)
       (should (string-match-p "Memory summarization failed" captured-error))
       (should (string-match-p "Unexpected internal error" captured-error)))))
+
+;;; --- System prompt dynamic generation tests ---
+
+(ert-deftest test-memory-build-system-prompt-reflects-max-entries ()
+  "my-gptel--memory-build-system-prompt should interpolate the current
+max-entries value at call time, not at load time.  When
+`my-gptel-memory-max-entries' is let-bound to a different value,
+the prompt should contain that value, not the default."
+  (let ((my-gptel-memory-max-entries 42))
+    (let ((prompt (my-gptel--memory-build-system-prompt)))
+      (should (stringp prompt))
+      (should (string-match-p "42 bullet points" prompt))
+      (should-not (string-match-p "20 bullet points" prompt))))
+  ;; Also verify with the default value
+  (let ((prompt (my-gptel--memory-build-system-prompt)))
+    (should (stringp prompt))
+    (should (string-match-p "memory summarization engine" prompt))
+    (should (string-match-p "20 bullet points" prompt))))
+
+(ert-deftest test-memory-build-system-prompt-is-a-function ()
+  "my-gptel--memory-build-system-prompt should be a function, not a defconst.
+This is a regression test: the old defconst `my-gptel-memory-system-prompt'
+captured the max-entries value at load time.  The function version
+interpolates at call time so Customize changes take effect immediately."
+  (should (fboundp 'my-gptel--memory-build-system-prompt))
+  (should-not (boundp 'my-gptel-memory-system-prompt)))
 
 (provide 'test-memory)

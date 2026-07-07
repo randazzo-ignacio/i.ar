@@ -66,7 +66,12 @@ exceed API limits. 100000 chars is roughly 25K tokens."
   :safe (lambda (v) (and (integerp v) (> v 0)))
   :group 'gptel)
 
-(defconst my-gptel-memory-system-prompt
+(defun my-gptel--memory-build-system-prompt ()
+  "Build the system prompt for the summarizer.
+Instructs the model to produce a concise rolling summary of the
+agent's memory.  The max-entries limit is interpolated at call time
+from `my-gptel-memory-max-entries' so that Customize changes take
+effect without reloading the module."
   (concat
    "You are a memory summarization engine for an AI agent system.\n"
    "Your job is to maintain a concise, rolling memory log for an agent.\n\n"
@@ -82,9 +87,7 @@ exceed API limits. 100000 chars is roughly 25K tokens."
    "- Entries are factual, concise, and specific (no vague statements).\n"
    "- Do NOT include operational logs -- those go to HISTORY.log separately.\n"
    "- Do NOT include a header or any text outside the bullet list.\n\n"
-   "Output ONLY the bullet-point memory entries. No preamble, no explanation.")
-  "System prompt for the summarizer. Instructs the model to produce
-a concise rolling summary of the agent's memory.")
+   "Output ONLY the bullet-point memory entries. No preamble, no explanation."))
 
 ;;; --- Internal functions ---
 
@@ -130,7 +133,7 @@ is extracted even when the buffer is narrowed."
   "Build the JSON payload string for the Ollama /api/chat endpoint.
 CURRENT-MEMORIES is the existing memory text.
 CONVERSATION is the conversation text to summarize."
-  (let* ((system-prompt my-gptel-memory-system-prompt)
+  (let* ((system-prompt (my-gptel--memory-build-system-prompt))
          (user-message (format "CURRENT MEMORIES:\n%s\n\nCONVERSATION:\n%s"
                                 (if (string-empty-p current-memories)
                                     "(none yet)"
