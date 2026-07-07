@@ -215,15 +215,17 @@ STREAM-POS-REF is a symbol holding the stream-pos marker (set dynamically)."
             (when (and new-text (string-match-p "\\S-" new-text))
               (with-current-buffer parent-buf
                 (save-excursion
-                  (unless stream-marker
-                    (goto-char parent-marker)
-                    (insert (format "--- Delegate '%s' streaming... ---\n" agent))
-                    (setq stream-marker (point-marker))
-                    (set-marker-insertion-type stream-marker t)
-                    (set stream-marker-ref stream-marker))
-                  (goto-char stream-marker)
-                  (insert new-text)
-                  (set-marker stream-marker (point)))))
+                  (save-restriction
+                    (widen)
+                    (unless stream-marker
+                      (goto-char parent-marker)
+                      (insert (format "--- Delegate '%s' streaming... ---\n" agent))
+                      (setq stream-marker (point-marker))
+                      (set-marker-insertion-type stream-marker t)
+                      (set stream-marker-ref stream-marker))
+                    (goto-char stream-marker)
+                    (insert new-text)
+                    (set-marker stream-marker (point))))))
             ;; set-marker must be inside save-restriction so (point-max)
             ;; returns the widened end, not the narrowed end.  Otherwise
             ;; stream-pos would be set behind the actual buffer end,
