@@ -247,7 +247,14 @@ The cycle uses a continuation mechanism: when the model produces a
 text-only response (no tool calls), it is re-prompted to continue
 until it either completes all steps or reaches the turn limit."
   (interactive)
-  (let* ((timeout (or (plist-get args :timeout) darwin-cycle-timeout))
+  (let* ((raw-timeout (or (plist-get args :timeout) darwin-cycle-timeout))
+         ;; Defense-in-depth: :safe rejects non-positive values at the
+         ;; file-local-variable level, but a direct setq bypasses it.
+         ;; nil causes run-with-timer to signal wrong-type-argument;
+         ;; 0 or negative causes immediate timeout.  Fall back to 7200.
+         (timeout (if (and (integerp raw-timeout) (> raw-timeout 0))
+                      raw-timeout
+                    7200))
          (prompt (or (plist-get args :prompt) darwin-cycle-prompt))
          (profile (darwin--load-profile))
          (cycle-buf (get-buffer-create "*darwin-cycle*"))
@@ -315,13 +322,21 @@ until it either completes all steps or reaches the turn limit."
                        (message "[darwin] Response: %.300s" response))))
 
                  ;; Check if we've hit the turn limit
-                 (if (>= turn-count darwin-cycle-max-turns)
+                 ;; Defense-in-depth: :safe rejects non-positive values at the
+                 ;; file-local-variable level, but a direct setq bypasses it.
+                 ;; nil causes wrong-type-argument in >=; 0 causes immediate
+                 ;; exit on the first turn.  Fall back to 40.
+                 (let ((max-turns (if (and (integerp darwin-cycle-max-turns)
+                                           (> darwin-cycle-max-turns 0))
+                                     darwin-cycle-max-turns
+                                   40)))
+                   (if (>= turn-count max-turns)
                      (progn
                        (setq completed t)
-                       (message "[darwin] Reached max turns (%d), ending cycle" darwin-cycle-max-turns)
+                       (message "[darwin] Reached max turns (%d), ending cycle" max-turns)
                        (setq darwin-cycle-result-message
                              (format "*Darwin Cycle: Max Turns Reached*\nTurns: %d (limit %d)\nTool calls: %d\nThe cycle hit the turn limit without completing."
-                                     turn-count darwin-cycle-max-turns tool-call-count))
+                                     turn-count max-turns tool-call-count))
                        (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
 
                    ;; Check if the cycle is truly complete.
@@ -348,7 +363,7 @@ until it either completes all steps or reaches the turn limit."
                             (goto-char (point-max))
                             (insert darwin-cycle-continue-prompt)
                             (setq continuation-pending nil)
-                            (gptel-send)))))))))))
+                            (gptel-send))))))))))))
         (add-hook 'gptel-post-response-functions cont-hook nil t)
 
         ;; Timeout handler

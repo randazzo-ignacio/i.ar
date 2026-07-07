@@ -913,5 +913,45 @@ region."
                                       (line-end-position)))
       (should (eq (darwin--cycle-complete-p (current-buffer) region-start region-end) t)))))
 
+;;; --- darwin-cycle-timeout defensive guard tests ---
+;; These tests verify the actual :safe predicate registered on the
+;; defcustoms via safe-local-variable-p, NOT a local lambda copy.
+;; safe-local-variable-p traverses the custom widget metadata to find
+;; the :safe predicate.  The guard logic in darwin-run-cycle uses the
+;; same (and (integerp v) (> v 0)) pattern with fallback to the
+;; defcustom default (7200 for timeout, 40 for max-turns).
+
+(ert-deftest test-darwin-cycle-timeout-safe-predicate ()
+  "darwin-cycle-timeout :safe predicate should reject nil/0/-1, accept positive integers.
+Tests the actual registered :safe predicate via safe-local-variable-p,
+not a local lambda copy.  The guard in darwin-run-cycle uses the same
+pattern and falls back to 7200 (the defcustom default) when the guard fails."
+  ;; Verify the actual :safe predicate rejects bad values
+  (should-not (safe-local-variable-p 'darwin-cycle-timeout nil))
+  (should-not (safe-local-variable-p 'darwin-cycle-timeout 0))
+  (should-not (safe-local-variable-p 'darwin-cycle-timeout -1))
+  (should-not (safe-local-variable-p 'darwin-cycle-timeout "foo"))
+  ;; Verify the actual :safe predicate accepts valid values
+  (should (safe-local-variable-p 'darwin-cycle-timeout 7200))
+  (should (safe-local-variable-p 'darwin-cycle-timeout 3600))
+  ;; Verify the defcustom default matches the guard fallback value
+  (should (eq (default-value 'darwin-cycle-timeout) 7200)))
+
+(ert-deftest test-darwin-cycle-max-turns-safe-predicate ()
+  "darwin-cycle-max-turns :safe predicate should reject nil/0/-1, accept positive integers.
+Tests the actual registered :safe predicate via safe-local-variable-p.
+The guard in the continuation hook uses the same pattern and falls back
+to 40 (the defcustom default) when the guard fails."
+  ;; Verify the actual :safe predicate rejects bad values
+  (should-not (safe-local-variable-p 'darwin-cycle-max-turns nil))
+  (should-not (safe-local-variable-p 'darwin-cycle-max-turns 0))
+  (should-not (safe-local-variable-p 'darwin-cycle-max-turns -1))
+  (should-not (safe-local-variable-p 'darwin-cycle-max-turns "foo"))
+  ;; Verify the actual :safe predicate accepts valid values
+  (should (safe-local-variable-p 'darwin-cycle-max-turns 40))
+  (should (safe-local-variable-p 'darwin-cycle-max-turns 100))
+  ;; Verify the defcustom default matches the guard fallback value
+  (should (eq (default-value 'darwin-cycle-max-turns) 40)))
+
 (provide 'test-darwin-cycle)
 ;;; test-darwin-cycle.el ends here
