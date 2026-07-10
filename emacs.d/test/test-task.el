@@ -17,7 +17,7 @@
 (defun test-task--setup ()
   "Create a temporary agents.d structure with test files."
   (setq test-task--tmpdir (make-temp-file "test-task-" :dir-flag))
-  (let ((agents-dir (expand-file-name "agents.d" test-task--tmpdir)))
+  (let ((agents-dir (expand-file-name "agents.d/agents" test-task--tmpdir)))
     (make-directory agents-dir t)
     ;; Create a test agent with TODO.md, IDEAS.md, and HISTORY.log
     (let ((agent-dir (expand-file-name "testagent" agents-dir)))
@@ -73,7 +73,7 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
 (ert-deftest test-task-read-tasks-only-todo ()
   "read_tasks should work when only TODO.md exists."
   (with-task-fixture
-    (let* ((agent-dir (expand-file-name "agents.d/testagent" test-task--tmpdir)))
+    (let* ((agent-dir (expand-file-name "agents.d/agents/testagent" test-task--tmpdir)))
       (delete-file (expand-file-name "IDEAS.md" agent-dir))
       (let ((result (my-gptel-tool-read-tasks)))
         (should (stringp result))
@@ -174,7 +174,7 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
   (with-task-fixture
     (let (my-gptel--current-agent-name
           (my-gptel--current-agent-file
-           (expand-file-name "agents.d/testagent/prompt.org" test-task--tmpdir)))
+           (expand-file-name "agents.d/agents/testagent/prompt.org" test-task--tmpdir)))
       (let ((result (my-gptel--get-agent-dir)))
         (should (stringp result))
         (should (string-match-p "testagent" result))))))
@@ -187,6 +187,8 @@ resolves to agents.d/passwd -- not a traversal.  Verify no '..' in result."
   (with-task-fixture
     (let (my-gptel--current-agent-name
           (my-gptel--current-agent-file "../../etc/passwd/prompt.org"))
+      ;; The fallback derives 'passwd' from the file path, which resolves
+      ;; to agents.d/agents/passwd -- not a traversal.  Verify no '..' in result.
       (let ((result (my-gptel--get-agent-dir)))
         (should (stringp result))
         (should (string-match-p "agents\\.d" result))
@@ -199,7 +201,7 @@ where the regex (requires at least one char) rejects it."
   (with-task-fixture
     (let ((my-gptel--current-agent-name "")
           (my-gptel--current-agent-file
-           (expand-file-name "agents.d/testagent/prompt.org" test-task--tmpdir)))
+           (expand-file-name "agents.d/agents/testagent/prompt.org" test-task--tmpdir)))
       (should-error (my-gptel--get-agent-dir)))))
 
 ;;; --- valid-agent-name-p and validate-agent-name tests ---

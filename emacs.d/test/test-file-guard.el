@@ -42,33 +42,33 @@
   "write_file should be blocked for any agent's prompt.org."
   (with-fg-fixture
     (should (stringp (my-gptel--guard-check-write
-                      "/root/.emacs.d/agents.d/darwin/prompt.org")))
+                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))
     (should (stringp (my-gptel--guard-check-write
-                      "/root/.emacs.d/agents.d/reviewer/prompt.org")))
+                      "/root/.emacs.d/agents.d/agents/reviewer/prompt.org")))
     (should (stringp (my-gptel--guard-check-write
-                      "/root/.emacs.d/agents.d/mccarthy/prompt.org")))))
+                      "/root/.emacs.d/agents.d/agents/mccarthy/prompt.org")))))
 
 (ert-deftest test-fg-replace-blocks-agent-prompt ()
   "replace_in_file should be blocked for any agent's prompt.org."
   (with-fg-fixture
     (should (stringp (my-gptel--guard-check-replace
-                      "/root/.emacs.d/agents.d/darwin/prompt.org")))))
+                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))))
 
 (ert-deftest test-fg-append-blocks-agent-prompt ()
   "append_file should be blocked for any agent's prompt.org."
   (with-fg-fixture
     (should (stringp (my-gptel--guard-check-append
-                      "/root/.emacs.d/agents.d/darwin/prompt.org")))))
+                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))))
 
 (ert-deftest test-fg-prompt-blocked-even-with-self-mod ()
   "Agent prompt files should remain protected even with self-modification on."
   (with-fg-self-mod
     (should (stringp (my-gptel--guard-check-write
-                      "/root/.emacs.d/agents.d/darwin/prompt.org")))
+                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))
     (should (stringp (my-gptel--guard-check-replace
-                      "/root/.emacs.d/agents.d/darwin/prompt.org")))
+                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))
     (should (stringp (my-gptel--guard-check-append
-                      "/root/.emacs.d/agents.d/darwin/prompt.org")))))
+                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))))
 
 ;;; --- Always-protected paths: base_context.org ---
 
@@ -106,41 +106,41 @@
   "write_file should be blocked for HISTORY.log files."
   (with-fg-fixture
     (should (stringp (my-gptel--guard-check-write
-                      "/root/.emacs.d/agents.d/darwin/HISTORY.log")))
+                      "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log")))
     (should (stringp (my-gptel--guard-check-write
-                      "/root/.emacs.d/agents.d/reviewer/HISTORY.log")))))
+                      "/root/.emacs.d/agents.d/agents/reviewer/HISTORY.log")))))
 
 (ert-deftest test-fg-replace-blocks-history-log ()
   "replace_in_file should be blocked for HISTORY.log files."
   (with-fg-fixture
     (should (stringp (my-gptel--guard-check-replace
-                      "/root/.emacs.d/agents.d/darwin/HISTORY.log")))))
+                      "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log")))))
 
 (ert-deftest test-fg-append-allows-history-log ()
   "append_file should be ALLOWED for HISTORY.log files (append is intended use)."
   (with-fg-fixture
     (should-not (my-gptel--guard-check-append
-                 "/root/.emacs.d/agents.d/darwin/HISTORY.log"))
+                 "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log"))
     (should-not (my-gptel--guard-check-append
-                 "/root/.emacs.d/agents.d/reviewer/HISTORY.log"))))
+                 "/root/.emacs.d/agents.d/agents/reviewer/HISTORY.log"))))
 
 (ert-deftest test-fg-append-allows-history-log-with-self-mod ()
   "append_file should still allow HISTORY.log with self-modification on."
   (with-fg-self-mod
     (should-not (my-gptel--guard-check-append
-                 "/root/.emacs.d/agents.d/darwin/HISTORY.log"))))
+                 "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log"))))
 
 (ert-deftest test-fg-write-blocks-history-log-with-self-mod ()
   "write_file should still block HISTORY.log with self-modification on."
   (with-fg-self-mod
     (should (stringp (my-gptel--guard-check-write
-                      "/root/.emacs.d/agents.d/darwin/HISTORY.log")))))
+                      "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log")))))
 
 (ert-deftest test-fg-replace-blocks-history-log-with-self-mod ()
   "replace_in_file should still block HISTORY.log with self-modification on."
   (with-fg-self-mod
     (should (stringp (my-gptel--guard-check-replace
-                      "/root/.emacs.d/agents.d/darwin/HISTORY.log")))))
+                      "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log")))))
 
 ;;; --- Conditionally-protected paths: init.el ---
 
@@ -369,17 +369,17 @@
   "Guard should match prompt.org under any agents.d directory."
   (with-fg-fixture
     (should (stringp (my-gptel--guard-check-write
-                      "/some/path/agents.d/custom-agent/prompt.org")))))
+                      "/some/path/agents.d/agents/custom-agent/prompt.org")))))
 
 (ert-deftest test-fg-write-allows-non-prompt-org ()
   "Guard should NOT block .org files that are not prompt.org or base_context.org."
   (with-fg-fixture
     (should-not (my-gptel--guard-check-write
-                 "/root/.emacs.d/agents.d/darwin/MEMORIES.md"))
+                 "/root/.emacs.d/agents.d/agents/darwin/MEMORIES.md"))
     (should-not (my-gptel--guard-check-write
-                 "/root/.emacs.d/agents.d/darwin/TODO.md"))
+                 "/root/.emacs.d/agents.d/agents/darwin/TODO.md"))
     (should-not (my-gptel--guard-check-write
-                 "/root/.emacs.d/agents.d/darwin/IDEAS.md"))))
+                 "/root/.emacs.d/agents.d/agents/darwin/IDEAS.md"))))
 
 (ert-deftest test-fg-write-blocks-history-log-anywhere ()
   "Guard should match HISTORY.log regardless of parent directory path."
@@ -398,7 +398,7 @@
   "Guard check returns should include human-readable reason strings."
   (with-fg-fixture
     (let ((reason (my-gptel--guard-check-write
-                   "/root/.emacs.d/agents.d/darwin/prompt.org")))
+                   "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))
       (should (stringp reason))
       (should (> (length reason) 10))
       (should (string-match-p "prompt" reason)))
@@ -411,7 +411,7 @@
       (should (stringp reason))
       (should (string-match-p "context\\|base_context" reason)))
     (let ((reason (my-gptel--guard-check-write
-                   "/root/.emacs.d/agents.d/darwin/HISTORY.log")))
+                   "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log")))
       (should (stringp reason))
       (should (string-match-p "HISTORY\\|history" reason)))
     (let ((reason (my-gptel--guard-check-write

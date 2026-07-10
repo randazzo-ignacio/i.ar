@@ -19,7 +19,7 @@
   "Create a temporary agents.d structure with test agents."
   (setq test-agent--tmpdir (make-temp-file "test-agent-" :dir-flag))
   ;; Create agents.d directory
-  (let ((agents-dir (expand-file-name "agents.d" test-agent--tmpdir)))
+  (let ((agents-dir (expand-file-name "agents.d/agents" test-agent--tmpdir)))
     (make-directory agents-dir t)
     ;; Create base_context.org
     (with-temp-file (expand-file-name "base_context.org" agents-dir)
@@ -66,7 +66,7 @@ Temporarily binds `user-emacs-directory' to the temp dir."
 (ert-deftest test-agent-read-profile-basic ()
   "my-gptel-read-agent-profile should read an org file and return its content."
   (with-agent-fixture
-    (let* ((alpha-path (expand-file-name "agents.d/alpha/prompt.org"
+    (let* ((alpha-path (expand-file-name "agents.d/agents/alpha/prompt.org"
                                          test-agent--tmpdir))
            (profile (my-gptel-read-agent-profile alpha-path)))
       (should (stringp profile))
@@ -76,7 +76,7 @@ Temporarily binds `user-emacs-directory' to the temp dir."
 (ert-deftest test-agent-read-profile-expands-includes ()
   "my-gptel-read-agent-profile should expand #+INCLUDE directives."
   (with-agent-fixture
-    (let* ((alpha-path (expand-file-name "agents.d/alpha/prompt.org"
+    (let* ((alpha-path (expand-file-name "agents.d/agents/alpha/prompt.org"
                                          test-agent--tmpdir))
            (profile (my-gptel-read-agent-profile alpha-path)))
       ;; Should contain content from base_context.org
@@ -91,7 +91,7 @@ Temporarily binds `user-emacs-directory' to the temp dir."
 (ert-deftest test-agent-read-profile-no-includes ()
   "my-gptel-read-agent-profile should work with files that have no includes."
   (with-agent-fixture
-    (let* ((beta-path (expand-file-name "agents.d/beta/prompt.org"
+    (let* ((beta-path (expand-file-name "agents.d/agents/beta/prompt.org"
                                         test-agent--tmpdir))
            (profile (my-gptel-read-agent-profile beta-path)))
       (should (stringp profile))
@@ -147,7 +147,7 @@ Verifies both the error type and the error message content."
   (let ((tmp-dir (make-temp-file "test-agent-load-" :dir-flag)))
     (unwind-protect
         (let ((user-emacs-directory tmp-dir)
-              (agents-dir (expand-file-name "agents.d" tmp-dir)))
+              (agents-dir (expand-file-name "agents.d/agents" tmp-dir)))
           (make-directory agents-dir t)
           ;; No agent directories with prompt.org -- should user-error
           (let ((err (should-error (my-gptel-load-agent) :type 'user-error)))
@@ -168,7 +168,7 @@ is missing. Verify the directory is created."
             (should (string-match-p "No agent profiles found"
                                     (error-message-string err))))
           ;; agents.d should now exist
-          (should (file-directory-p (expand-file-name "agents.d" tmp-dir))))
+          (should (file-directory-p (expand-file-name "agents.d/agents" tmp-dir))))
       (delete-directory tmp-dir t))))
 
 (ert-deftest test-agent-load-agent-discovers-agents ()
@@ -190,7 +190,7 @@ text-derived major mode."
         (should (equal my-gptel--current-agent-name "alpha"))
         (should (stringp my-gptel--current-agent-file))
         (should (string-prefix-p
-                 (expand-file-name "agents.d" test-agent--tmpdir)
+                 (expand-file-name "agents.d/agents" test-agent--tmpdir)
                  my-gptel--current-agent-file))
         (should (string-match-p "prompt\\.org" my-gptel--current-agent-file))
         (should (stringp gptel-system-prompt))
@@ -235,7 +235,7 @@ files with extensions, and directories with special characters."
   (let ((tmp-dir (make-temp-file "test-agent-filter-" :dir-flag)))
     (unwind-protect
         (let* ((user-emacs-directory tmp-dir)
-               (agents-dir (expand-file-name "agents.d" tmp-dir)))
+               (agents-dir (expand-file-name "agents.d/agents" tmp-dir)))
           (make-directory agents-dir t)
           ;; Create a valid agent
           (make-directory (expand-file-name "valid-agent" agents-dir) t)

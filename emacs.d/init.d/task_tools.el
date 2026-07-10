@@ -40,7 +40,7 @@ declared `safe-local-variable' with a validating predicate
 (`my-gptel--valid-agent-name-p'), so tampered values are filtered
 at the source.  This function provides defense-in-depth in case the
 predicate is bypassed or the variable is set by other means."
-  (let* ((agent-dir (expand-file-name "agents.d" user-emacs-directory))
+  (let* ((agent-dir (expand-file-name "agents.d/agents" user-emacs-directory))
          (agent-name
           (if (and (boundp 'my-gptel--current-agent-name)
                    my-gptel--current-agent-name)
@@ -104,7 +104,7 @@ Returns their contents concatenated, or a message if neither exists."
 If AGENT-NAME is provided, reads that agent's HISTORY.log only.
 If omitted, merges all per-agent HISTORY.log files sorted by timestamp."
   (condition-case err
-      (let* ((agents-dir (expand-file-name "agents.d" user-emacs-directory)))
+      (let* ((agents-dir (expand-file-name "agents.d/agents" user-emacs-directory)))
         (if (and agent-name (stringp agent-name) (string-match-p "\\S-" agent-name))
             ;; Single agent history
             (progn

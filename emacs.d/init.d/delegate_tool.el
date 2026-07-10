@@ -83,7 +83,7 @@ hallucinated tool names."
   "Load an agent profile by name from agents.d/<name>/prompt.org.
 Returns the profile string or nil if not found."
   (my-gptel--validate-agent-name agent-name)
-  (let* ((agent-dir (expand-file-name "agents.d" user-emacs-directory))
+  (let* ((agent-dir (expand-file-name "agents.d/agents" user-emacs-directory))
          (prompt-path (expand-file-name (format "%s/prompt.org" agent-name) agent-dir)))
     (unless (string-prefix-p agent-dir (file-truename prompt-path))
       (error "Path traversal attempt blocked for agent: '%s'" agent-name))
@@ -410,7 +410,7 @@ so the user can watch progress in real time."
  (gptel-make-tool
   :name "delegate"
   :description "Spawn a sub-agent with a specific profile to handle a sub-task. Returns the sub-agent's final response. Use for complex tasks requiring specialized expertise or parallel processing."
-  :args (list '(:name "agent" :type "string" :description "Profile name (e.g., 'coder', 'reviewer', 'researcher', 'mccarthy'). Must exist as agents.d/<name>/prompt.org")
+  :args (list '(:name "agent" :type "string" :description "Profile name (e.g., 'coder', 'reviewer', 'researcher', 'mccarthy'). Must exist as agents.d/agents/<name>/prompt.org")
               '(:name "task" :type "string" :description "What you want the sub-agent to accomplish. Be specific and detailed.")
               '(:name "context" :type "string" :description "Relevant context from the current conversation to pass along. Optional but recommended.")
               '(:name "timeout" :type "integer" :description "Maximum seconds to wait for delegate response. Default 600." :optional t))

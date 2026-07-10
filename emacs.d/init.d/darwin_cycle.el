@@ -85,8 +85,8 @@ notification.  Must be a non-empty string to trigger a send.")
 (defconst darwin-cycle-prompt
   "You are waking up for a new cycle. Follow your cycle protocol:
 
-1. Read your MEMORIES.md (use read_file on /root/.emacs.d/agents.d/darwin/MEMORIES.md)
-2. Read your HISTORY.log (use read_file on /root/.emacs.d/agents.d/darwin/HISTORY.log)
+1. Read your MEMORIES.md (use read_file on /root/.emacs.d/agents.d/agents/darwin/MEMORIES.md)
+2. Read your HISTORY.log (use read_file on /root/.emacs.d/agents.d/agents/darwin/HISTORY.log)
 3. Look at the codebase. Pick one thing that interests you.
 4. Make one change. Small. Deliberate.
 5. Delegate to the reviewer agent for code review. Fix issues if any.
@@ -96,7 +96,7 @@ notification.  Must be a non-empty string to trigger a send.")
 7. If tests fail, revert your change with git: execute_code_local with 'cd /root/i.ar && git checkout -- .'
 8. If tests pass, commit: execute_code_local with 'cd /root/i.ar && git add -A && git commit -m \"darwin: <description>\"'
    You MUST commit. Do not skip this step. If git fails with \"not a git repository\", run: cd /root/i.ar && git init first, then retry.
-9. Log to your HISTORY.log using append_file on /root/.emacs.d/agents.d/darwin/HISTORY.log.
+9. Log to your HISTORY.log using append_file on /root/.emacs.d/agents.d/agents/darwin/HISTORY.log.
    You MUST write to your history. Format: [TIMESTAMP] cycle: <what you did and why>
 10. Update your MEMORIES.md with what you learned (use write_file or replace_in_file).
     You MUST update your memories. Add what you learned this cycle.
@@ -188,12 +188,12 @@ truthy in Emacs Lisp but would send an empty Telegram message."
 ;;; --- Cycle execution ---
 
 (defun darwin--load-profile ()
-  "Load darwin's agent profile from agents.d/darwin/prompt.org.
+  "Load darwin's agent profile from agents.d/agents/darwin/prompt.org.
 Uses the shared `my-gptel--load-agent-profile' from delegate_tool.el,
 which validates the agent name, checks for path traversal, and
 expands #+INCLUDE directives."
   (or (my-gptel--load-agent-profile "darwin")
-      (error "Darwin profile not found in agents.d/darwin/prompt.org")))
+      (error "Darwin profile not found in agents.d/agents/darwin/prompt.org")))
 
 (defun darwin--cycle-complete-p (buf &optional start end)
   "Check if the cycle is truly complete by scanning BUF for completion markers.
@@ -272,7 +272,7 @@ until it either completes all steps or reaches the turn limit."
       (setq-local gptel-stream t)
       (setq-local my-gptel--current-agent-name "darwin")
       (setq-local my-gptel--current-agent-file
-                  (expand-file-name "agents.d/darwin/prompt.org" user-emacs-directory))
+                  (expand-file-name "agents.d/agents/darwin/prompt.org" user-emacs-directory))
       ;; Set self-modification mode so darwin can edit init.d/*.el.
       ;; Use setq-local (not setq) so only THIS buffer has self-modification
       ;; enabled.  Delegate buffers (e.g., reviewer) inherit the global nil

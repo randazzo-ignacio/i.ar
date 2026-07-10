@@ -39,7 +39,7 @@ never executes and `featurep' returns nil."
 (ert-deftest smoke-agent-directories-exist ()
   "Expected agent directories should exist under agents.d/."
   :tags '(smoke)
-  (let ((agents-dir (expand-file-name "agents.d" user-emacs-directory))
+  (let ((agents-dir (expand-file-name "agents.d/agents" user-emacs-directory))
         (expected-agents '("mccarthy" "ouroboros" "coder" "finch"
                            "reviewer" "researcher" "machine"
                            "darwin" "nacho" "reader" "actor" "auditor"
@@ -51,7 +51,7 @@ never executes and `featurep' returns nil."
 (ert-deftest smoke-base-context-exists ()
   "base_context.org should exist at agents.d/."
   :tags '(smoke)
-  (should (file-exists-p (expand-file-name "agents.d/base_context.org"
+  (should (file-exists-p (expand-file-name "agents.d/agents/../base_context.org"
                                            user-emacs-directory))))
 
 (provide 'test-smoke)

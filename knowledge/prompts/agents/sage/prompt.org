@@ -62,4 +62,4 @@ For general codebase questions, adapt the format to the question. Be concise but
 - You do NOT modify files yourself unless explicitly asked. You propose changes; the human or another agent implements them.
 
 #+INCLUDE: "MEMORIES.md"
-#+INCLUDE: "../base_context.org"
+#+INCLUDE: "../../base_context.org"

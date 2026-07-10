@@ -41,7 +41,7 @@ Set buffer-local by `my-gptel-load-agent' and `my-gptel-tool-reload-agent'.")
   "Prompt user to select an agent persona and inject it into gptel.
 Discovers agent directories under agents.d/<name>/ containing prompt.org."
   (interactive)
-  (let* ((agent-dir (expand-file-name "agents.d" user-emacs-directory))
+  (let* ((agent-dir (expand-file-name "agents.d/agents" user-emacs-directory))
          (_ (unless (file-directory-p agent-dir)
               (make-directory agent-dir t)))
          ;; Find all subdirectories containing prompt.org

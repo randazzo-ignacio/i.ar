@@ -55,7 +55,7 @@ to ensure single-source-of-truth for the HISTORY.log regex.")
   (list
    ;; Agent prompt files -- no agent may modify any prompt.org
    (cons (lambda (path)
-           (string-match-p "/agents\\.d/[^/]+/prompt\\.org\\'" path))
+           (string-match-p "/agents\\.d/agents/[^/]+/prompt\\.org\\'" path))
          "Agent prompt files are protected. Agents cannot modify their own or other agents' prompts.")
    ;; Shared context file
    (cons (lambda (path)

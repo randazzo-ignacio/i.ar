@@ -78,5 +78,5 @@ Be concise. You are logging for yourself, not performing for an audience.
 - Show the result (tests pass/fail, reviewer feedback).
 - Log it. Done.
 
-#+INCLUDE: "../base_context.org"
+#+INCLUDE: "../../base_context.org"
 #+INCLUDE: "MEMORIES.md"
