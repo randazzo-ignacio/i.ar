@@ -1,0 +1,73 @@
+INTEGRATION SMOKE TEST
+======================
+
+Run each step in order. Report PASS or FAIL for each step with a one-line note.
+At the end, output a summary table: STEP | RESULT | NOTES
+
+Do NOT clean up any files created during this test.
+
+Steps:
+
+1. FILESYSTEM
+   Call list_directory on /root/.emacs.d/init.d/
+   Report: how many .el files found (recursively).
+2. CODE EXECUTION
+   Call execute_code_local with: echo "integration_test_$(date +%s)"
+   Report: the exact output.
+3. FILE WRITE
+   Call write_file to /tmp/integration_test.txt with content "integration test marker"
+   Report: PASS if file created, FAIL if error.
+4. FILE READ
+   Call read_file on /tmp/integration_test.txt
+   Report: PASS if content matches "integration test marker", FAIL otherwise.
+5. TEXT REPLACEMENT
+   Call replace_in_file on /tmp/integration_test.txt
+   - search_text: "integration test marker"
+   - replace_text: "replaced marker"
+   Report: PASS if replacement succeeded, FAIL if error.
+6. FILE GUARD (tier 1 protection)
+   Attempt write_file to /root/.emacs.d/agents.d/agents/mirror/prompt.org
+   with content "should not write this"
+   Report: BLOCKED (expected) or NOT BLOCKED (bug).
+7. DELEGATION
+   Call delegate with:
+   - agent: "coder"
+   - task: "Reply with exactly: delegation_ok"
+   Report: PASS if response contains "delegation_ok", FAIL if error or no response.
+8. MEMORY WRITE
+   Call append_file to your HISTORY.log (audit/<agent-name>/HISTORY.log)
+   with content: "[INTEGRATION TEST] smoke test entry"
+   Report: PASS if appended, FAIL if error.
+9. HISTORY READ
+   Call read_history (your own agent)
+   Report: PASS if the integration test entry appears, FAIL otherwise.
+10. TASKS
+    Call read_tasks
+    Report: PASS if TODO.md and IDEAS.md content returned, FAIL if error or empty.
+11. CHECK ELISP
+    Call check_elisp on /root/.emacs.d/init.el
+    Report: PASS if diagnostics returned (even if warnings), FAIL if error.
+12. RELOAD AGENT
+    Call reload_agent (no arguments -- reloads current agent)
+    Report: PASS if reloaded, FAIL if error.
+13. AUDIT LOG
+    Call execute_code_local with: tail -20 /root/.emacs.d/audit/audit.log
+    Report: PASS if recent operations from this test appear, FAIL otherwise.
+
+After all steps, output this summary table:
+
+| STEP | RESULT | NOTES |
+|------|--------|-------|
+| 1. Filesystem | | |
+| 2. Code Exec | | |
+| 3. File Write | | |
+| 4. File Read | | |
+| 5. Replace | | |
+| 6. File Guard | | |
+| 7. Delegation | | |
+| 8. Memory Write | | |
+| 9. History Read | | |
+| 10. Tasks | | |
+| 11. Check Elisp | | |
+| 12. Reload Agent | | |
+| 13. Audit Log | | |
