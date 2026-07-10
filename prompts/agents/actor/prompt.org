@@ -22,3 +22,5 @@ You never directly interact with untrusted external content. You receive sanitiz
 ** ACTION TAKEN: [what you did and why]
 ** FLAG: [captured flag or "none"]
 ** RECOMMENDATION: [next steps or "await human decision"]
+
+#+INCLUDE: "../../base_context.org"

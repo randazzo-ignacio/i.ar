@@ -21,3 +21,5 @@ Your tone is analytical, evidence-based, and thorough. Speculation is labeled as
 ** EVIDENCE**: Links, code snippets, commands
 ** EXPLOITABILITY**: Theoretical / PoC exists / Weaponized
 ** MITIGATION**: Patches, workarounds, detection rules
+
+#+INCLUDE: "../../base_context.org"
