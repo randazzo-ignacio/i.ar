@@ -1,25 +1,30 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Darwin Cycle -- Headless batch entry point for autonomous self-improvement
+;;; Agent Cycle -- Headless batch entry point for autonomous agent loops
 ;;
-;; This module provides `darwin-run-cycle', a function that:
-;; 1. Creates a gptel buffer with darwin's agent profile
+;; This module provides `agent-run-cycle', a generic function that:
+;; 1. Creates a gptel buffer with the specified agent's profile
 ;; 2. Sends the cycle prompt ("Wake up. Do your thing. Stop.")
-;; 3. Waits for the full delegation chain to complete (darwin -> reviewer -> tests -> commit)
+;; 3. Waits for the full delegation chain to complete
 ;; 4. Sends a Telegram notification with cycle results
 ;; 5. Exits Emacs when done (or on timeout)
 ;;
+;; Any orchestrator agent can be run autonomously.  The agent's cycle
+;; prompt is loaded from agents.d/common/<agent>_cycle.org and the
+;; continue prompt from agents.d/common/<agent>_cycle_continue.org.
+;; If the continue prompt is not found, a generic default is used.
+;;
 ;; Usage (batch mode):
 ;;   emacs --batch -l /root/.emacs.d/init.el \
-;;         --eval '(darwin-run-cycle :timeout 7200)'
+;;         --eval '(agent-run-cycle :agent "darwin" :timeout 7200)'
 ;;
 ;; Telegram notifications require:
 ;;   DARWIN_TELEGRAM_BOT_TOKEN -- bot token from @BotFather
 ;;   DARWIN_TELEGRAM_CHAT_ID   -- your chat ID (message @userinfobot to get it)
 ;;
-;; The cycle is self-contained: darwin reads its own memories, decides what to
-;; change, delegates to reviewer, runs tests, commits, and logs.  All we do is
-;; wake it up and wait.
+;; The cycle is self-contained: the agent reads its own memories, decides
+;; what to change, delegates to reviewer, runs tests, commits, and logs.
+;; All we do is wake it up and wait.
 
 (require 'gptel)
 (require 'cl-lib)
@@ -28,6 +33,12 @@
 
 (defvar my-gptel--guard-allow-self-modification)
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar agent-cycle-timeout nil
+  "Default timeout for an agent cycle in seconds.")
+(defvar agent-cycle-max-turns nil
+  "Maximum number of LLM response turns before forcing cycle end.")
+
 (declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
 (declare-function my-gptel--block-unknown-tools "delegate_tool" (info))
 (declare-function my-gptel--load-prompt "prompt_loader" (name))
@@ -35,14 +46,14 @@
 
 ;;; --- Configuration ---
 
-(defgroup darwin nil
-  "Darwin autonomous self-improvement cycle configuration."
+(defgroup agent-cycle nil
+  "Autonomous agent cycle configuration."
   :group 'gptel)
 
-;; Parameters darwin-cycle-timeout and darwin-cycle-max-turns are defined
+;; Parameters agent-cycle-timeout and agent-cycle-max-turns are defined
 ;; in metaconfig/parameters.el (loaded early in init.el).
 
-(defcustom darwin-telegram-bot-token
+(defcustom agent-telegram-bot-token
   (or (getenv "DARWIN_TELEGRAM_BOT_TOKEN") "")
   "Telegram bot token for cycle notifications.
 Get this from @BotFather on Telegram.
@@ -53,9 +64,9 @@ prompts the user when it is set via file-local variables.  The bot
 token is a secret credential: silently accepting it from a tampered
 session file could redirect notifications to an attacker's bot."
   :type 'string
-  :group 'darwin)
+  :group 'agent-cycle)
 
-(defcustom darwin-telegram-chat-id
+(defcustom agent-telegram-chat-id
   (or (getenv "DARWIN_TELEGRAM_CHAT_ID") "")
   "Telegram chat ID to send notifications to.
 Message @userinfobot on Telegram to get your chat ID.
@@ -66,45 +77,34 @@ prompts the user when it is set via file-local variables.  The chat
 ID controls where notifications are sent: silently accepting it from
 a tampered session file could redirect notifications to an attacker."
   :type 'string
-  :group 'darwin)
+  :group 'agent-cycle)
 
-(defvar darwin-cycle-result-message nil
+(defvar agent-cycle-result-message nil
   "Message to send via Telegram when the cycle ends.
 Set this before killing Emacs.  Nil or empty string means no
 notification.  Must be a non-empty string to trigger a send.")
 
-(defconst darwin-cycle-prompt
-  (my-gptel--load-prompt "darwin_cycle")
-  "The prompt sent to darwin at the start of each cycle.
-Loaded from agents.d/common/darwin_cycle.org")
-
-(defconst darwin-cycle-continue-prompt
-  (my-gptel--load-prompt "darwin_cycle_continue")
-  "Prompt sent to darwin when it produces a text-only response (no tool calls)
-to nudge it to continue the cycle.
-Loaded from agents.d/common/darwin_cycle_continue.org")
+(defconst agent-cycle-default-continue-prompt
+  "Continue your cycle. You are not done yet. Pick up where you left off and complete all remaining steps. When all steps are complete, end with the exact text CYCLE_COMPLETE on its own line."
+  "Fallback continue prompt when no agent-specific one is found.")
 
 ;;; --- Telegram notification ---
 
-(defun darwin--notify-telegram (message)
+(defun agent--notify-telegram (message)
   "Send MESSAGE via Telegram bot API.
-Requires `darwin-telegram-bot-token' and `darwin-telegram-chat-id' to be set.
+Requires `agent-telegram-bot-token' and `agent-telegram-chat-id' to be set.
 Silently skips if either is empty.  Logs success or failure."
-  (let ((token darwin-telegram-bot-token)
-        (chat-id darwin-telegram-chat-id))
+  (let ((token agent-telegram-bot-token)
+        (chat-id agent-telegram-chat-id))
     (if (or (string-empty-p token)
             (string-empty-p chat-id))
-        (message "[darwin] Telegram notification skipped (no token/chat-id configured)")
+        (message "[agent] Telegram notification skipped (no token/chat-id configured)")
       (let ((url (format "https://api.telegram.org/bot%s/sendMessage" token))
-            ;; Use json-serialize (not json-encode) to avoid dependency on
-            ;; global json-encode-object-type.  Consistent with the pattern
-            ;; used in my-gptel--memory-build-payload.
-            ;; Note: if boolean fields are added, pass :false-object :json-false.
             (payload (json-serialize
                       `(:chat_id ,chat-id
                         :text ,message
                         :parse_mode "Markdown"))))
-        (message "[darwin] Sending Telegram notification...")
+        (message "[agent] Sending Telegram notification...")
         (let ((result (condition-case err
                           (with-temp-buffer
                             (call-process "curl" nil t nil
@@ -115,16 +115,10 @@ Silently skips if either is empty.  Logs success or failure."
                                            url)
                             (buffer-string))
                         (error
-                         (message "[darwin] Telegram notification FAILED: curl error: %s"
+                         (message "[agent] Telegram notification FAILED: curl error: %s"
                                   (error-message-string err))
                          nil))))
-          ;; Parse the JSON response to check the :ok field rather than
-          ;; using substring matching.  This is more robust: a substring
-          ;; check like "\"ok\":true" could false-positive if the literal
-          ;; string appears inside an error message, and would false-negative
-          ;; if the API returns whitespace like "\"ok\": true".
           (if (null result)
-              ;; curl error already logged by condition-case above
               nil
             (let ((ok nil)
                   (parse-error nil))
@@ -138,34 +132,50 @@ Silently skips if either is empty.  Logs success or failure."
                 (error
                  (setq parse-error (error-message-string err))))
               (if ok
-                  (message "[darwin] Telegram notification sent successfully")
+                  (message "[agent] Telegram notification sent successfully")
                 (if parse-error
-                    (message "[darwin] Telegram notification FAILED (JSON parse error: %s): %.500s"
+                    (message "[agent] Telegram notification FAILED (JSON parse error: %s): %.500s"
                              parse-error result)
-                  (message "[darwin] Telegram notification FAILED: %.500s" result))))))))))
+                  (message "[agent] Telegram notification FAILED: %.500s" result))))))))))
 
-(defun darwin--notify-on-exit ()
-  "Send Telegram notification if `darwin-cycle-result-message' is set.
+(defun agent--notify-on-exit ()
+  "Send Telegram notification if `agent-cycle-result-message' is set.
 This is added to `kill-emacs-hook' so it fires automatically on exit.
 Only sends when the message is a non-empty string -- empty strings are
 truthy in Emacs Lisp but would send an empty Telegram message."
-  (when (and (stringp darwin-cycle-result-message)
-             (not (string-empty-p darwin-cycle-result-message)))
-    (darwin--notify-telegram darwin-cycle-result-message)))
+  (when (and (stringp agent-cycle-result-message)
+             (not (string-empty-p agent-cycle-result-message)))
+    (agent--notify-telegram agent-cycle-result-message)))
 
-(add-hook 'kill-emacs-hook #'darwin--notify-on-exit)
+(add-hook 'kill-emacs-hook #'agent--notify-on-exit)
 
 ;;; --- Cycle execution ---
 
-(defun darwin--load-profile ()
-  "Load darwin's agent profile from agents.d/agents/darwin/prompt.org.
+(defun agent--load-profile (agent-name)
+  "Load an agent profile from agents.d/agents/<agent-name>/prompt.org.
 Uses the shared `my-gptel--load-agent-profile' from delegate_tool.el,
 which validates the agent name, checks for path traversal, and
 expands #+INCLUDE directives."
-  (or (my-gptel--load-agent-profile "darwin")
-      (error "Darwin profile not found in agents.d/agents/darwin/prompt.org")))
+  (or (my-gptel--load-agent-profile agent-name)
+      (error "Agent profile '%s' not found in agents.d/agents/%s/prompt.org"
+             agent-name agent-name)))
 
-(defun darwin--cycle-complete-p (buf &optional start end)
+(defun agent--load-cycle-prompt (agent-name)
+  "Load the cycle prompt for AGENT-NAME from agents.d/common/<agent>_cycle.org.
+Signals an error if not found -- every autonomous agent must have a cycle prompt."
+  (my-gptel--load-prompt (format "%s_cycle" agent-name)))
+
+(defun agent--load-continue-prompt (agent-name)
+  "Load the continue prompt for AGENT-NAME from agents.d/common/<agent>_cycle_continue.org.
+Returns a generic default if the agent-specific continue prompt is not found."
+  (let ((name (format "%s_cycle_continue" agent-name)))
+    (condition-case nil
+        (my-gptel--load-prompt name)
+      (error
+       (message "[agent] No continue prompt '%s', using default" name)
+       agent-cycle-default-continue-prompt))))
+
+(defun agent--cycle-complete-p (buf &optional start end)
   "Check if the cycle is truly complete by scanning BUF for completion markers.
 Looks for a completion phrase and evidence of history logging.
 
@@ -187,31 +197,24 @@ args-out-of-range errors from stale positions."
                        (min (max start (point-min)) (point-max))
                        (min (max end (point-min)) (point-max)))
                     (buffer-substring-no-properties (point-min) (point-max)))))
-        ;; Check for structured sentinel first (unambiguous, no HISTORY needed).
-        ;; The sentinel must appear on its own line (line-anchored) to avoid
-        ;; matching the substring inside the prompt text or tool output.
-        ;; Case-sensitive: the prompt asks for "exact text CYCLE_COMPLETE".
         (or (and (let ((case-fold-search nil))
                    (string-match-p "\\(^\\|\n\\)CYCLE_COMPLETE\\(\n\\|\\'\\)" text))
                  t)
-            ;; Natural language completion: requires both a completion phrase
-            ;; and a HISTORY reference (two-part check for reliability).
-            ;; case-fold-search is bound to t for deterministic matching
-            ;; regardless of buffer-local settings.
             (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished \\(?:[a-z]+ \\)\\{0,2\\}cycle\\>\\|cycle is done\\)" text)
                  (string-match-p "HISTORY" text)
                  t))))))
 
-(defun darwin-run-cycle (&rest args)
-  "Run one darwin cycle in batch mode.
+(defun agent-run-cycle (&rest args)
+  "Run one agent cycle in batch mode.
 Keywords args:
-  :timeout SECONDS -- override darwin-cycle-timeout
-  :prompt STRING   -- override darwin-cycle-prompt
-  :knowledge LABEL -- knowledge directory label to load (default: \"iar/\")
-                     Can be a single label string or a list of labels.
-                     Each label must match a subdirectory of the knowledge dir.
+  :agent NAME       -- agent profile name (default: \"darwin\")
+  :timeout SECONDS -- override agent-cycle-timeout
+  :prompt STRING    -- override the cycle prompt
+  :knowledge LABEL  -- knowledge directory label(s) to load (default: \"iar/\")
+                      Can be a single label string or a list of labels.
+  :self-modification BOOL -- enable self-modification in cycle buffer (default: t)
 
-Creates a gptel buffer with darwin's profile, sends the cycle prompt,
+Creates a gptel buffer with the agent's profile, sends the cycle prompt,
 and waits for completion.  Sends a Telegram notification and exits Emacs
 when the cycle is done or on timeout.
 
@@ -219,50 +222,47 @@ The cycle uses a continuation mechanism: when the model produces a
 text-only response (no tool calls), it is re-prompted to continue
 until it either completes all steps or reaches the turn limit."
   (interactive)
-  (let* ((raw-timeout (or (plist-get args :timeout) darwin-cycle-timeout))
-         ;; Defense-in-depth: :safe rejects non-positive values at the
-         ;; file-local-variable level, but a direct setq bypasses it.
-         ;; nil causes run-with-timer to signal wrong-type-argument;
-         ;; 0 or negative causes immediate timeout.  Fall back to 7200.
+  (let* ((agent-name (or (plist-get args :agent) "darwin"))
+         (raw-timeout (or (plist-get args :timeout) agent-cycle-timeout))
          (timeout (if (and (integerp raw-timeout) (> raw-timeout 0))
                       raw-timeout
                     7200))
-         (prompt (or (plist-get args :prompt) darwin-cycle-prompt))
-         (profile (darwin--load-profile))
+         (prompt (or (plist-get args :prompt)
+                     (agent--load-cycle-prompt agent-name)))
+         (continue-prompt (agent--load-continue-prompt agent-name))
+         (profile (agent--load-profile agent-name))
          (knowledge-labels (let ((k (plist-get args :knowledge)))
                              (cond
                               ((null k) '("iar/"))
                               ((stringp k) (list k))
                               ((listp k) k)
                               (t '("iar/")))))
-         (cycle-buf (get-buffer-create "*darwin-cycle*"))
+         (self-mod (let ((sm (plist-get args :self-modification)))
+                     (if (null sm) t sm)))
+         (cycle-buf (get-buffer-create (format "*%s-cycle*" agent-name)))
          (completed nil)
          (exit-code 0)
          (cycle-start (current-time))
          (tool-call-count 0)
          (turn-count 0)
          (continuation-pending nil))
-    (message "[darwin] Starting cycle with %ds timeout" timeout)
+    (message "[%s] Starting cycle with %ds timeout" agent-name timeout)
     (with-current-buffer cycle-buf
       (text-mode)
       (gptel-mode 1)
       (setq-local gptel-system-prompt profile)
       (setq-local gptel-confirm-tool-calls nil)
       (setq-local gptel-stream t)
-      (setq-local my-gptel--current-agent-name "darwin")
+      (setq-local my-gptel--current-agent-name agent-name)
       (setq-local my-gptel--current-agent-file
-                  (expand-file-name "agents.d/agents/darwin/prompt.org" user-emacs-directory))
-      ;; Set self-modification mode so darwin can edit init.d/**/*.el.
+                  (expand-file-name (format "agents.d/agents/%s/prompt.org" agent-name)
+                                    user-emacs-directory))
+      ;; Set self-modification mode so the agent can edit init.d/**/*.el.
       ;; Use setq-local (not setq) so only THIS buffer has self-modification
-      ;; enabled.  Delegate buffers (e.g., reviewer) inherit the global nil
-      ;; value and cannot modify init.d/**/*.el.  The global value remains nil,
-      ;; so future non-darwin sessions are also protected.
-      (setq-local my-gptel--guard-allow-self-modification t)
+      ;; enabled.  Delegate buffers inherit the global nil value.
+      (setq-local my-gptel--guard-allow-self-modification self-mod)
 
       ;; Load knowledge bases into the cycle buffer's system prompt.
-      ;; This gives darwin the same documentation context that interactive
-      ;; agents get via C-c k.  Default is "iar/" but can be overridden via
-      ;; :knowledge keyword (string or list of strings).
       (dolist (label knowledge-labels)
         (my-gptel-load-knowledge-dir label))
 
@@ -273,8 +273,8 @@ until it either completes all steps or reaches the turn limit."
                   (let ((name (plist-get info :name))
                         (args (plist-get info :args))
                         (result (plist-get info :result)))
-                    (message "[darwin] Tool call #%d: %s args=%.100s result=%.200s"
-                             tool-call-count name
+                    (message "[%s] Tool call #%d: %s args=%.100s result=%.200s"
+                             agent-name tool-call-count name
                              (prin1-to-string args)
                              (if (stringp result) result (prin1-to-string result)))))
                 nil t)
@@ -287,58 +287,45 @@ until it either completes all steps or reaches the turn limit."
                 nil t)
 
       ;; Continuation hook: fires on every DONE/ERRS/ABRT state.
-      ;; Instead of immediately killing Emacs, this hook checks if
-      ;; the cycle is truly complete. If not, it re-prompts the model
-      ;; to continue. This handles the case where the model produces
-      ;; a text-only response between tool calls (e.g., "Let me look
-      ;; at the codebase now") which would normally end the turn.
       (let ((cont-hook
              (lambda (start end)
                (unless completed
                  (cl-incf turn-count)
-                 (message "[darwin] Turn #%d completed (tool calls so far: %d)"
-                          turn-count tool-call-count)
+                 (message "[%s] Turn #%d completed (tool calls so far: %d)"
+                          agent-name turn-count tool-call-count)
                  (when (and (integerp start) (integerp end) (< start end))
                    (save-restriction
                      (widen)
                      (let ((response (buffer-substring-no-properties
                                       (min (max start (point-min)) (point-max))
                                       (min (max end (point-min)) (point-max)))))
-                       (message "[darwin] Response: %.300s" response))))
+                       (message "[%s] Response: %.300s" agent-name response))))
 
-                 ;; Check if we've hit the turn limit
-                 ;; Defense-in-depth: :safe rejects non-positive values at the
-                 ;; file-local-variable level, but a direct setq bypasses it.
-                 ;; nil causes wrong-type-argument in >=; 0 causes immediate
-                 ;; exit on the first turn.  Fall back to 40.
-                 (let ((max-turns (if (and (integerp darwin-cycle-max-turns)
-                                           (> darwin-cycle-max-turns 0))
-                                     darwin-cycle-max-turns
+                 (let ((max-turns (if (and (integerp agent-cycle-max-turns)
+                                           (> agent-cycle-max-turns 0))
+                                     agent-cycle-max-turns
                                    40)))
                    (if (>= turn-count max-turns)
                      (progn
                        (setq completed t)
-                       (message "[darwin] Reached max turns (%d), ending cycle" max-turns)
-                       (setq darwin-cycle-result-message
-                             (format "*Darwin Cycle: Max Turns Reached*\nTurns: %d (limit %d)\nTool calls: %d\nThe cycle hit the turn limit without completing."
-                                     turn-count max-turns tool-call-count))
+                       (message "[%s] Reached max turns (%d), ending cycle" agent-name max-turns)
+                       (setq agent-cycle-result-message
+                             (format "*%s Cycle: Max Turns Reached*\nTurns: %d (limit %d)\nTool calls: %d\nThe cycle hit the turn limit without completing."
+                                     (capitalize agent-name) turn-count max-turns tool-call-count))
                        (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
 
-                   ;; Check if the cycle is truly complete.
-                   ;; Pass start/end to search only the latest response,
-                   ;; preventing false positives from early planning text.
-                   (if (darwin--cycle-complete-p cycle-buf start end)
+                   (if (agent--cycle-complete-p cycle-buf start end)
                        (progn
                          (setq completed t)
                          (let ((elapsed (float-time (time-subtract (current-time) cycle-start))))
-                           (message "[darwin] Cycle completed in %.1fs" elapsed)
-                           (setq darwin-cycle-result-message
-                                 (format "*Darwin Cycle Complete*\nElapsed: %.1fs\nTool calls: %d\nTurns: %d\nExit code: %d"
-                                         elapsed tool-call-count turn-count exit-code)))
+                           (message "[%s] Cycle completed in %.1fs" agent-name elapsed)
+                           (setq agent-cycle-result-message
+                                 (format "*%s Cycle Complete*\nElapsed: %.1fs\nTool calls: %d\nTurns: %d\nExit code: %d"
+                                         (capitalize agent-name) elapsed tool-call-count turn-count exit-code)))
                          (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
 
                      ;; Not complete yet -- re-prompt to continue
-                     (message "[darwin] Re-prompting darwin to continue cycle...")
+                     (message "[%s] Re-prompting to continue cycle..." agent-name)
                      (setq continuation-pending t)
                      (run-with-timer
                       1 nil
@@ -348,13 +335,9 @@ until it either completes all steps or reaches the turn limit."
                               (save-restriction
                                 (widen)
                                 (goto-char (point-max))
-                                (insert "\n\n" darwin-cycle-continue-prompt)
+                                (insert "\n\n" continue-prompt)
                                 (setq continuation-pending nil)
                                 (gptel-send)))
-                          ;; Buffer is dead or cycle completed -- clear the
-                          ;; pending flag so the event loop can exit instead
-                          ;; of spinning for 1800s waiting for a re-prompt
-                          ;; that will never come.
                           (setq continuation-pending nil)))))))))))
         (add-hook 'gptel-post-response-functions cont-hook nil t)
 
@@ -365,24 +348,23 @@ until it either completes all steps or reaches the turn limit."
            (unless completed
              (setq completed t)
              (setq exit-code 1)
-             (message "[darwin] Cycle timed out after %ds" timeout)
-             ;; Capture partial response
+             (message "[%s] Cycle timed out after %ds" agent-name timeout)
              (when (buffer-live-p cycle-buf)
                (with-current-buffer cycle-buf
                  (save-restriction
                    (widen)
                    (let ((partial (buffer-substring-no-properties (point-min) (point-max))))
-                     (message "[darwin] Partial response: %.500s" partial)))))
-             (setq darwin-cycle-result-message
-                   (format "*Darwin Cycle: Timed Out*\nTimeout: %ds\nTool calls: %d\nTurns: %d\nThe cycle exceeded its time limit."
-                           timeout tool-call-count turn-count))
+                     (message "[%s] Partial response: %.500s" agent-name partial)))))
+             (setq agent-cycle-result-message
+                   (format "*%s Cycle: Timed Out*\nTimeout: %ds\nTool calls: %d\nTurns: %d\nThe cycle exceeded its time limit."
+                           (capitalize agent-name) timeout tool-call-count turn-count))
              (when (buffer-live-p cycle-buf)
                (gptel-abort cycle-buf))
              (run-with-timer 3 nil (lambda () (kill-emacs 1)))))
 
         ;; Insert prompt and send
         (insert prompt)
-        (message "[darwin] Sending cycle prompt to darwin agent...")
+        (message "[%s] Sending cycle prompt to %s agent..." agent-name agent-name)
         (gptel-send)))
 
     ;; In batch mode, we need to process events until completion
@@ -390,12 +372,7 @@ until it either completes all steps or reaches the turn limit."
       (let ((idle-count 0))
         (while (not completed)
           (accept-process-output nil 1)
-          ;; Check for dead timers / processes
           (unless (or completed (get-buffer-process cycle-buf) continuation-pending)
-            ;; No active process in cycle-buf -- but there might be delegate
-            ;; subprocesses still running. Check if any gptel request has a
-            ;; live buffer -- this covers both the main cycle buffer and any
-            ;; delegate sub-agent buffers.
             (let ((active-requests
                    (cl-some
                     (lambda (entry)
@@ -406,68 +383,46 @@ until it either completes all steps or reaches the turn limit."
                         (and req-buf (buffer-live-p req-buf))))
                     gptel--request-alist)))
               (if active-requests
-                  (setq idle-count 0) ; Reset: active requests mean we're not idle
-                ;; No active requests at all -- check if the FSM is done
+                  (setq idle-count 0)
                 (let ((fsm (buffer-local-value 'gptel--fsm-last cycle-buf)))
                   (cond
-                   ;; FSM in terminal state -- but only exit if the
-                   ;; continuation hook isn't about to re-prompt.
-                   ;; If continuation-pending is nil and turn-count > 0,
-                   ;; the post-response hook already ran and decided not
-                   ;; to continue, so we can exit.
                    ((and fsm (gptel-fsm-p fsm)
                          (memq (gptel-fsm-state fsm) '(DONE ERRS ABRT))
                          (not continuation-pending)
                          (> turn-count 0))
                     (setq completed t)
-                    (message "[darwin] FSM reached terminal state: %s"
-                             (gptel-fsm-state fsm))
-                    (setq darwin-cycle-result-message
-                          (format "*Darwin Cycle: FSM Terminal*\nState: %s\nTool calls: %d\nTurns: %d\nThe FSM reached a terminal state without explicit completion."
-                                  (gptel-fsm-state fsm) tool-call-count turn-count))
+                    (message "[%s] FSM reached terminal state: %s"
+                             agent-name (gptel-fsm-state fsm))
+                    (setq agent-cycle-result-message
+                          (format "*%s Cycle: FSM Terminal*\nState: %s\nTool calls: %d\nTurns: %d\nThe FSM reached a terminal state without explicit completion."
+                                  (capitalize agent-name) (gptel-fsm-state fsm) tool-call-count turn-count))
                     (run-with-timer 1 nil (lambda () (kill-emacs exit-code))))
-                   ;; FSM in terminal state but continuation is pending --
-                   ;; wait for the timer to fire and re-prompt.
                    ((and fsm (gptel-fsm-p fsm)
                          (memq (gptel-fsm-state fsm) '(DONE ERRS ABRT))
                          continuation-pending)
-                    ;; Don't exit, just keep waiting for the re-prompt
                     (cl-incf idle-count))
-                   ;; No FSM at all -- something is wrong, bail out
                    ((and (not fsm) (> idle-count 60))
                     (setq completed t)
-                    (message "[darwin] No FSM and idle for 60s, exiting")
-                    (setq darwin-cycle-result-message
-                          (format "*Darwin Cycle: No FSM*\nTool calls: %d\nTurns: %d\nNo FSM found and idle for 60s."
-                                  tool-call-count turn-count))
+                    (message "[%s] No FSM and idle for 60s, exiting" agent-name)
+                    (setq agent-cycle-result-message
+                          (format "*%s Cycle: No FSM*\nTool calls: %d\nTurns: %d\nNo FSM found and idle for 60s."
+                                  (capitalize agent-name) tool-call-count turn-count))
                     (run-with-timer 1 nil (lambda () (kill-emacs exit-code))))
-                   ;; FSM in a non-terminal state (TOOL, WAIT, TRET, etc.)
-                   ;; This means an async tool is running or a request is
-                   ;; in flight.  The FSM is NOT idle -- don't increment
-                   ;; idle-count.  Async tools (execute_code_local, delegate)
-                   ;; keep the FSM in TOOL state while their processes run,
-                   ;; but these processes are NOT in gptel--request-alist
-                   ;; (they are plain Emacs processes, not gptel requests),
-                   ;; so the active-requests check above misses them.
-                   ;; Similarly, a delegate's curl process is removed from
-                   ;; gptel--request-alist once it completes, but the delegate
-                   ;; may still be processing its own async tools.
-                   ;; The tool's own timeout (3600s for execute_code_local,
-                   ;; 600s for delegate) handles hung tools.
                    ((and fsm (gptel-fsm-p fsm)
                          (not (memq (gptel-fsm-state fsm) '(DONE ERRS ABRT))))
                     (setq idle-count 0))
-                   ;; Catch-all: no FSM with low idle-count.
-                   ;; Increment so the 60s no-FSM exit above can trigger.
                    (t
                     (cl-incf idle-count))))
-                ;; Safety: if idle for too long with no requests, bail out
                 (when (> idle-count 1800)
                   (setq completed t)
-                  (message "[darwin] No active requests for 1800s, exiting")
-                  (setq darwin-cycle-result-message
-                        (format "*Darwin Cycle: Idle Exit*\nTool calls: %d\nTurns: %d\nNo active requests for 1800s, bailing out."
-                                tool-call-count turn-count))
+                  (message "[%s] No active requests for 1800s, exiting" agent-name)
+                  (setq agent-cycle-result-message
+                        (format "*%s Cycle: Idle Exit*\nTool calls: %d\nTurns: %d\nNo active requests for 1800s, bailing out."
+                                (capitalize agent-name) tool-call-count turn-count))
                   (run-with-timer 1 nil (lambda () (kill-emacs exit-code)))))))))))))
 
+;; Backward compatibility alias
+(defalias 'darwin-run-cycle #'agent-run-cycle)
+
+(provide 'agent_cycle)
 (provide 'darwin_cycle)

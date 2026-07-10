@@ -106,8 +106,8 @@
 ;; Task reader and unified history tools
 (load (expand-file-name "task_tools.el" init-agent-dir))
 
-;; Darwin autonomous cycle runner
-(load (expand-file-name "darwin_cycle.el" init-agent-dir))
+;; Agent autonomous cycle runner (darwin and other orchestrator agents)
+(load (expand-file-name "agent_cycle.el" init-agent-dir))
 
 ;; ──────────────────────────────────────────────────────────
 ;; Session modules
