@@ -138,7 +138,7 @@ exceed API limits. 100000 chars is roughly 25K tokens."
 ;; Personal File Injection Parameters
 ;; =============================================================================
 
-(defcustom my-gptel-personal-file-max-lines 50
+(defcustom my-gptel-personal-file-max-lines 200
   "Maximum number of lines to inject from personal files (LOGS.md, SUMMARY.md,
 MEMORIES.md) into an agent's system prompt.
 When a personal file exceeds this many lines, only the last N lines are
