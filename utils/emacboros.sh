@@ -14,6 +14,9 @@ CONTAINER_NAME="iar-emacboros"
 REMOTE_OLLAMA_HOST="10.66.0.3:11434"
 LOCAL_OLLAMA_HOST="localhost:11434"
 
+# Default: knowledge directory (can be overridden with --knowledge)
+KNOWLEDGE_DIR="${REPO_DIR}/knowledge"
+
 # =============================================================================
 # Usage
 # =============================================================================
@@ -31,12 +34,17 @@ Options:
   --mount-ro PATH  Mount a host directory read-only inside the container at
                    the same absolute path. Can be specified multiple times.
                    The path must exist on the host.
+  --knowledge PATH Mount a knowledge base directory into the container at
+                   /root/.emacs.d/knowledge. Defaults to the bundled
+                   knowledge/ directory in the repo. Use this to point
+                   at a separate knowledge repository.
   --help, -h       Show this message and exit.
 
 Examples:
   emacboros.sh --mount /home/nacho/projects/myapp
   emacboros.sh --mount-ro /etc/ansible --mount /home/nacho/infra
   emacboros.sh --local --mount /home/nacho/dev/scratch
+  emacboros.sh --knowledge /home/nacho/repos/iar-knowledge
 EOF
 }
 
@@ -65,6 +73,13 @@ while [[ $# -gt 0 ]]; do
             MOUNT_PATH="$(realpath "$2")"
             [[ ! -d "${MOUNT_PATH}" ]] && error "--mount-ro: directory does not exist: ${MOUNT_PATH}" && exit 1
             MOUNT_RO_ARGS+=("${MOUNT_PATH}")
+            shift 2
+            ;;
+        --knowledge)
+            [[ $# -lt 2 ]] && error "--knowledge requires a path argument" && exit 1
+            KNOWLEDGE_PATH="$(realpath "$2")"
+            [[ ! -d "${KNOWLEDGE_PATH}" ]] && error "--knowledge: directory does not exist: ${KNOWLEDGE_PATH}" && exit 1
+            KNOWLEDGE_DIR="${KNOWLEDGE_PATH}"
             shift 2
             ;;
         --help|-h)
@@ -130,7 +145,8 @@ run() {
         --tmpfs /var/tmp:rw,size=64m \
         -v "${REPO_DIR}/emacs.d:/root/.emacs.d:z" \
         -v "${REPO_DIR}/metaconfig:/root/.emacs.d/metaconfig:z" \
-        -v "${REPO_DIR}/knowledge/prompts:/root/.emacs.d/agents.d:z" \
+        -v "${REPO_DIR}/prompts:/root/.emacs.d/agents.d:z" \
+        -v "${KNOWLEDGE_DIR}:/root/.emacs.d/knowledge:z" \
         \
         -v "${REPO_DIR}/:/root/i.ar/:z" \
         ${DYNAMIC_MOUNT_OPTS[@]+"${DYNAMIC_MOUNT_OPTS[@]}"} \

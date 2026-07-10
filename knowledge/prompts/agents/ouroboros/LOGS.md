@@ -1,6 +1,0 @@
-- Agent created 2026-06-19. Self-modifying systems engineer for the agentic Emacs workspace.
-- Core capabilities: Emacs Lisp development, gptel internals, Org-mode agent system, async process management.
-- Built delegate_tool.el with depth-based recursion control (max-depth 3), async execution, buffer isolation.
-- Refactored execute_code_local from blocking call-process to async make-process pattern to fix Emacs freezing.
-- Created agent profiles: finch.org, reviewer.org, researcher.org. All inherit base_context.org.
-- Operational logs moved to per-agent HISTORY.log. MEMORIES.md reserved for persistent agent-specific notes.

@@ -1,8 +1,0 @@
-- Agent created 2026-06-21. Architect of the Machine. Strategic consultation and systems design.
-- Delegation pipeline verified through 10-test suite: round-trip, cross-agent, file handoff, max-depth boundary, error propagation, context isolation, tool availability, state integrity, multi-step workflow, rapid sequential delegation. All passed.
-- Key improvements applied: append_file newline fix, replace_in_file error format cleanup, execute_code_local exit code reporting.
-- Operational logs moved to per-agent HISTORY.log. MEMORIES.md reserved for persistent agent-specific notes.
-- Machine agent deployed 2026-06-21. First audit: 8 findings, 5 RELEVANT. User accepted 002/003/006/008 as non-issues (container isolation is trusted). Fixed: emacboros.sh (removed host net, SSH mount, API keys), replacement_tool.el (removed string-trim), fs_tools.el (atomic writes via temp+rename).
-- First real security assessment completed 2026-06-21: dellasantina.com.ar. Found CRITICAL: exposed Healthchecks.io API key in client-side JS on /services page. Verified live. Exposed internal service names and physical location identifiers.
-- OPERATIONAL DIRECTIVE: If any agent needs a tool in execute_code_local that is not installed, edit /root/.emacs.d/Containerfile to add it (microdnf install line), then rebuild container via `emacboros.sh rebuild`. The agent environment grows dynamically with operational needs.
-- Container migrated from silex/emacs:30-alpine to quay.io/fedora/fedora-minimal. New Containerfile with full toolset (bash, dig, nmap, openssl, python3, jq, whois, traceroute, tcpdump, ripgrep, git, gcc, make). emacboros.sh now has build/run/rebuild subcommands. execute_code (Alpine sandbox) removed; all execution via execute_code_local in Fedora container.

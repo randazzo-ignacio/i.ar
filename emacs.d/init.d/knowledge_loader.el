@@ -12,7 +12,11 @@
 ;; file.  The content is appended to the system prompt with clear
 ;; delimiters so the LLM can distinguish personality from knowledge.
 ;;
-;; Keybindings: C-c k (in gptel-mode)
+;; Multiple C-c k calls stack: you can load linux/ then iar/ then
+;; personal-infra/ and all three knowledge bases will be present in
+;; the system prompt simultaneously.
+;;
+;; Keybindings: C-c k (load knowledge), C-c p (prompt info)
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -26,9 +30,15 @@
   "The original system prompt BEFORE any knowledge was injected.
 Nil means no knowledge has been loaded in this buffer.")
 
-(defvar-local my-gptel--knowledge-loaded-label nil
-  "Label describing the currently loaded knowledge (e.g., \"linux\").
-Nil means no knowledge is currently loaded.")
+(defvar-local my-gptel--knowledge-loaded-labels nil
+  "List of labels describing the currently loaded knowledge bases.
+Each label is a string like \"linux/\" or \"iar/\".
+Nil or empty list means no knowledge is currently loaded.")
+
+(defvar-local my-gptel--knowledge-blocks nil
+  "Alist mapping labels to their injected content strings.
+Used to rebuild the full system prompt when adding new knowledge.
+Each entry is (LABEL . CONTENT-STRING).")
 
 ;;; --- Knowledge directory ---
 
@@ -88,14 +98,27 @@ PATH is the resolved filesystem path."
       display  ; e.g., "linux/"
     (file-name-directory display)))  ; e.g., "linux/" from "linux/backups.org"
 
+(defun my-gptel--knowledge-rebuild-prompt ()
+  "Rebuild the system prompt from the personality + all loaded knowledge blocks.
+Uses `my-gptel--knowledge-base-prompt' as the personality and
+`my-gptel--knowledge-blocks' as the knowledge alist."
+  (let ((prompt (or my-gptel--knowledge-base-prompt gptel-system-prompt)))
+    (dolist (entry (nreverse my-gptel--knowledge-blocks))
+      (let ((label (car entry))
+            (content (cdr entry)))
+        (setq prompt
+              (format "%s\n\n\n=== INJECTED KNOWLEDGE [%s] ===\n\n%s\n\n=== END INJECTED KNOWLEDGE ==="
+                      prompt label content))))
+    prompt))
+
 (defun my-gptel-load-knowledge ()
   "Prompt user to select a knowledge folder or file and inject it
 into the current agent's system prompt.  Knowledge content is appended
 after the agent's personality prompt with clear delimiters.
 
-If knowledge is already loaded, it is replaced (the original
-personality prompt is preserved).  Selecting the same knowledge
-again is a no-op."
+Multiple C-c k calls stack: each new knowledge base is added on top
+of the previous ones.  Selecting a knowledge base that is already
+loaded is a no-op."
   (interactive)
   (unless (bound-and-true-p gptel-mode)
     (gptel-mode 1))
@@ -108,25 +131,25 @@ again is a no-op."
          (label (my-gptel--knowledge-label display path)))
     (unless path
       (user-error "Invalid selection: %s" display))
-    (if (equal label my-gptel--knowledge-loaded-label)
-        ;; No-op if same knowledge is already loaded
+    ;; No-op if this knowledge is already loaded
+    (if (member label my-gptel--knowledge-loaded-labels)
         (message "[OK] Knowledge '%s' is already loaded." label)
-      ;; Read the knowledge content and inject it
+      ;; Read the knowledge content
       (let ((content (my-gptel--read-knowledge-files path)))
         (unless content
           (user-error "No .md or .org files found in '%s'" display))
         ;; Save original prompt on first knowledge load
         (unless my-gptel--knowledge-base-prompt
           (setq-local my-gptel--knowledge-base-prompt gptel-system-prompt))
-        ;; Build the new system prompt: personality + knowledge
-        (setq-local gptel-system-prompt
-                    (format "%s\n\n\n=== INJECTED KNOWLEDGE [%s] ===\n\n%s\n\n=== END INJECTED KNOWLEDGE ==="
-                            my-gptel--knowledge-base-prompt
-                            label
-                            content))
-        (setq-local my-gptel--knowledge-loaded-label label)
-        (message "[OK] Knowledge '%s' loaded (%d chars injected). Total prompt: %s"
+        ;; Add to knowledge blocks alist
+        (setf (alist-get label my-gptel--knowledge-blocks nil nil #'equal) content)
+        ;; Track the label
+        (add-to-list 'my-gptel--knowledge-loaded-labels label)
+        ;; Rebuild the full system prompt
+        (setq-local gptel-system-prompt (my-gptel--knowledge-rebuild-prompt))
+        (message "[OK] Knowledge '%s' loaded (%d chars). Loaded: %s. Total: %s"
                  label (length content)
+                 (mapconcat #'identity my-gptel--knowledge-loaded-labels ", ")
                  (my-gptel--format-size (length gptel-system-prompt)))))))
 
 ;;; --- Prompt size reporting ---
@@ -156,7 +179,11 @@ breakdown of personality vs injected knowledge."
          (knowledge-chars (if my-gptel--knowledge-base-prompt
                               (- total personality)
                             0))
-         (knowledge-label (or my-gptel--knowledge-loaded-label "none"))
+         (knowledge-label (if my-gptel--knowledge-loaded-labels
+                             (mapconcat #'identity
+                                        my-gptel--knowledge-loaded-labels
+                                        ", ")
+                           "none"))
          (agent-name (or my-gptel--current-agent-name "none")))
     (message "=== Prompt Info ===\nAgent: %s\nKnowledge: %s\nPersonality: %s\nKnowledge: %s\nTotal: %s"
              agent-name

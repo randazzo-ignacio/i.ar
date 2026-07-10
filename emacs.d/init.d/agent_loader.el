@@ -23,7 +23,8 @@ Set buffer-local by `my-gptel-load-agent' and `my-gptel-tool-reload-agent'.")
 ;; Declared here so agent_loader can reset them when switching agents.
 ;; Defined in knowledge_loader.el.
 (defvar my-gptel--knowledge-base-prompt nil)
-(defvar my-gptel--knowledge-loaded-label nil)
+(defvar my-gptel--knowledge-loaded-labels nil)
+(defvar my-gptel--knowledge-blocks nil)
 
 ;;; --- Profile reading ---
 
@@ -70,7 +71,8 @@ Discovers agent directories under agents.d/<name>/ containing prompt.org."
     (setq-local my-gptel--current-agent-name chosen)
     ;; Reset knowledge state when loading a new agent
     (setq-local my-gptel--knowledge-base-prompt nil)
-    (setq-local my-gptel--knowledge-loaded-label nil)
+    (setq-local my-gptel--knowledge-loaded-labels nil)
+    (setq-local my-gptel--knowledge-blocks nil)
     (message "[OK] Agent %s loaded! Prompt: %d chars (~%d tokens)"
              chosen (length profile) (/ (length profile) 4))))
 
