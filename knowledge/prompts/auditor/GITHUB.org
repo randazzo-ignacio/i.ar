@@ -1,0 +1,165 @@
+* GITHUB BUG BOUNTY PROGRAM — RULES OF ENGAGEMENT
+
+This document defines the scope, rules, and constraints for testing against
+GitHub's public Bug Bounty Program on HackerOne. It is included in the auditor
+prompt as a reference and MUST be respected at all times during engagement.
+
+** PROGRAM METADATA
+- Platform: HackerOne
+- Handle: github
+- Program URL: https://hackerone.com/github
+- Bounty: Yes ($617 - $30,000+)
+- Safe Harbor: Legal Safe Harbor (CFAA, DMCA, Cal. Penal Code 502(c))
+- Automation: EXPLICITLY ALLOWED with rate limiting (no excessive traffic)
+
+** AUTOMATION POLICY (CRITICAL)
+
+GitHub explicitly permits automated tools. Their policy states:
+
+> "We do allow the use of automated tools so long as they do not produce
+> excessive amounts of traffic. For example, running one nmap scan against
+> one host is allowed, but sending 65,000 requests in two minutes using
+> Burp Suite Intruder is excessive."
+
+Rules:
+- Automated tools are ALLOWED.
+- Excessive traffic is NOT allowed. Example threshold: 65,000 requests in 2
+  minutes = excessive. One nmap scan against one host = acceptable.
+- No DDoS or volumetric attacks.
+- No large-scale vulnerability scanners or scrapers that produce excessive
+  traffic.
+- No spamming content.
+
+** IN-SCOPE ASSETS (bounty-eligible)
+
+*** Web Properties (URL / WILDCARD scope)
+- =github.com= (all subdomains, with exclusions below)
+- =githubassets.com= (all subdomains)
+- =githubusercontent.com= (all subdomains)
+- =githubapp.com= (all subdomains, with exclusions below)
+- =githubwebhooks.net= (all subdomains)
+- =github.net= (all subdomains — internal production, many not externally accessible)
+- =npmjs.com= (all subdomains)
+- =npmjs.org= (all subdomains)
+
+*** Other Assets
+- GitHub Enterprise Cloud
+- GitHub Pages (build process only — individual =*.github.io= sites are OUT)
+- GitHub Production Credentials (GitHub Inc. credentials, not user credentials)
+- Dependabot (execution environment breakout, dependabot-core security issues)
+- GitHub for mobile
+- Copilot (all variants: Copilot, Copilot for Business, Copilot Chat on dotcom, Copilot Spaces, Copilot Coding Agent)
+- GitHub Spark
+- GitHub Enterprise Server (on-premise — can request trial instance)
+- GitHub Desktop (RCE via protocol handlers, code execution on clone/fetch only)
+- GitHub CLI
+- npm CLI
+- GitHub CSP (novel CSP bypasses on github.com only)
+
+** OUT-OF-SCOPE (explicit exclusions — DO NOT TEST)
+
+*** Under github.com
+- =blog.github.com=
+- =community.github.com=
+- =email.enterprise.github.com=
+- =email.finance.github.com=
+- =email.staging.finance.github.com=
+- =email.support.github.com=
+- =email.verify.github.com=
+- =google7650dcf6146f04d8.github.com=
+- =k1._domainkey.github.com=
+- =k1._domainkey.mcmail.github.com=
+- =mcmail.github.com=
+- =resources.github.com= and =*.resources.github.com=
+- =sgmail.github.com= and =*.sgmail.github.com=
+- =shop.github.com=
+- =smtp.github.com= and =*.smtp.github.com=
+
+*** Under githubapp.com
+- =atom-io.githubapp.com=
+- =atom-io-staging.githubapp.com=
+- =email.enterprise-staging.githubapp.com=
+- =email.haystack.githubapp.com=
+- =reply.githubapp.com=
+
+*** Other exclusions
+- =*.github.io= (individual GitHub Pages sites)
+- =enterprise.github.com= (marketing site, not the Enterprise Server product)
+- =git.io=
+- =spectrum.chat=
+- =github.blog=
+- =education.github.com/forum=
+- =blog.github.com=
+- =community.github.com=
+- =shop.github.com=
+- Atom (editor)
+- Electron (unless directly affecting GitHub Desktop)
+- GitHub Classroom Assistant
+
+** TESTING RULES
+
+1. Use accounts you own. Do not test in repos/orgs you don't own (except for
+   authorization bypass testing with your own accounts).
+2. Add your @wearehackerone.com email to any GitHub account used for testing.
+3. Do not impact other users with your testing.
+4. Do not access others' PII. If you suspect a service exposes PII, limit
+   queries to your own personal information.
+5. For SQL injection: limit the number of rows returned. Do not extract
+   sensitive data unless explicitly authorized.
+6. Delete all local/cached copies of PII immediately.
+7. DoS research: allowed on your own GitHub Enterprise Server instance
+   (preferred). On github.com: must use your own repos/orgs, stop immediately
+   if availability is affected.
+
+** REPORT REQUIREMENTS
+
+- Written reproduction instructions required (video-only is not enough).
+- Keep all information on HackerOne. Do not post to pastebin or video-sharing
+  sites.
+- Redact PII in submissions.
+- No public disclosure until fix is publicly available.
+
+** BOUNTY RANGES (for severity reference)
+
+| Severity | Range            |
+|----------+------------------|
+| Critical | $20,000 - $30,000+ |
+| High     | $10,000 - $20,000  |
+| Medium   | $4,000 - $10,000   |
+| Low      | $617 - $2,000      |
+
+** SEVERITY EXAMPLES
+
+*** Critical ($20,000 - $30,000+)
+- Arbitrary code/command execution on production server
+- Arbitrary SQL queries on production database
+- Bypassing login (password or 2FA)
+- Access to sensitive production user data or internal production systems
+- Accessing another user's data in GitHub Actions
+
+*** High ($10,000 - $20,000)
+- XSS on github.com that bypasses CSP
+- Authorization bypass granting more access than intended
+- Sensitive user/GitHub data in publicly exposed resource (e.g., S3 bucket)
+- Overwriting a customer repo/package that should be inaccessible
+- Access to non-critical employee-only resources
+- GitHub Actions repo-scoped token used to access private content outside repo
+- Client app sending auth credentials to unintended server
+- Code execution in client app with no user interaction (e.g., on clone)
+
+*** Medium ($4,000 - $10,000)
+- Disclosing titles of issues in private repos
+- XSS on github.com that does NOT bypass CSP
+- CSRF bypass for low-risk actions (starring, unsubscribing)
+- Code execution in client app with minimal expected user interaction
+- Package integrity compromise
+
+*** Low ($617 - $2,000)
+- Signing up arbitrary users for early access without consent
+- Bypassing image proxying filter with malformed URL
+- Verbose/debug error pages without proof of exploitability
+- Application exceptions affecting many users
+- JS event handler injection mitigated by CSP
+- Disclosing existence of private npm packages via error messages
+- Novel supply chain vulnerabilities affecting a GitHub product
+- Credentials leaked in logs (.npmrc, GitHub Enterprise Server)

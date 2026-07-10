@@ -21,3 +21,56 @@
 [2026-07-06 08:30:00] Nacho: Built tinylisp pilot implementation in C (~500 lines). Working: reader, printer, eval, special forms (if, quote, lambda, let, setq, defmacro, define, begin), primitives (car, cdr, cons, list, +, -, *, /, <, >, =, eq, null, make-array, aref, aset, read-char, write-char, error, eval, print), macros with rest params, dotted pairs, closures, recursion. No GC. Ugly but works.
 [2026-07-06 08:50:00] Nacho: Wrote ALPHA_SPEC.md for tinylisp v0.1. Complete spec documenting the pilot implementation as-is: lexical syntax, 7 types, evaluation model, 8 special forms, 21 primitives, macro system, printer, environment/scoping, REPL, 15 known limitations, reference card.
 [2026-07-06 08:55:00] Nacho: Created tinylisp agent at agents.d/tinylisp/ with prompt.org (full project context, ~13KB), MEMORIES.md (project inception notes), and HISTORY.log. Agent is specialized for tinylisp language design and development.
+[2026-07-08 02:33:58] Nacho: Fixed WireGuard role — added wg-quick@.service fallback unit for AlmaLinux, split playbooks into hub-first/spokes-second to prevent lockout, added firewalld availability check, removed yoga exclusion from wireguard install
+[2026-07-08 04:25:44] Nacho: Removed pricing numbers from i.ar static-page index.html, replaced with "Request a Quote" section. Updated nav link from #pricing to #quote, hero CTA from "Request a Deployment" to "Request a Quote", removed price display CSS, cleaned up card layout.
+[2026-07-09 02:07:05] Nacho: Created /root/i.ar/knowledge/linux/backups.org -- mini wiki with full RAID 1 (mdadm) + borgbackup setup guide, systemd timer automation, maintenance commands, and security notes. Matches existing knowledge file format (rename-user.org).
+[2026-07-09 03:53:31] Nacho: Created unified infrastructure repo at /root/.emacs.d/workspace/infrastructure. Option C (one repo, three inventories). 13 shared roles copied from i.ar/infra. Three inventory files: laptop.yml (yoga), randazzo.yml (sophon+rammstein), iar.yml (daftpunk+greenday). Per-host package lists in host_vars. Three playbooks + site.yml master. ansible.cfg, README.md, .gitignore. Git initialized and committed.
+[2026-07-09 04:06:52] Nacho: Restructured infrastructure repo to single inventory with 3 groups (laptop, randazzo, iar). Eliminates group_vars/all duplication. One vault file, one shared config. Playbooks target groups not individual hosts. Committed cb86e99.
+[2026-07-09 04:23:05] Nacho: Created docs/SETUP.org (build from scratch), docs/DRP.org (disaster recovery with DRP files), docs/MANIFEST.org (DRP folder contents + recovery summary for printing). Includes live USB image plan with pre-installed packages for offline recovery. Committed 77e91ab.
+[2026-07-09 04:34:15] Nacho: Replaced livecd-creator/lorax approach with BlueBuild for custom Fedora Silverblue installer image. Updated all three docs (SETUP.org, DRP.org, MANIFEST.org). BlueBuild produces a permanent Silverblue installation with pre-installed packages, not a disposable live CD. Committed 231c648.
+[2026-07-09 07:49:03] Nacho: End of all-nighter sprint (11h). Accomplished: NAS+RAID+borgbackup, backup strategy designed, infrastructure repo created with single-inventory/3-group structure, DRP docs written (SETUP/DRP/MANIFEST), BlueBuild plan documented. Digital archaeology across GitLab found ~90 repos under groups, recovered lost thesis (50% done) + 2022 thesis design report. Migrated GitLab repos to GitHub, cleaned both platforms. Cleaned Google Drive. Gmail cleanup deferred (100k+ emails, needs systematic filter approach). pass setup deferred. Next: SaaS spec, Telecom summary, read thesis report, deploy infra.
+[2026-07-09 14:08:25] Nacho: Researched HackerOne bug bounty programs via GraphQL API. Compared GitHub, GitLab, Uber, Coinbase, X, Shopify, AT&T for automation policy, safe harbor, scope, and report volume. Selected GitHub as MVP target — only program explicitly allowing automated tools with rate limiting. Pulled full scope list and policy text for rules-of-engagement encoding.
+[2026-07-09 14:49:16] Nacho: Recorded "duct tape is the feature" principle to MEMORIES.md after deep self-reflection session on lateral thinking, inadequacy feelings, and the origin of i.ar's self-modification capability.
+[2026-07-10 00:58:05] Nacho: Sprint planning conversation - all-nighter Elisp + i.ar bug fix sprint.
+
+CONTEXT:
+- Nacho completed a productive sprint yesterday: git repo cleanup, unified gitlab+github into github, cleaned 100k email inbox, set up NAS+backups (borgbackup on RAID, full strategy not yet complete).
+- Planned a 12-hour all-nighter sprint starting ~9pm, going to ~9am.
+
+ORIGINAL PROPOSAL: Read and summarize entire "Land of Lisp" book (~500 pages) in 12 hours.
+- Motivation: understand i.ar codebase, learn Elisp, learn CL for future ignisp development.
+- Known bug: API requests sometimes return empty, needs resending, race condition involving UI.
+
+PUSHBACK GIVEN:
+1. Land of Lisp teaches Common Lisp, not Emacs Lisp. i.ar is Elisp. Gap between them is real (dynamic vs lexical binding, no CLOS, Emacs-specific APIs).
+2. Reading a programming book for 12h is high-cognitive-load work, not comparable to yesterday's mechanical git/email/NAS sprint. Decay hits at hour 6-8, not 12.
+3. The fun goal (read book) vs the real goal (fix bug, understand codebase) were misaligned.
+4. ignisp (CL) and i.ar (Elisp) goals were being mixed again.
+
+REVISED PLAN (agreed by Nacho):
+1. Switched from Land of Lisp to GNU Emacs Lisp Intro (~300 pages) + Elisp Reference Manual (targeted sections).
+2. Emacs manual (~800 pages) to be used as reference only, NOT read cover-to-cover.
+3. Org manual also downloaded - flagged as potential focus drift risk.
+
+SPRINT PLAN:
+- Hours 1-3: Read eintr chapters on evaluation, functions, variables, lists, control flow. Skip toy projects. Summarize core concepts.
+- Hours 3-4: Read elisp manual sections on Processes, Sentinels, Filters, Timers (async/process territory where the bug lives).
+- Hours 4-6: Read i.ar codebase. Map request flow. Identify race condition location. Write hypothesis.
+- Hours 6-10: Debug and fix the bug.
+- Hours 10-12: Buffer for difficulty + write summary.
+
+BUG DESCRIPTION: API requests sometimes go out but come back empty. Must resend multiple times. Race condition involving UI. Likely candidates: with-current-buffer context issues in async callbacks, or process filter not handling chunked/partial responses correctly.
+
+FINISH LINE DEFINITION: "I understand Elisp fundamentals, I know my codebase's request flow, and I either fixed the race condition or have a documented root cause and a clear next step."
+
+NACHO'S COUNTERPOINT: Acknowledged he gravitates toward fun, admitted mixing ignisp/i.ar goals. Stated that when on a deadline working on something interesting, he finds ways to use duct tape to reach the deadline. Suspects this might take 2 days instead of 1.
+
+RISKS FLAGGED:
+- Focus drift: temptation to read emacs manual (800pg) and org manual cover-to-cover instead of targeting the bug.
+- Scope creep: 3 manuals downloaded, only eintr + elisp ref targeted sections are in scope.
+- Time estimate: Nacho says 2 days, mirror says multiply by 3 = 6 days. Duct tape method may compress this but quality of learning may suffer.
+- Cognitive load: learning a language AND debugging a race condition in the same sprint is two different types of work.
+
+FOLLOW-UP: Nacho to check in after sprint to debrief what went right, what went wrong, and draw conclusions.
+[2026-07-10 03:35:58] Nacho: Created new agent 'sage' -- practical Elisp expert for i.ar codebase analysis, bug tracing, and fix proposals. Complements mccarthy with debugging-focused expertise.
+[2026-07-10 04:18:57] Nacho: Removed session_persistence.el and tool_display.el (plus their tests) from init.d and init.el load list. Cleaned up stale references to session_persistence in audit_log.el and task_tools.el docstrings. Reloaded OS - 12 tools registered, down from 14.

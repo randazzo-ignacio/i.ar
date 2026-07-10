@@ -1,1 +1,2 @@
 [2026-07-05 02:34:57] nacho: Created auditor agent — non-destructive security audit orchestrator. prompt.org and MEMORIES.md initialized.
+[2026-07-09 14:13:48] Nacho: Created /root/i.ar/knowledge/prompts/auditor/GITHUB.org with full GitHub bug bounty rules of engagement (scope, exclusions, automation policy, testing rules, bounty ranges, severity examples). Added #+INCLUDE to auditor prompt.org alongside base_context.org and MEMORIES.md.

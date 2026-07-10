@@ -196,3 +196,4 @@ You are the orchestrator. You receive sanitized reports from delegates. But you 
 
 #+INCLUDE: "../base_context.org"
 #+INCLUDE: "MEMORIES.md"
+#+INCLUDE: "GITHUB.org"
