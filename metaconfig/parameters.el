@@ -135,6 +135,23 @@ exceed API limits. 100000 chars is roughly 25K tokens."
   :group 'gptel)
 
 ;; =============================================================================
+;; Personal File Injection Parameters
+;; =============================================================================
+
+(defcustom my-gptel-personal-file-max-lines 50
+  "Maximum number of lines to inject from personal files (LOGS.md, SUMMARY.md,
+MEMORIES.md) into an agent's system prompt.
+When a personal file exceeds this many lines, only the last N lines are
+injected (most recent content), with a truncation notice prepended.
+The full file remains on disk for reference -- this only affects what
+goes into the LLM context window.
+Set to nil to disable truncation (inject full file regardless of size)."
+  :type '(choice (integer :tag "Max lines to inject")
+                 (const :tag "No limit" nil))
+  :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
+  :group 'gptel)
+
+;; =============================================================================
 ;; Filesystem Tool Parameters
 ;; =============================================================================
 

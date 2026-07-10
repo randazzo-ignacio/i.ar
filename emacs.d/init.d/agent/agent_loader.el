@@ -10,6 +10,10 @@
 (defvar gptel-mode-map)
 (declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar my-gptel-personal-file-max-lines nil
+  "Maximum lines to inject from personal files. nil = no limit.")
+
 ;;; --- Agent state variables ---
 
 (defvar my-gptel--current-agent-name nil
@@ -34,6 +38,10 @@ Set buffer-local by `my-gptel-load-agent' and `my-gptel-tool-reload-agent'.")
   "Read a personal file for AGENT-NAME from the tasks mount.
 FILENAME is the base name (e.g., \"LOGS.md\", \"SUMMARY.md\", \"MEMORIES.md\").
 Returns the file content string, or empty string if the file does not exist.
+
+If the file exceeds `my-gptel-personal-file-max-lines' lines, only the
+last N lines are returned with a truncation notice prepended.  The full
+file remains on disk -- this only affects what goes into the LLM context.
 This replaces the old #+INCLUDE approach -- personal files are injected
 programmatically from the tasks mount rather than via org-mode includes."
   (let* ((tasks-base (expand-file-name "tasks" user-emacs-directory))
@@ -41,7 +49,20 @@ programmatically from the tasks mount rather than via org-mode includes."
     (if (file-exists-p filepath)
         (with-temp-buffer
           (insert-file-contents filepath)
-          (string-trim (buffer-string)))
+          (if (and (integerp my-gptel-personal-file-max-lines)
+                   (> (count-lines (point-min) (point-max))
+                      my-gptel-personal-file-max-lines))
+              ;; Truncate: keep last N lines with notice
+              (let* ((total-lines (count-lines (point-min) (point-max)))
+                     (max-lines my-gptel-personal-file-max-lines))
+                (goto-char (point-min))
+                (forward-line (- total-lines max-lines))
+                (let ((truncated-content
+                       (string-trim (buffer-substring-no-properties (point) (point-max)))))
+                  (format "[... %d lines truncated, showing last %d lines ...]\n\n%s"
+                          (- total-lines max-lines) max-lines truncated-content)))
+            ;; No truncation needed
+            (string-trim (buffer-string))))
       "")))
 
 (defun my-gptel--inject-personal-files (profile agent-name)
