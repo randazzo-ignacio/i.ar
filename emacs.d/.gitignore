@@ -1,3 +1,9 @@
+audit
+audit/
+tasks
+tasks/
+knowledge
+knowledge/
 eln-cache/
 elpa/
 org-persist/

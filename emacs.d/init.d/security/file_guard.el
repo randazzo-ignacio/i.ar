@@ -10,7 +10,7 @@
 ;; 3. HISTORY.log files -- append only
 ;;
 ;; Protected categories (active unless self-modification mode is enabled):
-;; 4. Emacs Lisp source (init.el, init.d/*.el) -- prevents tool tampering
+;; 4. Emacs Lisp source (init.el, init.d/**/*.el) -- prevents tool tampering
 ;; 5. Container config (Containerfile, emacboros.sh) -- prevents escape
 ;; 6. Git hooks (.git/hooks/*) -- prevents scheduled execution
 ;;
@@ -31,7 +31,7 @@
 
 (defcustom my-gptel--guard-allow-self-modification nil
   "When non-nil, relax file guard protections for self-modification.
-Allows agents to modify Emacs Lisp source files (init.el, init.d/*.el),
+Allows agents to modify Emacs Lisp source files (init.el, init.d/**/*.el),
 container configuration, and git hooks.  Agent prompt files and
 base_context.org remain protected regardless.
 
@@ -90,7 +90,7 @@ if the path is protected.")
    (cons (lambda (path)
            (or (string-match-p "/init\\.el\\'" path)
                (string-match-p "/init\\.d/.*\\.el\\'" path)))
-         "Emacs Lisp source files (init.el, init.d/*.el) are protected. Agents cannot modify tool definitions or Emacs configuration.")
+         "Emacs Lisp source files (init.el, init.d/**/*.el) are protected. Agents cannot modify tool definitions or Emacs configuration.")
    ;; Container configuration
    (cons (lambda (path)
            (or (string-match-p "/Containerfile\\'" path)

@@ -53,13 +53,27 @@
 - [ ] Edit ctfwizard prompt.org to insert CTF rules and scope
 
 ## Knowledge Base Restructuring
-- [ ] Rename nacho agent to mirror (generic agent, no PII in prompt.org)
+- [x] Rename nacho agent to mirror (generic agent, no PII in prompt.org)
   - Move Nacho's identity, working style, blind spots to knowledge/user/
   - Any agent can load knowledge/user/ to know who the user is
-- [ ] Create knowledge/user/ knowledge base
+- [x] Create knowledge/user/ knowledge base
   - User bio, working style, blind spots, projects, homelab context
   - Loadable by mirror, ctfwizard, auditor, or any agent via C-c k
-- [ ] Separate knowledge base into its own git repo
-  - Move knowledge/ out of i.ar/ repo into standalone repo
-  - Update emacboros.sh --knowledge flag to point at new repo path
-  - Users clone i.ar without getting author's personal knowledge
+- [x] Separate personal data into personalization directory
+  - Moved knowledge/, tasks/ (TODO/IDEAS/LOGS/SUMMARY/MEMORIES), audit/ (HISTORY.log, audit.log) into i.ar/personalization/
+  - emacboros.sh --personalization flag mounts all three subdirectories
+  - Agent dirs now contain only prompt.org -- no personal data in prompts repo
+- [ ] Separate personalization into its own git repo
+  - Move i.ar/personalization/ out of i.ar repo into standalone repo
+  - Update emacboros.sh --personalization to point at new repo path
+  - Users clone i.ar without getting author's personal data
+
+## init.d Restructuring
+- [x] Create subdirectories (core/, agent/, tools/, security/, session/, dynamic/)
+- [x] Move all .el files to appropriate subdirectories
+- [x] Rewrite init.el with full-path loads and load-path for subdirs
+- [x] Update auto-discovery to scan init.d/dynamic/ only
+- [x] Update file_guard.el comments for new path patterns
+- [x] Update darwin prompt.org to reference init.d/dynamic/ for new modules
+- [x] Update knowledge/iar/modules.md documentation
+- [x] Verify: batch load, all 12 tools registered, dynamic discovery works

@@ -19,5 +19,3 @@ Structure your review as:
 ** QUESTIONS** - Clarifications needed
 
 Be specific. Quote code. Suggest fixes. No flattery.
-#+INCLUDE: "LOGS.md"
-#+INCLUDE: "SUMMARY.md"

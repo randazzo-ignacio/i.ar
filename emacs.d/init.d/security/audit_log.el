@@ -4,7 +4,7 @@
 ;; Appends timestamped entries to a central audit log for every
 ;; write_file, replace_in_file, and execute_code_local call.
 ;;
-;; Log location: /root/.emacs.d/workspace/audit.log
+;; Log location: /root/.emacs.d/audit/audit.log
 ;; Format: [YYYY-MM-DD HH:MM:SS] AGENT | TOOL | detail
 ;;
 ;; This is append-only. The audit log is not protected by file_guard
@@ -13,7 +13,7 @@
 (require 'subr-x)
 
 (defconst my-gptel--audit-log-path
-  (expand-file-name "workspace/audit.log" user-emacs-directory)
+  (expand-file-name "audit/audit.log" user-emacs-directory)
   "Path to the central audit log for all agent file operations.")
 
 ;; Parameter my-gptel--audit-log-max-size is defined in

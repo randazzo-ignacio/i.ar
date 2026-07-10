@@ -32,7 +32,9 @@ Returns NAME if valid."
   name)
 
 (defun my-gptel--get-agent-dir ()
-  "Return the directory path for the currently loaded agent.
+  "Return the tasks directory path for the currently loaded agent.
+Personal files (TODO.md, IDEAS.md, LOGS.md, SUMMARY.md, MEMORIES.md)
+live in the tasks mount at /root/.emacs.d/tasks/<agent-name>/.
 Validates the agent name against path traversal before constructing
 the path.  This is defense-in-depth: the name is typically set by
 `my-gptel-load-agent' which already validates, and the variable is
@@ -40,7 +42,7 @@ declared `safe-local-variable' with a validating predicate
 (`my-gptel--valid-agent-name-p'), so tampered values are filtered
 at the source.  This function provides defense-in-depth in case the
 predicate is bypassed or the variable is set by other means."
-  (let* ((agent-dir (expand-file-name "agents.d/agents" user-emacs-directory))
+  (let* ((tasks-base (expand-file-name "tasks" user-emacs-directory))
          (agent-name
           (if (and (boundp 'my-gptel--current-agent-name)
                    my-gptel--current-agent-name)
@@ -53,13 +55,17 @@ predicate is bypassed or the variable is set by other means."
     (if agent-name
         (progn
           (my-gptel--validate-agent-name agent-name)
-          (let ((resolved (expand-file-name agent-name agent-dir)))
+          (let* ((tasks-base (expand-file-name "tasks" user-emacs-directory))
+                 (tasks-base-real (file-truename tasks-base))
+                 (resolved (expand-file-name agent-name tasks-base))
+                 (resolved-real (file-truename resolved)))
             ;; Defense-in-depth: verify the resolved path hasn't escaped
-            ;; agents.d via symlinks.  The regex blocks direct traversal
-            ;; characters, but a symlink at agents.d/<name> -> /etc would
-            ;; bypass the regex.  This matches the containment check in
-            ;; my-gptel--load-agent-profile (delegate_tool.el).
-            (unless (string-prefix-p agent-dir (file-truename resolved))
+            ;; the tasks directory via symlinks.  The regex blocks direct
+            ;; traversal characters, but a symlink at tasks/<name> -> /etc
+            ;; would bypass the regex.  Compare truenames so symlinks
+            ;; pointing within the tasks tree (e.g., tasks -> /root/i.ar/
+            ;; personalization/tasks) are accepted.
+            (unless (string-prefix-p tasks-base-real resolved-real)
               (error "Path traversal attempt blocked for agent: '%s'" agent-name))
             resolved))
       (error "No agent loaded. Load one with C-c a first."))))
@@ -102,14 +108,17 @@ Returns their contents concatenated, or a message if neither exists."
 (defun my-gptel-tool-read-history (&optional agent-name)
   "Read HISTORY.log from a specific agent or all agents merged by timestamp.
 If AGENT-NAME is provided, reads that agent's HISTORY.log only.
-If omitted, merges all per-agent HISTORY.log files sorted by timestamp."
+If omitted, merges all per-agent HISTORY.log files sorted by timestamp.
+
+HISTORY.log files live in the audit mount at
+/root/.emacs.d/audit/<agent-name>/HISTORY.log."
   (condition-case err
-      (let* ((agents-dir (expand-file-name "agents.d/agents" user-emacs-directory)))
+      (let* ((audit-base (expand-file-name "audit" user-emacs-directory)))
         (if (and agent-name (stringp agent-name) (string-match-p "\\S-" agent-name))
             ;; Single agent history
             (progn
               (my-gptel--validate-agent-name agent-name)
-              (let ((log-file (expand-file-name (format "%s/HISTORY.log" agent-name) agents-dir)))
+              (let ((log-file (expand-file-name (format "%s/HISTORY.log" agent-name) audit-base)))
                 (if (file-exists-p log-file)
                     (with-temp-buffer
                       (insert-file-contents log-file)
@@ -119,12 +128,12 @@ If omitted, merges all per-agent HISTORY.log files sorted by timestamp."
           (let* ((agent-dirs
                   (cl-remove-if-not
                    (lambda (name)
-                     (let ((log-path (expand-file-name (format "%s/HISTORY.log" name) agents-dir)))
+                     (let ((log-path (expand-file-name (format "%s/HISTORY.log" name) audit-base)))
                        (file-exists-p log-path)))
-                   (directory-files agents-dir nil "\\`[a-zA-Z0-9_-]+\\'" t)))
+                   (directory-files audit-base nil "\\`[a-zA-Z0-9_-]+\\'" t)))
                  (all-entries nil))
             (dolist (agent-dir agent-dirs)
-              (let ((log-file (expand-file-name (format "%s/HISTORY.log" agent-dir) agents-dir)))
+              (let ((log-file (expand-file-name (format "%s/HISTORY.log" agent-dir) audit-base)))
                 (with-temp-buffer
                   (insert-file-contents log-file)
                   (goto-char (point-min))

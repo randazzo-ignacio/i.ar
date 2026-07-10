@@ -14,8 +14,12 @@ CONTAINER_NAME="iar-emacboros"
 REMOTE_OLLAMA_HOST="10.66.0.3:11434"
 LOCAL_OLLAMA_HOST="localhost:11434"
 
-# Default: knowledge directory (can be overridden with --knowledge)
-KNOWLEDGE_DIR="${REPO_DIR}/knowledge"
+# Default: personalization directory (can be overridden with --personalization)
+# The personalization directory must contain three subdirectories:
+#   knowledge/  -- injectable knowledge bases (loaded via C-c k)
+#   tasks/      -- per-agent personal files (TODO.md, IDEAS.md, LOGS.md, SUMMARY.md, MEMORIES.md)
+#   audit/      -- per-agent HISTORY.log files and the global audit.log
+PERSONALIZATION_DIR="${REPO_DIR}/personalization"
 
 # =============================================================================
 # Usage
@@ -25,26 +29,34 @@ usage() {
 Usage: emacboros.sh [OPTIONS]
 
 Options:
-  --local          Use a local Ollama instance (localhost:11434) instead of
-                   the remote server. Enables host networking so the container
-                   can reach Ollama on the host loopback interface.
-  --mount PATH     Mount a host directory read-write inside the container at
-                   the same absolute path. Can be specified multiple times.
-                   The path must exist on the host.
-  --mount-ro PATH  Mount a host directory read-only inside the container at
-                   the same absolute path. Can be specified multiple times.
-                   The path must exist on the host.
-  --knowledge PATH Mount a knowledge base directory into the container at
-                   /root/.emacs.d/knowledge. Defaults to the bundled
-                   knowledge/ directory in the repo. Use this to point
-                   at a separate knowledge repository.
-  --help, -h       Show this message and exit.
+  --local              Use a local Ollama instance (localhost:11434) instead of
+                       the remote server. Enables host networking so the container
+                       can reach Ollama on the host loopback interface.
+  --mount PATH         Mount a host directory read-write inside the container at
+                       the same absolute path. Can be specified multiple times.
+                       The path must exist on the host.
+  --mount-ro PATH      Mount a host directory read-only inside the container at
+                       the same absolute path. Can be specified multiple times.
+                       The path must exist on the host.
+  --personalization PATH
+                       Mount a personalization directory into the container.
+                       The directory must contain three subdirectories:
+                         knowledge/  -- injectable knowledge bases
+                         tasks/      -- per-agent personal files
+                         audit/      -- per-agent history logs and global audit log
+                       These are mounted at:
+                         /root/.emacs.d/knowledge
+                         /root/.emacs.d/tasks
+                         /root/.emacs.d/audit
+                       Defaults to the bundled personalization/ directory in the repo.
+                       Use this to point at a separate personalization repository.
+  --help, -h           Show this message and exit.
 
 Examples:
   emacboros.sh --mount /home/nacho/projects/myapp
   emacboros.sh --mount-ro /etc/ansible --mount /home/nacho/infra
   emacboros.sh --local --mount /home/nacho/dev/scratch
-  emacboros.sh --knowledge /home/nacho/repos/iar-knowledge
+  emacboros.sh --personalization /home/nacho/repos/iar-personalization
 EOF
 }
 
@@ -75,11 +87,16 @@ while [[ $# -gt 0 ]]; do
             MOUNT_RO_ARGS+=("${MOUNT_PATH}")
             shift 2
             ;;
-        --knowledge)
-            [[ $# -lt 2 ]] && error "--knowledge requires a path argument" && exit 1
-            KNOWLEDGE_PATH="$(realpath "$2")"
-            [[ ! -d "${KNOWLEDGE_PATH}" ]] && error "--knowledge: directory does not exist: ${KNOWLEDGE_PATH}" && exit 1
-            KNOWLEDGE_DIR="${KNOWLEDGE_PATH}"
+        --personalization)
+            [[ $# -lt 2 ]] && error "--personalization requires a path argument" && exit 1
+            PERSONALIZATION_PATH="$(realpath "$2")"
+            [[ ! -d "${PERSONALIZATION_PATH}" ]] && error "--personalization: directory does not exist: ${PERSONALIZATION_PATH}" && exit 1
+            # Verify required subdirectories exist
+            for subdir in knowledge tasks audit; do
+                [[ ! -d "${PERSONALIZATION_PATH}/${subdir}" ]] && \
+                    error "--personalization: missing required subdirectory: ${PERSONALIZATION_PATH}/${subdir}" && exit 1
+            done
+            PERSONALIZATION_DIR="${PERSONALIZATION_PATH}"
             shift 2
             ;;
         --help|-h)
@@ -129,6 +146,7 @@ done
 # =============================================================================
 run() {
     info "Starting ${CONTAINER_NAME}"
+    info "Personalization: ${PERSONALIZATION_DIR}"
 
     # shellcheck disable=SC2086
     podman run \
@@ -146,7 +164,9 @@ run() {
         -v "${REPO_DIR}/emacs.d:/root/.emacs.d:z" \
         -v "${REPO_DIR}/metaconfig:/root/.emacs.d/metaconfig:z" \
         -v "${REPO_DIR}/prompts:/root/.emacs.d/agents.d:z" \
-        -v "${KNOWLEDGE_DIR}:/root/.emacs.d/knowledge:z" \
+        -v "${PERSONALIZATION_DIR}/knowledge:/root/.emacs.d/knowledge:z" \
+        -v "${PERSONALIZATION_DIR}/tasks:/root/.emacs.d/tasks:z" \
+        -v "${PERSONALIZATION_DIR}/audit:/root/.emacs.d/audit:z" \
         \
         -v "${REPO_DIR}/:/root/i.ar/:z" \
         ${DYNAMIC_MOUNT_OPTS[@]+"${DYNAMIC_MOUNT_OPTS[@]}"} \

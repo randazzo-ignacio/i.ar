@@ -58,3 +58,42 @@ The split line: behavioral directives stay in prompt.org, factual knowledge abou
 File guard blocked write_file on prompt.org (tier 1 protection). Used execute_code_local to write directly. This is expected behavior -- the file guard protects agent prompts from agent self-modification, but the human user can still write via shell.
 
 **Task 3 (separate knowledge into own git repo)** is deferred until the user is ready to move the repo. The --knowledge flag in emacboros.sh already works, so it's just git mechanics.
+## 2026-07-10: init.d Restructuring
+
+Restructured `init.d/` from a flat directory of 22 files into 6 subdirectories:
+- `core/` -- locale, package_setup, ui_cleanup, evil_mode, gptel_setup
+- `agent/` -- agent_loader, knowledge_loader, delegate_tool, prompt_loader, reload_tools, memory_tools, task_tools, darwin_cycle
+- `tools/` -- fs_tools, code_tools, replacement_tool, check_elisp_tool
+- `security/` -- file_guard, audit_log, loop_guard, output_sanitizer
+- `session/` -- iar_quit
+- `dynamic/` -- empty, for darwin's new module drops
+
+Key changes to init.el:
+- All modules now loaded with explicit full paths (no load-path magic for explicit loads)
+- All subdirectories added to `load-path` so cross-module `require` calls resolve
+- Auto-discovery now scans `init.d/dynamic/` instead of `init.d/` -- darwin drops new modules there, they auto-load next cycle. Promote to a categorized subdir + explicit load when proven.
+- Stale `.elc` files cleaned
+
+Also updated: file_guard.el comments (init.d/*.el -> init.d/**/*.el), darwin prompt.org (init.d/ -> init.d/dynamic/ for new files), knowledge/iar/modules.md documentation.
+
+Verified: `emacs --batch -l init.el` loads clean, all 12 gptel tools registered, dynamic auto-discovery confirmed with test file.
+## 2026-07-10: Personalization Refactor
+
+Separated all personal/user data from the i.ar repo into `i.ar/personalization/` with three subdirectories:
+
+- `knowledge/` -- injectable knowledge bases (moved from `i.ar/knowledge/`)
+- `tasks/<agent>/` -- per-agent personal files: TODO.md, IDEAS.md, LOGS.md, SUMMARY.md, MEMORIES.md
+- `audit/<agent>/` -- per-agent HISTORY.log files
+- `audit/audit.log` -- global audit log (moved from `workspace/audit.log`)
+
+**Code changes:**
+- `agent_loader.el`: New `my-gptel--inject-personal-files` function reads LOGS.md, SUMMARY.md, and MEMORIES.md from the tasks mount and appends them to the profile string. Replaces the old #+INCLUDE approach. Darwin's MEMORIES.md is handled specially (used instead of LOGS.md + SUMMARY.md).
+- `task_tools.el`: `my-gptel--get-agent-dir` now resolves from `tasks/<agent>/` instead of `agents.d/agents/<agent>/`. Path traversal check updated to compare truenames (handles symlinks). `my-gptel-tool-read-history` reads from `audit/<agent>/HISTORY.log`.
+- `audit_log.el`: Audit log path changed from `workspace/audit.log` to `audit/audit.log`.
+- `emacboros.sh`: `--knowledge` flag replaced by `--personalization PATH` which mounts `PATH/knowledge`, `PATH/tasks`, and `PATH/audit` into the container. Validates that all three subdirectories exist.
+- `base_context.org`: Updated agent structure description and all file paths.
+- All 9 `prompt.org` files: Removed `#+INCLUDE: "LOGS.md"`, `#+INCLUDE: "SUMMARY.md"`, and `#+INCLUDE: "MEMORIES.md"` lines.
+
+**Agent directories now contain only `prompt.org`** -- no personal data in the prompts repo.
+
+**Note:** The knowledge bind mount in the current running container is stale (points to old inode). On next container restart with the new emacboros.sh, all three mounts will be fresh. For the current session, tasks and audit work via symlinks; knowledge works via the restored `i.ar/knowledge/` directory.
