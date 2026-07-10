@@ -38,19 +38,39 @@
 (require 'json)
 (require 'undercover)
 
+;; --- Module subdirectories (must match init.el ordering) ---
+;; Listed in dependency order: core, security, tools, agent, session, dynamic.
+;; This mirrors the explicit load order in init.el so that inter-module
+;; dependencies (e.g., prompt_loader before delegate_tool, output_sanitizer
+;; before code_tools, file_guard before audit_log) are satisfied.
+
+(defconst test-init-dir (expand-file-name "init.d" user-emacs-directory))
+(defconst test-init-subdirs
+  '("core" "security" "tools" "agent" "session" "dynamic"))
+
+;; --- Add all subdirectories to load-path (for cross-module requires) ---
+
+(dolist (subdir test-init-subdirs)
+  (let ((dir (expand-file-name subdir test-init-dir)))
+    (when (file-directory-p dir)
+      (add-to-list 'load-path dir))))
+
 ;; --- Instrument source files for coverage ---
-;; Must be called BEFORE loading source files. Uses :files with paths
-;; derived from user-emacs-directory so it works regardless of where
-;; .emacs.d lives. UNDERCOVER_FORCE env var must be set for coverage.
+;; Must be called BEFORE loading source files. Collects .el files from
+;; all init.d subdirectories in dependency order. UNDERCOVER_FORCE env
+;; var must be set for coverage.
 ;;
 ;; We call undercover--setup directly (the function that the undercover
 ;; macro expands to) because the paths are dynamic, not literal.
 
-(let* ((init-dir (expand-file-name "init.d" user-emacs-directory))
-       (source-files
-        (mapcar (lambda (f) (expand-file-name f init-dir))
-                (directory-files init-dir nil "\\.el\\'")))
-       (report-path (expand-file-name "test/coverage.txt" user-emacs-directory)))
+(let (source-files
+      (report-path (expand-file-name "test/coverage.txt" user-emacs-directory)))
+  (dolist (subdir test-init-subdirs)
+    (let ((dir (expand-file-name subdir test-init-dir)))
+      (when (file-directory-p dir)
+        (dolist (f (directory-files dir nil "\\.el\\'"))
+          (push (expand-file-name f dir) source-files)))))
+  (setq source-files (nreverse source-files))
   (undercover--setup
    (append source-files
            (list (list :report-file report-path)
@@ -61,17 +81,21 @@
 (load-file (expand-file-name "metaconfig/parameters.el" user-emacs-directory))
 
 ;; --- Load prompt loader (must be before modules that use prompts) ---
+;; prompt_loader.el lives in init.d/agent/ and must load before
+;; delegate_tool, memory_tools, and loop_guard which call
+;; my-gptel--load-prompt at load time (in defconst forms).
 
-(let ((init-dir (expand-file-name "init.d" user-emacs-directory)))
-  (add-to-list 'load-path init-dir)
-  (load (expand-file-name "prompt_loader.el" init-dir) nil t))
+(load (expand-file-name "prompt_loader.el"
+                        (expand-file-name "agent" test-init-dir))
+      nil t)
 
-;; --- Load all source modules ---
+;; --- Load all source modules (in subdirectory dependency order) ---
 
-(let ((init-dir (expand-file-name "init.d" user-emacs-directory)))
-  (add-to-list 'load-path init-dir)
-  (dolist (file (directory-files init-dir t "\\.el\\'"))
-    (load (file-name-sans-extension file) nil t)))
+(dolist (subdir test-init-subdirs)
+  (let ((dir (expand-file-name subdir test-init-dir)))
+    (when (file-directory-p dir)
+      (dolist (file (directory-files dir t "\\.el\\'"))
+        (load (file-name-sans-extension file) nil t)))))
 
 ;; --- Load all test files ---
 

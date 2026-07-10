@@ -227,15 +227,25 @@ are left behind in the temp directory."
   "my-gptel--memory-get-agent-dir should use my-gptel--current-agent-name."
   ;; Use defvar to set dynamic binding, then restore
   (let ((old-value (and (boundp 'my-gptel--current-agent-name)
-                        my-gptel--current-agent-name)))
+                        my-gptel--current-agent-name))
+        (old-user-emacs-directory (bound-and-true-p user-emacs-directory)))
     (unwind-protect
         (progn
           (setq my-gptel--current-agent-name "testagent")
-          (let ((dir (my-gptel--memory-get-agent-dir)))
-            (should (stringp dir))
-            (should (string-match-p "testagent" dir))
-            (should (string-match-p "agents\\.d" dir))))
-      (setq my-gptel--current-agent-name old-value))))
+          (let* ((user-emacs-directory (make-temp-file "test-mem-agent-" :dir-flag))
+                 (tasks-dir (expand-file-name "tasks" user-emacs-directory))
+                 (agent-dir (expand-file-name "testagent" tasks-dir)))
+            (make-directory agent-dir t)
+            (let ((dir (my-gptel--memory-get-agent-dir)))
+              (should (stringp dir))
+              (should (string-match-p "testagent" dir))
+              (should (string-match-p "tasks" dir))))
+          (when (and old-user-emacs-directory
+                     (file-exists-p (make-temp-file "test-mem-agent-" :dir-flag)))
+            (delete-directory (make-temp-file "test-mem-agent-" :dir-flag) t)))
+      (setq my-gptel--current-agent-name old-value)
+      (when (boundp 'user-emacs-directory)
+        (setq user-emacs-directory old-user-emacs-directory)))))
 
 (ert-deftest test-memory-get-agent-dir-fallback-to-file ()
   "my-gptel--memory-get-agent-dir should fall back to agent file path."

@@ -25,10 +25,10 @@
 (ert-deftest test-reload-agent-with-specific-name ()
   "reload_agent should reload a specific agent by name."
   :tags '(integration)
-  (let ((result (my-gptel-tool-reload-agent "mccarthy")))
+  (let ((result (my-gptel-tool-reload-agent "reviewer")))
     (should (stringp result))
     (should (string-match-p "Success" result))
-    (should (equal my-gptel--current-agent-name "mccarthy"))))
+    (should (equal my-gptel--current-agent-name "reviewer"))))
 
 (ert-deftest test-reload-agent-rejects-invalid-name ()
   "reload_agent should reject agent names with special characters."
@@ -46,9 +46,9 @@
   "reload_agent should set my-gptel--current-agent-name in current buffer."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (my-gptel-tool-reload-agent "mccarthy")))
+    (let ((result (my-gptel-tool-reload-agent "reviewer")))
       (should (string-match-p "Success" result))
-      (should (equal my-gptel--current-agent-name "mccarthy")))))
+      (should (equal my-gptel--current-agent-name "reviewer")))))
 
 ;;; --- reload_os tests ---
 
@@ -111,21 +111,21 @@ is loaded."
   "reload_agent should set my-gptel--current-agent-file on success."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (my-gptel-tool-reload-agent "mccarthy")))
+    (let ((result (my-gptel-tool-reload-agent "reviewer")))
       (should (string-match-p "Success" result))
       (should (stringp my-gptel--current-agent-file))
-      (should (string-match-p "mccarthy" my-gptel--current-agent-file))
+      (should (string-match-p "reviewer" my-gptel--current-agent-file))
       (should (string-match-p "prompt\\.org" my-gptel--current-agent-file)))))
 
 (ert-deftest test-reload-agent-success-sets-system-prompt ()
   "reload_agent should update gptel-system-prompt on success."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (my-gptel-tool-reload-agent "mccarthy")))
+    (let ((result (my-gptel-tool-reload-agent "reviewer")))
       (should (string-match-p "Success" result))
       (should (stringp gptel-system-prompt))
       (should (> (length gptel-system-prompt) 0))
-      (should (string-match-p "McCarthy" gptel-system-prompt)))))
+      (should (string-match-p "Reviewer" gptel-system-prompt)))))
 
 (ert-deftest test-reload-agent-rejects-special-chars-comprehensive ()
   "reload_agent should reject agent names with various special characters.
@@ -143,16 +143,16 @@ should also echo the offending name for debugging."
   "reload_agent success message should contain the agent name."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (my-gptel-tool-reload-agent "mccarthy")))
+    (let ((result (my-gptel-tool-reload-agent "reviewer")))
       (should (string-match-p "Success" result))
-      (should (string-match-p "mccarthy" result)))))
+      (should (string-match-p "reviewer" result)))))
 
 (ert-deftest test-reload-agent-success-message-contains-char-count ()
   "reload_agent success message should include profile character count.
 The count should be at least 1 (non-empty profile)."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (my-gptel-tool-reload-agent "mccarthy")))
+    (let ((result (my-gptel-tool-reload-agent "reviewer")))
       (should (string-match-p "Success" result))
       (should (string-match-p "[1-9][0-9]* chars" result)))))
 

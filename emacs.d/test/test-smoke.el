@@ -13,12 +13,20 @@
 Each module has a `provide' form, so we verify via `featurep'
 that the feature is registered in `features'.  If a module fails
 to load (syntax error, missing dependency), its `provide' form
-never executes and `featurep' returns nil."
+never executes and `featurep' returns nil.
+
+init.d/ is organized into subdirectories (core, security, tools,
+agent, session, dynamic).  We traverse each subdirectory to find
+.el files, mirroring the load order in init.el and run-tests.el."
   :tags '(smoke)
-  (let ((init-dir (expand-file-name "init.d" user-emacs-directory)))
-    (dolist (file (directory-files init-dir nil "\\.el\\'"))
-      (let ((module (file-name-sans-extension file)))
-        (should (featurep (intern module)))))))
+  (let ((init-dir (expand-file-name "init.d" user-emacs-directory))
+        (subdirs '("core" "security" "tools" "agent" "session" "dynamic")))
+    (dolist (subdir subdirs)
+      (let ((dir (expand-file-name subdir init-dir)))
+        (when (file-directory-p dir)
+          (dolist (file (directory-files dir nil "\\.el\\'"))
+            (let ((module (file-name-sans-extension file)))
+              (should (featurep (intern module))))))))))
 
 (ert-deftest smoke-gptel-tools-registered ()
   "gptel-tools should contain at least 12 tools after init."
@@ -40,10 +48,9 @@ never executes and `featurep' returns nil."
   "Expected agent directories should exist under agents.d/."
   :tags '(smoke)
   (let ((agents-dir (expand-file-name "agents.d/agents" user-emacs-directory))
-        (expected-agents '("mccarthy" "ouroboros" "coder" "finch"
-                           "reviewer" "researcher" "machine"
-                           "darwin" "nacho" "reader" "actor" "auditor"
-                           "ctfwizard")))
+        (expected-agents '("actor" "auditor" "coder" "ctfwizard"
+                           "darwin" "mirror" "reader" "researcher"
+                           "reviewer")))
     (dolist (agent expected-agents)
       (let ((prompt-path (expand-file-name (format "%s/prompt.org" agent) agents-dir)))
         (should (file-exists-p prompt-path))))))

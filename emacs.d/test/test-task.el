@@ -15,24 +15,34 @@
   "Temporary directory for task tool tests.")
 
 (defun test-task--setup ()
-  "Create a temporary agents.d structure with test files."
+  "Create a temporary tasks/ and audit/ structure with test files."
   (setq test-task--tmpdir (make-temp-file "test-task-" :dir-flag))
-  (let ((agents-dir (expand-file-name "agents.d/agents" test-task--tmpdir)))
-    (make-directory agents-dir t)
-    ;; Create a test agent with TODO.md, IDEAS.md, and HISTORY.log
-    (let ((agent-dir (expand-file-name "testagent" agents-dir)))
+  ;; Create tasks/ directory with agent subdirectories
+  (let ((tasks-dir (expand-file-name "tasks" test-task--tmpdir)))
+    (make-directory tasks-dir t)
+    ;; Create a test agent with TODO.md and IDEAS.md
+    (let ((agent-dir (expand-file-name "testagent" tasks-dir)))
       (make-directory agent-dir t)
       (with-temp-file (expand-file-name "TODO.md" agent-dir)
         (insert "# TODO\n\n- [ ] Task 1\n- [ ] Task 2\n"))
       (with-temp-file (expand-file-name "IDEAS.md" agent-dir)
-        (insert "# IDEAS\n\n## Cool Idea\nDescription here.\n"))
-      (with-temp-file (expand-file-name "HISTORY.log" agent-dir)
+        (insert "# IDEAS\n\n## Cool Idea\nDescription here.\n")))
+    ;; Create a second agent with no task files
+    (let ((agent-dir (expand-file-name "otheragent" tasks-dir)))
+      (make-directory agent-dir t)))
+  ;; Create audit/ directory with HISTORY.log files
+  (let ((audit-dir (expand-file-name "audit" test-task--tmpdir)))
+    (make-directory audit-dir t)
+    ;; testagent history
+    (let ((agent-audit-dir (expand-file-name "testagent" audit-dir)))
+      (make-directory agent-audit-dir t)
+      (with-temp-file (expand-file-name "HISTORY.log" agent-audit-dir)
         (insert "[2026-06-22 10:00:00] testagent: did something\n")
         (insert "[2026-06-22 11:00:00] testagent: did something else\n")))
-    ;; Create a second agent with only HISTORY.log
-    (let ((agent-dir (expand-file-name "otheragent" agents-dir)))
-      (make-directory agent-dir t)
-      (with-temp-file (expand-file-name "HISTORY.log" agent-dir)
+    ;; otheragent history
+    (let ((agent-audit-dir (expand-file-name "otheragent" audit-dir)))
+      (make-directory agent-audit-dir t)
+      (with-temp-file (expand-file-name "HISTORY.log" agent-audit-dir)
         (insert "[2026-06-22 09:00:00] otheragent: started up\n")))))
 
 (defun test-task--teardown ()
@@ -42,7 +52,7 @@
     (setq test-task--tmpdir nil)))
 
 (defmacro with-task-fixture (&rest body)
-  "Execute BODY with a temporary agents.d directory.
+  "Execute BODY with a temporary tasks/ and audit/ directory.
 Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
   (declare (indent 0))
   `(let ((old-emacs-dir user-emacs-directory)
@@ -73,7 +83,7 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
 (ert-deftest test-task-read-tasks-only-todo ()
   "read_tasks should work when only TODO.md exists."
   (with-task-fixture
-    (let* ((agent-dir (expand-file-name "agents.d/agents/testagent" test-task--tmpdir)))
+    (let* ((agent-dir (expand-file-name "tasks/testagent" test-task--tmpdir)))
       (delete-file (expand-file-name "IDEAS.md" agent-dir))
       (let ((result (my-gptel-tool-read-tasks)))
         (should (stringp result))
@@ -136,7 +146,8 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
   (with-task-fixture
     (let ((result (my-gptel--get-agent-dir)))
       (should (stringp result))
-      (should (string-match-p "testagent" result)))))
+      (should (string-match-p "testagent" result))
+      (should (string-match-p "tasks" result)))))
 
 (ert-deftest test-task-get-agent-dir-no-agent-loaded ()
   "my-gptel--get-agent-dir should error when no agent is loaded."
@@ -183,15 +194,15 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
   "my-gptel--get-agent-dir should safely handle traversal in agent-file path.
 The derived name from a traversal path like ../../etc/passwd/prompt.org
 is 'passwd' (last directory component), which passes the regex but
-resolves to agents.d/passwd -- not a traversal.  Verify no '..' in result."
+resolves to tasks/passwd -- not a traversal.  Verify no '..' in result."
   (with-task-fixture
     (let (my-gptel--current-agent-name
           (my-gptel--current-agent-file "../../etc/passwd/prompt.org"))
       ;; The fallback derives 'passwd' from the file path, which resolves
-      ;; to agents.d/agents/passwd -- not a traversal.  Verify no '..' in result.
+      ;; to tasks/passwd -- not a traversal.  Verify no '..' in result.
       (let ((result (my-gptel--get-agent-dir)))
         (should (stringp result))
-        (should (string-match-p "agents\\.d" result))
+        (should (string-match-p "tasks" result))
         (should-not (string-match-p "\\.\\." result))))))
 
 (ert-deftest test-task-get-agent-dir-empty-name-errors ()
@@ -239,3 +250,4 @@ where the regex (requires at least one char) rejects it."
   (should-error (my-gptel--validate-agent-name "valid\nmalicious")))
 
 (provide 'test-task)
+;;; test-task.el ends here

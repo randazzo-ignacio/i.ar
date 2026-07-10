@@ -25,25 +25,24 @@
 (ert-deftest test-unknown-tool-fsm-recovery ()
   "Test that calling an unknown tool name does not crash or hang.
 
-In gptel 20260628.758 (our installed version), unknown tool names are
-logged but NOT handled gracefully by the FSM: gptel--handle-tool-use
-finds tool-spec is nil, logs a message, and returns without setting
-:result or transitioning the FSM.  The FSM stays in TOOL state.
+In gptel 20260704.707 (our installed version), unknown tool names are
+handled gracefully by the FSM: gptel--handle-tool-use finds tool-spec
+is nil, logs a message, and calls gptel--process-tool-call with an
+error message.  This sets :result on the tool-call and transitions
+the FSM to WAIT state.
 
-This means the raw gptel behavior for unknown tools is a no-op: no
-crash, no hang, but also no recovery.  The FSM remains stuck in TOOL
-state because no :result is set on the tool-call.
+This means the raw gptel behavior for unknown tools is graceful
+recovery: no crash, no hang, and the FSM transitions properly.
+The model receives an error feedback message and can retry with
+the correct tool name.
 
-This is why our pre-tool-call hook guard
+Our pre-tool-call hook guard
 (`my-gptel--block-unknown-tools', tested in
-test-unknown-tool-pre-hook-blocks) is critical: it intercepts unknown
-tools at the TPRE stage BEFORE they reach gptel--handle-tool-use, and
-returns (:block ...) which causes gptel to inject an error result via
-gptel--process-tool-call.  This sets :result on the tool-call and
-transitions the FSM properly.
-
-Without the hook guard, the FSM would hang in TOOL state on unknown
-tools.  The hook guard is the actual protection mechanism."
+test-unknown-tool-pre-hook-blocks) provides additional protection:
+it intercepts unknown tools at the TPRE stage BEFORE they reach
+gptel--handle-tool-use, and returns (:block ...) which causes gptel
+to inject an error result via gptel--process-tool-call at an earlier
+stage.  This provides a cleaner error message to the model."
   (let* ((tool-spec (gptel-make-tool
                      :name "list_directory"
                      :description "List a directory"
@@ -71,15 +70,17 @@ tools.  The hook guard is the actual protection mechanism."
     (condition-case _err
         (gptel--handle-tool-use fsm)
       (error nil))
-    ;; In gptel 20260628.758, unknown tools are logged but not handled:
-    ;; - FSM stays in TOOL state (no transition)
-    ;; - No :result is set on the tool-call
-    ;; - No callback is called
-    ;; This documents the raw gptel behavior.  Our hook guard
-    ;; (my-gptel--block-unknown-tools) is the actual protection.
-    (should (eq (gptel-fsm-state fsm) 'TOOL))
-    (should-not (plist-get tool-call :result))
-    (should-not test-unknown-tool--callback-result)))
+    ;; In gptel 20260704.707, unknown tools are handled gracefully:
+    ;; - FSM transitions from TOOL to WAIT state
+    ;; - :result is set on the tool-call with an error message
+    ;; - No callback is called (the result is fed back to the model)
+    (should (eq (gptel-fsm-state fsm) 'WAIT))
+    (should (plist-get tool-call :result))
+    ;; In gptel 20260704.707, the callback IS called with the tool result
+    ;; (the error message for the unknown tool).  This is the expected
+    ;; behavior: the callback receives the error feedback so it can be
+    ;; sent back to the model for retry.
+    (should test-unknown-tool--callback-result)))
 
 (ert-deftest test-unknown-tool-pre-hook-blocks ()
   "Test that `my-gptel--block-unknown-tools' blocks unknown tool names.

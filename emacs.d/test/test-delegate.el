@@ -2,7 +2,7 @@
 
 ;;; Tests for delegate_tool.el
 ;; Tests depth tracking, path traversal protection, validation,
-;; timeout edge cases, timeout handler, stream function, completion hook,
+;; timeout edge cases, timeout handler, completion hook,
 ;; and depth limit enforcement. Full delegation tests that spawn gptel
 ;; sessions would require a running Ollama backend.
 
@@ -77,9 +77,9 @@ The error from my-gptel--load-agent-profile propagates through the callback."
 
 (ert-deftest test-delegate-load-profile-finds-real-agent ()
   "my-gptel--load-agent-profile should load a real agent profile."
-  (let ((profile (my-gptel--load-agent-profile "mccarthy")))
+  (let ((profile (my-gptel--load-agent-profile "reviewer")))
     (should (stringp profile))
-    (should (string-match-p "McCarthy" profile))))
+    (should (string-match-p "reviewer" profile))))
 
 (ert-deftest test-delegate-load-profile-returns-nil-for-missing ()
   "my-gptel--load-agent-profile should return nil for nonexistent agent."
@@ -93,7 +93,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "mccarthy" "task" "ctx" 30))
+      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 30))
     (should (= captured-timeout 30))))
 
 (ert-deftest test-delegate-timeout-string-converted ()
@@ -102,7 +102,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "mccarthy" "task" "ctx" "30"))
+      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" "30"))
     (should (= captured-timeout 30))))
 
 (ert-deftest test-delegate-timeout-default-when-nil ()
@@ -111,7 +111,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "mccarthy" "task" "ctx" nil))
+      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" nil))
     (should (= captured-timeout 600))))
 
 ;;; --- Timeout edge case tests ---
@@ -125,7 +125,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "mccarthy" "task" "ctx" -5))
+      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" -5))
     (should (= captured-timeout 1))))
 
 (ert-deftest test-delegate-timeout-zero-clamped-to-1 ()
@@ -134,7 +134,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "mccarthy" "task" "ctx" 0))
+      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 0))
     (should (= captured-timeout 1))))
 
 (ert-deftest test-delegate-timeout-float-floored ()
@@ -143,7 +143,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "mccarthy" "task" "ctx" 30.7))
+      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 30.7))
     (should (= captured-timeout 30))))
 
 ;;; --- Timeout handler tests ---
@@ -172,60 +172,6 @@ The error from my-gptel--load-agent-profile propagates through the callback."
             buf (lambda (r) (setq result r)) "testagent" completed-sym 0 30)
            (should (null result)))
       (when (buffer-live-p buf) (kill-buffer buf)))))
-
-;;; --- Stream function tests ---
-
-(defun test-delegate--setup-stream-buffers ()
-  "Create parent and delegate buffers with stream tracking symbols.
-Returns a plist: (:parent-buf :delegate-buf :stream-fn)."
-  (let ((parent-buf (generate-new-buffer "test-parent"))
-        (delegate-buf (generate-new-buffer "test-delegate"))
-        (stream-marker-sym (make-symbol "stream-marker"))
-        (stream-pos-sym (make-symbol "stream-pos")))
-    (set stream-marker-sym nil)
-    (with-current-buffer parent-buf
-      (insert "Parent buffer start.\n")
-      (let ((parent-marker (point-marker)))
-        (with-current-buffer delegate-buf
-          (insert "PROMPT TEXT\n")
-          (set stream-pos-sym (point-marker)))
-        (let ((stream-fn (my-gptel--delegate-stream-fn
-                          parent-buf parent-marker "testagent"
-                          stream-marker-sym stream-pos-sym)))
-          (list :parent-buf parent-buf
-                :delegate-buf delegate-buf
-                :stream-fn stream-fn))))))
-
-(ert-deftest test-delegate-stream-fn-mirrors-to-parent ()
-  "Stream function should mirror new text to the parent buffer."
-  (let ((fixture (test-delegate--setup-stream-buffers)))
-    (unwind-protect
-         (progn
-           (with-current-buffer (plist-get fixture :delegate-buf)
-             (goto-char (point-max))
-             (insert "streamed response text\n")
-             (funcall (plist-get fixture :stream-fn)))
-           (with-current-buffer (plist-get fixture :parent-buf)
-             (should (string-match-p "streamed response text" (buffer-string)))
-             (should (string-match-p "Delegate 'testagent' streaming" (buffer-string)))))
-      (when (buffer-live-p (plist-get fixture :parent-buf))
-        (kill-buffer (plist-get fixture :parent-buf)))
-      (when (buffer-live-p (plist-get fixture :delegate-buf))
-        (kill-buffer (plist-get fixture :delegate-buf))))))
-
-(ert-deftest test-delegate-stream-fn-no-new-text ()
-  "Stream function should do nothing when there is no new text."
-  (let ((fixture (test-delegate--setup-stream-buffers)))
-    (unwind-protect
-         (progn
-           (with-current-buffer (plist-get fixture :delegate-buf)
-             (funcall (plist-get fixture :stream-fn)))
-           (with-current-buffer (plist-get fixture :parent-buf)
-             (should-not (string-match-p "streaming" (buffer-string)))))
-      (when (buffer-live-p (plist-get fixture :parent-buf))
-        (kill-buffer (plist-get fixture :parent-buf)))
-      (when (buffer-live-p (plist-get fixture :delegate-buf))
-        (kill-buffer (plist-get fixture :delegate-buf))))))
 
 ;;; --- Completion hook tests ---
 
@@ -450,19 +396,6 @@ Returns a plist: (:parent-buf :delegate-buf :stream-fn)."
                (should (> (length gptel-pre-tool-call-functions) 0))))
         (when (buffer-live-p buf) (kill-buffer buf))))))
 
-(ert-deftest test-delegate-spawn-adds-stream-hook ()
-  "spawn-async-delegate should add a post-stream hook for mirroring."
-  (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
-    (let ((buf nil))
-      (unwind-protect
-           (progn
-             (setq buf (my-gptel--spawn-async-delegate
-                        (lambda (_r)) "testagent" "task" "ctx" 30
-                        "You are a test agent."))
-             (with-current-buffer buf
-               (should (> (length gptel-post-stream-hook) 0))))
-        (when (buffer-live-p buf) (kill-buffer buf))))))
-
 (ert-deftest test-delegate-spawn-removes-delegate-tool-at-max-depth ()
   "spawn-async-delegate should remove delegate tool when depth >= max-depth."
   (with-temp-buffer
@@ -502,58 +435,6 @@ Returns a plist: (:parent-buf :delegate-buf :stream-fn)."
                                   gptel-tools)))
                  (should has-delegate))))
         (when (buffer-live-p buf) (kill-buffer buf))))))
-
-;;; --- Stream function edge case tests ---
-
-(ert-deftest test-delegate-stream-fn-dead-parent-buffer ()
-  "Stream function should not crash when parent buffer is dead."
-  (let ((parent-buf (generate-new-buffer "test-parent"))
-        (delegate-buf (generate-new-buffer "test-delegate"))
-        (stream-marker-sym (make-symbol "stream-marker"))
-        (stream-pos-sym (make-symbol "stream-pos")))
-    (set stream-marker-sym nil)
-    (with-current-buffer parent-buf
-      (insert "Parent buffer start.\n")
-      (let ((parent-marker (point-marker)))
-        (with-current-buffer delegate-buf
-          (insert "PROMPT TEXT\n")
-          (set stream-pos-sym (point-marker)))
-        (let ((stream-fn (my-gptel--delegate-stream-fn
-                          parent-buf parent-marker "testagent"
-                          stream-marker-sym stream-pos-sym)))
-          ;; Kill parent buffer before calling stream-fn
-          (kill-buffer parent-buf)
-          (with-current-buffer delegate-buf
-            (goto-char (point-max))
-            (insert "new text\n")
-            ;; Should not crash
-            (funcall stream-fn)))))
-    (when (buffer-live-p delegate-buf) (kill-buffer delegate-buf))))
-
-(ert-deftest test-delegate-stream-fn-nil-stream-pos ()
-  "Stream function should do nothing when stream-pos is nil."
-  (let ((parent-buf (generate-new-buffer "test-parent"))
-        (delegate-buf (generate-new-buffer "test-delegate"))
-        (stream-marker-sym (make-symbol "stream-marker"))
-        (stream-pos-sym (make-symbol "stream-pos")))
-    (set stream-marker-sym nil)
-    (set stream-pos-sym nil)  ; nil stream-pos
-    (with-current-buffer parent-buf
-      (insert "Parent buffer start.\n")
-      (let ((parent-marker (point-marker)))
-        (with-current-buffer delegate-buf
-          (insert "PROMPT TEXT\n"))
-        (let ((stream-fn (my-gptel--delegate-stream-fn
-                          parent-buf parent-marker "testagent"
-                          stream-marker-sym stream-pos-sym)))
-          (with-current-buffer delegate-buf
-            (goto-char (point-max))
-            (insert "new text\n")
-            (funcall stream-fn))
-          (with-current-buffer parent-buf
-            (should-not (string-match-p "new text" (buffer-string)))))))
-    (when (buffer-live-p parent-buf) (kill-buffer parent-buf))
-    (when (buffer-live-p delegate-buf) (kill-buffer delegate-buf))))
 
 ;;; --- Completion function edge case tests ---
 
@@ -712,6 +593,7 @@ Returns a plist: (:parent-buf :delegate-buf :stream-fn)."
              (with-current-buffer buf
                (should (null gptel-confirm-tool-calls))))
         (when (buffer-live-p buf) (kill-buffer buf))))))
+
 (ert-deftest test-delegate-spawn-clamps-negative-parent-depth ()
   "spawn-async-delegate should clamp negative parent-depth to 0.
 A tampered session file could set my-gptel--delegate-depth to a
@@ -733,3 +615,4 @@ negatives, but this is defense-in-depth at the consumer level."
           (when (buffer-live-p buf) (kill-buffer buf)))))))
 
 (provide 'test-delegate)
+;;; test-delegate.el ends here

@@ -134,9 +134,9 @@ Temporarily binds `user-emacs-directory' to the temp dir."
 
 (ert-deftest test-agent-load-profile-finds-real-agent ()
   "my-gptel--load-agent-profile should find a real agent in agents.d/."
-  (let ((result (my-gptel--load-agent-profile "mccarthy")))
+  (let ((result (my-gptel--load-agent-profile "reviewer")))
     (should (stringp result))
-    (should (string-match-p "McCarthy" result))))
+    (should (string-match-p "reviewer" result))))
 
 ;;; --- my-gptel-load-agent tests ---
 
