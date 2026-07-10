@@ -134,7 +134,7 @@ fi
 # =============================================================================
 # Setup
 # =============================================================================
-LOG_FILE="${REPO_DIR}/logs/darwin-loop-$(date +%Y-%m-%d).log"
+LOG_FILE="${PERSONALIZATION_DIR}/audit/darwin-loop-$(date +%Y-%m-%d).log"
 mkdir -p "$(dirname "${LOG_FILE}")"
 
 # --- Telegram helpers ---
