@@ -19,8 +19,8 @@
 ;;         --eval '(agent-run-cycle :agent "darwin" :timeout 7200)'
 ;;
 ;; Telegram notifications require:
-;;   DARWIN_TELEGRAM_BOT_TOKEN -- bot token from @BotFather
-;;   DARWIN_TELEGRAM_CHAT_ID   -- your chat ID (message @userinfobot to get it)
+;;   AGENT_TELEGRAM_BOT_TOKEN -- bot token from @BotFather
+;;   AGENT_TELEGRAM_CHAT_ID   -- your chat ID (message @userinfobot to get it)
 ;;
 ;; The cycle is self-contained: the agent reads its own memories, decides
 ;; what to change, delegates to reviewer, runs tests, commits, and logs.
@@ -54,10 +54,10 @@
 ;; in metaconfig/parameters.el (loaded early in init.el).
 
 (defcustom agent-telegram-bot-token
-  (or (getenv "DARWIN_TELEGRAM_BOT_TOKEN") "")
+  (or (getenv "AGENT_TELEGRAM_BOT_TOKEN") "")
   "Telegram bot token for cycle notifications.
 Get this from @BotFather on Telegram.
-Can also be set via DARWIN_TELEGRAM_BOT_TOKEN env var.
+Can also be set via AGENT_TELEGRAM_BOT_TOKEN env var.
 
 This variable intentionally lacks a :safe property so that Emacs
 prompts the user when it is set via file-local variables.  The bot
@@ -67,10 +67,10 @@ session file could redirect notifications to an attacker's bot."
   :group 'agent-cycle)
 
 (defcustom agent-telegram-chat-id
-  (or (getenv "DARWIN_TELEGRAM_CHAT_ID") "")
+  (or (getenv "AGENT_TELEGRAM_CHAT_ID") "")
   "Telegram chat ID to send notifications to.
 Message @userinfobot on Telegram to get your chat ID.
-Can also be set via DARWIN_TELEGRAM_CHAT_ID env var.
+Can also be set via AGENT_TELEGRAM_CHAT_ID env var.
 
 This variable intentionally lacks a :safe property so that Emacs
 prompts the user when it is set via file-local variables.  The chat

@@ -62,8 +62,8 @@ Options:
 
 Environment:
   EMACBOROS_OLLAMA_HOST     Ollama API host (overridden by --ollama-host)
-  DARWIN_TELEGRAM_BOT_TOKEN  Telegram bot token for notifications
-  DARWIN_TELEGRAM_CHAT_ID    Telegram chat ID for notifications
+  AGENT_TELEGRAM_BOT_TOKEN  Telegram bot token for notifications
+  AGENT_TELEGRAM_CHAT_ID    Telegram chat ID for notifications
 
 Examples:
   # Single darwin cycle (default)
@@ -231,11 +231,11 @@ log() {
 # --- Telegram helpers ---
 tg_send() {
     local message="$1"
-    if [[ -n "${DARWIN_TELEGRAM_BOT_TOKEN:-}" && -n "${DARWIN_TELEGRAM_CHAT_ID:-}" ]]; then
+    if [[ -n "${AGENT_TELEGRAM_BOT_TOKEN:-}" && -n "${AGENT_TELEGRAM_CHAT_ID:-}" ]]; then
         curl -s -m 10 -X POST \
-            "https://api.telegram.org/bot${DARWIN_TELEGRAM_BOT_TOKEN}/sendMessage" \
+            "https://api.telegram.org/bot${AGENT_TELEGRAM_BOT_TOKEN}/sendMessage" \
             -H "Content-Type: application/json" \
-            -d "$(jq -n --arg chat_id "$DARWIN_TELEGRAM_CHAT_ID" \
+            -d "$(jq -n --arg chat_id "$AGENT_TELEGRAM_CHAT_ID" \
                        --arg text "$message" \
                        '{chat_id: $chat_id, text: $text, parse_mode: "Markdown"}')" \
             > /dev/null 2>&1 || true
@@ -283,8 +283,8 @@ run_cycle() {
         --cap-add=NET_BIND_SERVICE \
         --network=host \
         -e "EMACBOROS_OLLAMA_HOST=${OLLAMA_HOST}" \
-        -e "DARWIN_TELEGRAM_BOT_TOKEN=${DARWIN_TELEGRAM_BOT_TOKEN:-}" \
-        -e "DARWIN_TELEGRAM_CHAT_ID=${DARWIN_TELEGRAM_CHAT_ID:-}" \
+        -e "AGENT_TELEGRAM_BOT_TOKEN=${AGENT_TELEGRAM_BOT_TOKEN:-}" \
+        -e "AGENT_TELEGRAM_CHAT_ID=${AGENT_TELEGRAM_CHAT_ID:-}" \
         -e "LANG=C.utf8" \
         --tmpfs /tmp:rw,size=256m \
         --tmpfs /run:rw,size=64m \
