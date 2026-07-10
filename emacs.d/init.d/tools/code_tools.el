@@ -56,7 +56,7 @@ to prevent interactive pagers (less/more) from hanging in batch mode."
                    :name "gptel-async-cmd"
                    :buffer buf
                    :command (list shell-file-name "-c"
-                                  (format "GIT_PAGER=cat TERM=dumb %s" cmd))
+                                  (format "export GIT_PAGER=cat TERM=dumb; %s" cmd))
                    :sentinel
                    (lambda (proc _event)
                      (when (memq (process-status proc) '(exit signal))
