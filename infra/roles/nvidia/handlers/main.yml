@@ -1,6 +1,0 @@
----
-# roles/nvidia/handlers/main.yml
-
-- name: rebuild initramfs
-  command: dracut --force
-  changed_when: true

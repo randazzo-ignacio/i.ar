@@ -1,8 +1,0 @@
----
-# roles/ollama/handlers/main.yml
-
-- name: restart ollama
-  service:
-    name: ollama
-    state: restarted
-    daemon_reload: true

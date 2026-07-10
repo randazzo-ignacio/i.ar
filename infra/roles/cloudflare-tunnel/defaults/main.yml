@@ -1,6 +1,0 @@
----
-# roles/cloudflare-tunnel/defaults/main.yml
-# Cloudflare tunnel role defaults.
-
-cloudflare_tunnel_enabled: false
-cloudflare_domain: "randazzo.net.ar"

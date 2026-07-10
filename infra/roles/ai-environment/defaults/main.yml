@@ -1,5 +1,0 @@
----
-# roles/ai-environment/defaults/main.yml
-# AI environment role defaults.
-
-ai_agent_ssh_public_key: "ssh-ed25519 AAAA... replace-with-actual-key"

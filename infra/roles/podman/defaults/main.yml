@@ -1,5 +1,0 @@
----
-# roles/podman/defaults/main.yml
-# podman role defaults.
-
-podman_enabled: false

@@ -1,7 +1,0 @@
----
-# roles/caddy/defaults/main.yml
-# Caddy defaults — overridden by group_vars/all.yml in practice.
-
-caddy_version: "latest"
-caddy_email: "change-me@example.com"
-caddy_config_path: "/etc/caddy/Caddyfile"

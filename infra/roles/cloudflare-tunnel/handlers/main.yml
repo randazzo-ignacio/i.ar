@@ -1,7 +1,0 @@
----
-# roles/cloudflare-tunnel/handlers/main.yml
-
-- name: restart cloudflared
-  service:
-    name: cloudflared
-    state: restarted

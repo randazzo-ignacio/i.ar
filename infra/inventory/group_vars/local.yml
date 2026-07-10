@@ -1,2 +1,0 @@
-# Local machines use a personal user account, not 'admin'.
-local_ssh_user: "nacho"

@@ -1,2 +1,0 @@
-wg_ip: "10.66.0.4"
-# No wg_endpoint — spoke connects to hub, no public endpoint needed.

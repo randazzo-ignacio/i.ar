@@ -1,3 +1,0 @@
----
-# roles/portfolio-page/handlers/main.yml
-# No handlers needed — Caddy serves files directly from disk.
