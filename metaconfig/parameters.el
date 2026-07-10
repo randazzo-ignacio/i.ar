@@ -31,7 +31,8 @@
 ;;
 ;; Parameters NOT in this file (kept in their own modules):
 ;;   - darwin-telegram-bot-token / darwin-telegram-chat-id (env-based secrets)
-;;   - my-gptel--guard-allow-self-modification (security toggle, set in init.el)
+;;   - my-gptel--guard-allow-self-modification (security toggle, defined in
+;;     file_guard.el, set by EMACBOROS_SELF_MODIFICATION env var in init.el)
 
 ;; =============================================================================
 ;; Delegate Tool Parameters

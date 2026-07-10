@@ -25,6 +25,13 @@
 ;; Central parameter configuration (must load before any init.d modules)
 (load-file (expand-file-name "metaconfig/parameters.el" user-emacs-directory))
 
+;; Self-modification mode -- controlled by EMACBOROS_SELF_MODIFICATION env var.
+;; Set by emacboros.sh --self-modification flag. Default: nil (all guards enabled).
+;; Must be set before file_guard.el loads -- defcustom respects an already-bound
+;; variable, so this value will not be overwritten by file_guard.el's defcustom.
+(when (string= (getenv "EMACBOROS_SELF_MODIFICATION") "1")
+  (setq my-gptel--guard-allow-self-modification t))
+
 ;; ──────────────────────────────────────────────────────────
 ;; Core modules
 ;; ──────────────────────────────────────────────────────────
@@ -117,14 +124,3 @@
 ;; ──────────────────────────────────────────────────────────
 (dolist (file (directory-files init-dynamic-dir nil "\\.el\\'"))
   (load (expand-file-name file init-dynamic-dir)))
-
-(custom-set-variables
- ;; custom-set-variables was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; If there is more than one, they won't work right.
- '(my-gptel--guard-allow-self-modification t))
-(custom-set-faces
- ;; custom-set-faces was added by Custom.
- ;; If you edit it by hand, you could mess it up, so be careful.
- ;; If there is more than one, they won't work right.
- )

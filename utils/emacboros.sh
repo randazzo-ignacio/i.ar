@@ -35,6 +35,11 @@ Required:
                        Use this to point at your personalization repository.
 
 Options:
+  --self-modification  Enable self-modification mode. Allows agents to modify
+                       Emacs Lisp source files (init.el, init.d/**/*.el), container
+                       configuration, and git hooks. Agent prompt files and
+                       base_context.org remain protected regardless.
+                       Default: disabled (all guards active).
   --local              Use a local Ollama instance (localhost:11434) instead of
                        the remote server. Enables host networking so the container
                        can reach Ollama on the host loopback interface.
@@ -49,6 +54,7 @@ Options:
 
 Examples:
   emacboros.sh --personalization ~/repos/iar-personalization
+  emacboros.sh --personalization ~/repos/iar-personalization --self-modification
   emacboros.sh --personalization ~/repos/iar-personalization --local
   emacboros.sh --personalization ~/repos/iar-personalization --mount /home/nacho/projects/myapp
   emacboros.sh --personalization ~/repos/iar-personalization --mount-ro /etc/ansible --mount /home/nacho/infra
@@ -61,11 +67,16 @@ EOF
 USE_LOCAL=false
 PERSONALIZATION_DIR=""
 CUSTOM_OLLAMA_HOST=""
+SELF_MODIFICATION=false
 MOUNT_ARGS=()
 MOUNT_RO_ARGS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --self-modification)
+            SELF_MODIFICATION=true
+            shift
+            ;;
         --local)
             USE_LOCAL=true
             shift
@@ -161,6 +172,14 @@ run() {
     info "Starting ${CONTAINER_NAME}"
     info "Personalization: ${PERSONALIZATION_DIR}"
 
+    if [[ "${SELF_MODIFICATION}" == "true" ]]; then
+        info "Self-modification: ENABLED (file guard tier 2 relaxed)"
+        SELF_MOD_ENV="-e EMACBOROS_SELF_MODIFICATION=1"
+    else
+        info "Self-modification: disabled (all guards active)"
+        SELF_MOD_ENV=""
+    fi
+
     # shellcheck disable=SC2086
     podman run \
         --rm -it --name "${CONTAINER_NAME}" \
@@ -170,6 +189,7 @@ run() {
         --cap-add=NET_BIND_SERVICE \
         ${NET_OPTS} \
         -e "EMACBOROS_OLLAMA_HOST=${OLLAMA_HOST}" \
+        ${SELF_MOD_ENV} \
         -e "LANG=C.utf8" \
         --tmpfs /tmp:rw,size=256m \
         --tmpfs /run:rw,size=64m \
