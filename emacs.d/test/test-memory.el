@@ -224,8 +224,8 @@ are left behind in the temp directory."
 ;;; --- Agent dir resolution tests ---
 
 (ert-deftest test-memory-get-agent-dir-with-name ()
-  "my-gptel--memory-get-agent-dir should use my-gptel--current-agent-name."
-  ;; Use defvar to set dynamic binding, then restore
+  "my-gptel--memory-get-agent-dir should use my-gptel--current-agent-name.
+Memory files now live in audit/<agent>/ (not tasks/<agent>/)."
   (let ((old-value (and (boundp 'my-gptel--current-agent-name)
                         my-gptel--current-agent-name))
         (old-user-emacs-directory (bound-and-true-p user-emacs-directory)))
@@ -233,13 +233,13 @@ are left behind in the temp directory."
         (progn
           (setq my-gptel--current-agent-name "testagent")
           (let* ((user-emacs-directory (make-temp-file "test-mem-agent-" :dir-flag))
-                 (tasks-dir (expand-file-name "tasks" user-emacs-directory))
-                 (agent-dir (expand-file-name "testagent" tasks-dir)))
+                 (audit-dir (expand-file-name "audit" user-emacs-directory))
+                 (agent-dir (expand-file-name "testagent" audit-dir)))
             (make-directory agent-dir t)
             (let ((dir (my-gptel--memory-get-agent-dir)))
               (should (stringp dir))
               (should (string-match-p "testagent" dir))
-              (should (string-match-p "tasks" dir))))
+              (should (string-match-p "audit" dir))))
           (when (and old-user-emacs-directory
                      (file-exists-p (make-temp-file "test-mem-agent-" :dir-flag)))
             (delete-directory (make-temp-file "test-mem-agent-" :dir-flag) t)))

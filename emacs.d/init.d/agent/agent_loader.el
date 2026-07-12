@@ -44,8 +44,8 @@ last N lines are returned with a truncation notice prepended.  The full
 file remains on disk -- this only affects what goes into the LLM context.
 This replaces the old #+INCLUDE approach -- personal files are injected
 programmatically from the tasks mount rather than via org-mode includes."
-  (let* ((tasks-base (expand-file-name "tasks" user-emacs-directory))
-         (filepath (expand-file-name (format "%s/%s" agent-name filename) tasks-base)))
+  (let* ((audit-base (expand-file-name "audit" user-emacs-directory))
+         (filepath (expand-file-name (format "%s/%s" agent-name filename) audit-base)))
     (if (file-exists-p filepath)
         (with-temp-buffer
           (insert-file-contents filepath)

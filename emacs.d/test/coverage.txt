@@ -1,6 +1,6 @@
 == Code coverage text report ==
 iar_quit : Percent 0% [Relevant: 14 Covered: 0 Missed: 14]
-task_tools : Percent 98% [Relevant: 80 Covered: 79 Missed: 1]
+task_tools : Percent 93% [Relevant: 128 Covered: 120 Missed: 8]
 reload_tools : Percent 81% [Relevant: 32 Covered: 26 Missed: 6]
 prompt_loader : Percent 85% [Relevant: 7 Covered: 6 Missed: 1]
 memory_tools : Percent 88% [Relevant: 164 Covered: 145 Missed: 19]

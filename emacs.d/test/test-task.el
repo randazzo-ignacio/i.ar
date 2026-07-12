@@ -1,8 +1,8 @@
 ;; -*- lexical-binding: t; -*-
 
 ;;; Tests for task_tools.el
-;; Tests read_tasks (TODO.md/IDEAS.md reading) and read_history
-;; (per-agent and unified HISTORY.log reading).
+;; Tests read_tasks (file-per-task reading), write_task, remove_task,
+;; and read_history (per-agent and unified HISTORY.log reading).
 
 (require 'ert)
 (require 'cl-lib)
@@ -20,13 +20,13 @@
   ;; Create tasks/ directory with agent subdirectories
   (let ((tasks-dir (expand-file-name "tasks" test-task--tmpdir)))
     (make-directory tasks-dir t)
-    ;; Create a test agent with TODO.md and IDEAS.md
+    ;; Create a test agent with individual task files
     (let ((agent-dir (expand-file-name "testagent" tasks-dir)))
       (make-directory agent-dir t)
-      (with-temp-file (expand-file-name "TODO.md" agent-dir)
-        (insert "# TODO\n\n- [ ] Task 1\n- [ ] Task 2\n"))
-      (with-temp-file (expand-file-name "IDEAS.md" agent-dir)
-        (insert "# IDEAS\n\n## Cool Idea\nDescription here.\n")))
+      (with-temp-file (expand-file-name "fix-bugs.md" agent-dir)
+        (insert "# Fix Bugs\n\nFix the bug in module X.\n"))
+      (with-temp-file (expand-file-name "add-feature.md" agent-dir)
+        (insert "# Add Feature\n\nAdd a cool feature to module Y.\n")))
     ;; Create a second agent with no task files
     (let ((agent-dir (expand-file-name "otheragent" tasks-dir)))
       (make-directory agent-dir t)))
@@ -70,34 +70,91 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
 
 ;;; --- read_tasks tests ---
 
-(ert-deftest test-task-read-tasks-returns-both ()
-  "read_tasks should return both TODO.md and IDEAS.md content."
+(ert-deftest test-task-read-tasks-returns-all-files ()
+  "read_tasks should return all .md task files with names (no .md extension)."
   (with-task-fixture
     (let ((result (my-gptel-tool-read-tasks)))
       (should (stringp result))
-      (should (string-match-p "TODO" result))
-      (should (string-match-p "Task 1" result))
-      (should (string-match-p "IDEAS" result))
-      (should (string-match-p "Cool Idea" result)))))
+      (should (string-match-p "fix-bugs" result))
+      (should (string-match-p "Fix Bugs" result))
+      (should (string-match-p "add-feature" result))
+      (should (string-match-p "Add Feature" result))
+      ;; Verify .md extension is NOT in the output (task name only)
+      (should-not (string-match-p "\\.md ===" result)))))
 
-(ert-deftest test-task-read-tasks-only-todo ()
-  "read_tasks should work when only TODO.md exists."
+(ert-deftest test-task-read-tasks-single-file ()
+  "read_tasks should work when only one task file exists."
   (with-task-fixture
     (let* ((agent-dir (expand-file-name "tasks/testagent" test-task--tmpdir)))
-      (delete-file (expand-file-name "IDEAS.md" agent-dir))
+      (delete-file (expand-file-name "add-feature.md" agent-dir))
       (let ((result (my-gptel-tool-read-tasks)))
         (should (stringp result))
-        (should (string-match-p "TODO" result))
-        (should (string-match-p "Task 1" result))
-        (should-not (string-match-p "IDEAS" result))))))
+        (should (string-match-p "fix-bugs" result))
+        (should-not (string-match-p "add-feature" result))))))
 
-(ert-deftest test-task-read-tasks-neither-exists ()
-  "read_tasks should return error when neither TODO.md nor IDEAS.md exists."
+(ert-deftest test-task-read-tasks-no-tasks ()
+  "read_tasks should return message when no task files exist."
   (with-task-fixture
     (let ((my-gptel--current-agent-name "otheragent"))
       (let ((result (my-gptel-tool-read-tasks)))
         (should (stringp result))
-        (should (string-match-p "Error" result))))))
+        (should (string-match-p "No tasks" result))))))
+
+;;; --- write_task tests ---
+
+(ert-deftest test-task-write-task-creates-file ()
+  "write_task should create a new .md task file."
+  (with-task-fixture
+    (let ((result (my-gptel-tool-write-task "new-task" "# New Task\n\nDo something."))
+          (task-path (expand-file-name "tasks/testagent/new-task.md" test-task--tmpdir)))
+      (should (stringp result))
+      (should (string-match-p "created" result))
+      (should (file-exists-p task-path))
+      (with-temp-buffer
+        (insert-file-contents task-path)
+        (should (string-match-p "New Task" (buffer-string)))))))
+
+(ert-deftest test-task-write-task-refuses-overwrite ()
+  "write_task should refuse to overwrite an existing task file."
+  (with-task-fixture
+    (let ((result (my-gptel-tool-write-task "fix-bugs" "# Overwrite attempt")))
+      (should (stringp result))
+      (should (string-match-p "Error" result))
+      (should (string-match-p "already exists" result)))))
+
+(ert-deftest test-task-write-task-rejects-invalid-name ()
+  "write_task should reject names with dots, slashes, spaces."
+  (with-task-fixture
+    (should (string-match-p "Error" (my-gptel-tool-write-task "foo.bar" "content")))
+    (should (string-match-p "Error" (my-gptel-tool-write-task "foo/bar" "content")))
+    (should (string-match-p "Error" (my-gptel-tool-write-task "foo bar" "content")))
+    (should (string-match-p "Error" (my-gptel-tool-write-task "../etc" "content")))))
+
+;;; --- remove_task tests ---
+
+(ert-deftest test-task-remove-task-deletes-file ()
+  "remove_task should delete the task file."
+  (with-task-fixture
+    (let* ((task-path (expand-file-name "tasks/testagent/fix-bugs.md" test-task--tmpdir))
+           (result (my-gptel-tool-remove-task "fix-bugs")))
+      (should (stringp result))
+      (should (string-match-p "removed" result))
+      (should-not (file-exists-p task-path)))))
+
+(ert-deftest test-task-remove-task-nonexistent ()
+  "remove_task should error when task file does not exist."
+  (with-task-fixture
+    (let ((result (my-gptel-tool-remove-task "nonexistent")))
+      (should (stringp result))
+      (should (string-match-p "Error" result))
+      (should (string-match-p "does not exist" result)))))
+
+(ert-deftest test-task-remove-task-rejects-invalid-name ()
+  "remove_task should reject names with dots, slashes, spaces."
+  (with-task-fixture
+    (should (string-match-p "Error" (my-gptel-tool-remove-task "foo.bar")))
+    (should (string-match-p "Error" (my-gptel-tool-remove-task "foo/bar")))
+    (should (string-match-p "Error" (my-gptel-tool-remove-task "foo bar")))))
 
 ;;; --- read_history tests ---
 
@@ -139,81 +196,80 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
       (should (stringp result))
       (should (string-match-p "Invalid agent name" result)))))
 
-;;; --- get-agent-dir validation tests ---
+;;; --- resolve-agent-tasks-dir validation tests ---
 
-(ert-deftest test-task-get-agent-dir-valid-name ()
-  "my-gptel--get-agent-dir should return the agent directory path."
+(ert-deftest test-task-resolve-agent-tasks-dir-valid-name ()
+  "my-gptel--resolve-agent-tasks-dir should return the agent tasks directory path."
   (with-task-fixture
-    (let ((result (my-gptel--get-agent-dir)))
+    (let ((result (my-gptel--resolve-agent-tasks-dir)))
       (should (stringp result))
       (should (string-match-p "testagent" result))
       (should (string-match-p "tasks" result)))))
 
-(ert-deftest test-task-get-agent-dir-no-agent-loaded ()
-  "my-gptel--get-agent-dir should error when no agent is loaded."
+(ert-deftest test-task-resolve-agent-tasks-dir-no-agent-loaded ()
+  "my-gptel--resolve-agent-tasks-dir should error when no agent is loaded."
   (with-task-fixture
     (let (my-gptel--current-agent-name
           my-gptel--current-agent-file)
-      (should-error (my-gptel--get-agent-dir)))))
+      (should-error (my-gptel--resolve-agent-tasks-dir)))))
 
-(ert-deftest test-task-get-agent-dir-rejects-path-traversal ()
-  "my-gptel--get-agent-dir should reject agent names with path traversal."
+(ert-deftest test-task-resolve-agent-tasks-dir-rejects-path-traversal ()
+  "my-gptel--resolve-agent-tasks-dir should reject agent names with path traversal."
   (with-task-fixture
     (let ((my-gptel--current-agent-name "../../etc/passwd"))
-      (should-error (my-gptel--get-agent-dir)))))
+      (should-error (my-gptel--resolve-agent-tasks-dir)))))
 
-(ert-deftest test-task-get-agent-dir-rejects-slashes ()
-  "my-gptel--get-agent-dir should reject agent names with slashes."
+(ert-deftest test-task-resolve-agent-tasks-dir-rejects-slashes ()
+  "my-gptel--resolve-agent-tasks-dir should reject agent names with slashes."
   (with-task-fixture
     (let ((my-gptel--current-agent-name "foo/bar"))
-      (should-error (my-gptel--get-agent-dir)))))
+      (should-error (my-gptel--resolve-agent-tasks-dir)))))
 
-(ert-deftest test-task-get-agent-dir-rejects-dots ()
-  "my-gptel--get-agent-dir should reject agent names with dots."
+(ert-deftest test-task-resolve-agent-tasks-dir-rejects-dots ()
+  "my-gptel--resolve-agent-tasks-dir should reject agent names with dots."
   (with-task-fixture
     (let ((my-gptel--current-agent-name "foo.bar"))
-      (should-error (my-gptel--get-agent-dir)))))
+      (should-error (my-gptel--resolve-agent-tasks-dir)))))
 
-(ert-deftest test-task-get-agent-dir-rejects-spaces ()
-  "my-gptel--get-agent-dir should reject agent names with spaces."
+(ert-deftest test-task-resolve-agent-tasks-dir-rejects-spaces ()
+  "my-gptel--resolve-agent-tasks-dir should reject agent names with spaces."
   (with-task-fixture
     (let ((my-gptel--current-agent-name "foo bar"))
-      (should-error (my-gptel--get-agent-dir)))))
+      (should-error (my-gptel--resolve-agent-tasks-dir)))))
 
-(ert-deftest test-task-get-agent-dir-falls-back-to-agent-file ()
-  "my-gptel--get-agent-dir should derive agent name from agent file path."
-  (with-task-fixture
-    (let (my-gptel--current-agent-name
-          (my-gptel--current-agent-file
-           (expand-file-name "agents.d/agents/testagent/prompt.org" test-task--tmpdir)))
-      (let ((result (my-gptel--get-agent-dir)))
-        (should (stringp result))
-        (should (string-match-p "testagent" result))))))
+;;; --- valid-task-name-p and validate-task-name tests ---
 
-(ert-deftest test-task-get-agent-dir-fallback-traversal-file ()
-  "my-gptel--get-agent-dir should safely handle traversal in agent-file path.
-The derived name from a traversal path like ../../etc/passwd/prompt.org
-is 'passwd' (last directory component), which passes the regex but
-resolves to tasks/passwd -- not a traversal.  Verify no '..' in result."
-  (with-task-fixture
-    (let (my-gptel--current-agent-name
-          (my-gptel--current-agent-file "../../etc/passwd/prompt.org"))
-      ;; The fallback derives 'passwd' from the file path, which resolves
-      ;; to tasks/passwd -- not a traversal.  Verify no '..' in result.
-      (let ((result (my-gptel--get-agent-dir)))
-        (should (stringp result))
-        (should (string-match-p "tasks" result))
-        (should-not (string-match-p "\\.\\." result))))))
+(ert-deftest test-task-valid-task-name-p-accepts-valid ()
+  "valid-task-name-p should accept alphanumeric, hyphens, underscores."
+  (should (my-gptel--valid-task-name-p "fix-bugs"))
+  (should (my-gptel--valid-task-name-p "add-feature"))
+  (should (my-gptel--valid-task-name-p "task_123"))
+  (should (my-gptel--valid-task-name-p "A-B-C"))
+  (should (my-gptel--valid-task-name-p "a"))
+  (should (my-gptel--valid-task-name-p "123")))
 
-(ert-deftest test-task-get-agent-dir-empty-name-errors ()
-  "my-gptel--get-agent-dir should error when agent name is empty string.
-Empty string is truthy in Elisp, so it enters the validation branch
-where the regex (requires at least one char) rejects it."
-  (with-task-fixture
-    (let ((my-gptel--current-agent-name "")
-          (my-gptel--current-agent-file
-           (expand-file-name "agents.d/agents/testagent/prompt.org" test-task--tmpdir)))
-      (should-error (my-gptel--get-agent-dir)))))
+(ert-deftest test-task-valid-task-name-p-rejects-invalid ()
+  "valid-task-name-p should reject nil, non-strings, empty, dots, slashes, spaces."
+  (should-not (my-gptel--valid-task-name-p nil))
+  (should-not (my-gptel--valid-task-name-p 42))
+  (should-not (my-gptel--valid-task-name-p ""))
+  (should-not (my-gptel--valid-task-name-p "foo/bar"))
+  (should-not (my-gptel--valid-task-name-p "foo.bar"))
+  (should-not (my-gptel--valid-task-name-p "foo bar"))
+  (should-not (my-gptel--valid-task-name-p "../../etc"))
+  (should-not (my-gptel--valid-task-name-p "valid\nmalicious")))
+
+(ert-deftest test-task-validate-task-name-returns-name-on-success ()
+  "validate-task-name should return the name when valid."
+  (should (equal "fix-bugs" (my-gptel--validate-task-name "fix-bugs")))
+  (should (equal "add-feature" (my-gptel--validate-task-name "add-feature"))))
+
+(ert-deftest test-task-validate-task-name-errors-on-invalid ()
+  "validate-task-name should signal error on invalid names."
+  (should-error (my-gptel--validate-task-name ""))
+  (should-error (my-gptel--validate-task-name "foo.bar"))
+  (should-error (my-gptel--validate-task-name "foo/bar"))
+  (should-error (my-gptel--validate-task-name "../../etc")))
 
 ;;; --- valid-agent-name-p and validate-agent-name tests ---
 

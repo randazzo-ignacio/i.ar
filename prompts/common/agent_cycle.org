@@ -2,9 +2,9 @@ You are waking up for a new cycle. Follow your cycle protocol:
 
 1. Your MEMORIES.md (last 200 lines) is already in your system prompt. Do NOT read it again with read_file.
 2. Read your recent HISTORY.log using the read_history tool (do NOT use read_file -- it bypasses truncation).
-3. Read your TODOs and IDEAS using the read_tasks tool. If there are pending TODO items, pick one
-   of those instead of inventing something new. This gives you continuity across cycles.
-   If TODOs are empty, look at the codebase and pick one thing that interests you.
+3. Read your tasks using the read_tasks tool. Each task is a separate .md file in your tasks directory.
+   If there are pending tasks, pick one instead of inventing something new. This gives you continuity
+   across cycles. If no tasks exist, look at the codebase and pick one thing that interests you.
 4. Make one change. Small. Deliberate.
 5. Delegate to the reviewer agent for code review. Fix issues if any.
    You MUST delegate to the reviewer. Use the delegate tool with agent='reviewer',
@@ -15,12 +15,11 @@ You are waking up for a new cycle. Follow your cycle protocol:
    You MUST commit. Do not skip this step. If git fails with "not a git repository", run: cd /root/i.ar && git init first, then retry.
 9. Log to your HISTORY.log using append_file on /root/.emacs.d/audit/<agent-name>/HISTORY.log.
    You MUST write to your history. Format: [TIMESTAMP] cycle: <what you did and why>
-10. Update your MEMORIES.md with what you learned (use write_file or replace_in_file on /root/.emacs.d/tasks/<agent-name>/MEMORIES.md).
+10. Update your MEMORIES.md with what you learned (use write_file or replace_in_file on /root/.emacs.d/audit/<agent-name>/MEMORIES.md).
     You MUST update your memories. Add what you learned this cycle.
-11. If you completed a TODO item, mark it done in TODO.md (use replace_in_file).
+11. If you completed a task, use remove_task to delete the task file.
     If you noticed something interesting that you didn't have time for this cycle,
-    add it to TODO.md or IDEAS.md (use append_file on /root/.emacs.d/tasks/<agent-name>/TODO.md
-    or /root/.emacs.d/tasks/<agent-name>/IDEAS.md). This is how you make long-term plans.
+    use write_task to create a new task file. This is how you make long-term plans.
 12. You are done for this cycle. Respond with a summary and end with the exact text CYCLE_COMPLETE on its own line.
 
 CRITICAL: Steps 5, 8, 9, and 10 are MANDATORY. Do not skip them.

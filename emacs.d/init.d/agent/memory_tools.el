@@ -51,10 +51,10 @@ effect without reloading the module."
 ;; buffer-local state (my-gptel--current-agent-name or
 ;; my-gptel--current-agent-file). The logic is identical, so we
 ;; delegate to the single source of truth.
-(defalias 'my-gptel--memory-get-agent-dir 'my-gptel--get-agent-dir
-  "Return the directory path for the currently loaded agent.
-Based on my-gptel--current-agent-name or derived from the agent file path.
-This is an alias for `my-gptel--get-agent-dir' defined in task_tools.el.")
+(defalias 'my-gptel--memory-get-agent-dir 'my-gptel--resolve-agent-audit-dir
+  "Return the audit directory path for the currently loaded agent.
+Memory files (LOGS.md, SUMMARY.md, MEMORIES.md) live in audit/<agent>/.
+This is an alias for `my-gptel--resolve-agent-audit-dir' defined in task_tools.el.")
 
 (defun my-gptel--memory-extract-summary (agent-dir)
   "Read SUMMARY.md from AGENT-DIR. Returns the content string."
