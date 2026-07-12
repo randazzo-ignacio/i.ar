@@ -19,7 +19,7 @@
     (insert "Some tool output...\n")
     (insert "Updated HISTORY.log with cycle entry.\n")
     (insert "Cycle complete. All steps done.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-no-completion-marker ()
   "agent--cycle-complete-p should return nil without a completion marker."
@@ -43,19 +43,19 @@
   "agent--cycle-complete-p should match 'all steps done' completion phrase."
   (with-temp-buffer
     (insert "All steps done. HISTORY updated.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-cycle-summary-phrase ()
   "agent--cycle-complete-p should match 'cycle summary' completion phrase."
   (with-temp-buffer
     (insert "Here is my cycle summary. I wrote to history.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-done-for-this-cycle-phrase ()
   "agent--cycle-complete-p should match 'done for this cycle' phrase."
   (with-temp-buffer
     (insert "I am done for this cycle. HISTORY.log appended.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-finished-cycle-phrase ()
   "agent--cycle-complete-p should match 'finished <0-2 words> cycle' phrase.
@@ -67,7 +67,7 @@ this cycle', 'finished the current cycle' while rejecting phrases where
 many words separate 'finished' from 'cycle'."
   (with-temp-buffer
     (insert "Finished the cycle. history log written.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-case-fold-search ()
   "agent--cycle-complete-p should match case-insensitively via case-fold-search.
@@ -75,7 +75,7 @@ Tests mixed-case 'History' which is not in the explicit regex alternation
 but matches because case-fold-search is bound to t."
   (with-temp-buffer
     (insert "Cycle complete. Updated History log.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-case-fold-search-disabled ()
   "agent--cycle-complete-p should still match when buffer has case-fold=nil.
@@ -84,7 +84,7 @@ settings should not affect matching."
   (with-temp-buffer
     (setq-local case-fold-search nil)
     (insert "Cycle complete. Updated History log.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 ;;; --- agent--cycle-complete-p region-scoped tests ---
 
@@ -103,7 +103,7 @@ phrase and a HISTORY reference, the function should return t."
                       (search-forward "---\n")))
            (region-start sep-end)
            (region-end (point-max)))
-      (should (eq (agent--cycle-complete-p (current-buffer) region-start region-end) t)))))
+      (should (eq (agent--cycle-complete-p (current-buffer) region-start region-end) 'cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-region-excludes-early-mention ()
   "agent--cycle-complete-p should return nil when completion phrase is outside region.
@@ -148,7 +148,7 @@ get the old behavior of scanning the full buffer."
     (insert "Some tool output...\n")
     (insert "Updated HISTORY.log with cycle entry.\n")
     (insert "Cycle complete. All steps done.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer) nil nil) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer) nil nil) 'cycle))))
 
 (ert-deftest test-darwin-cycle-complete-region-start-gt-end ()
   "agent--cycle-complete-p should search entire buffer when START >= END.
@@ -158,9 +158,9 @@ Tests both start == end and start > end cases."
     (insert "Updated HISTORY.log.\n")
     (insert "Cycle complete.\n")
     ;; start == end: invalid region, should search full buffer
-    (should (eq (agent--cycle-complete-p (current-buffer) 10 10) t))
+    (should (eq (agent--cycle-complete-p (current-buffer) 10 10) 'cycle))
     ;; start > end: also invalid, should search full buffer
-    (should (eq (agent--cycle-complete-p (current-buffer) 50 10) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer) 50 10) 'cycle))))
 
 (ert-deftest test-darwin-cycle-complete-region-clamps-out-of-bounds ()
   "agent--cycle-complete-p should clamp START/END to buffer boundaries.
@@ -171,11 +171,11 @@ clamped to point-min."
     (insert "Updated HISTORY.log.\n")
     (insert "Cycle complete.\n")
     ;; END beyond point-max: should clamp, not crash
-    (should (eq (agent--cycle-complete-p (current-buffer) 1 9999) t))
+    (should (eq (agent--cycle-complete-p (current-buffer) 1 9999) 'cycle))
     ;; START below point-min (0): should clamp to point-min
-    (should (eq (agent--cycle-complete-p (current-buffer) 0 9999) t))
+    (should (eq (agent--cycle-complete-p (current-buffer) 0 9999) 'cycle))
     ;; Both out of bounds: should clamp and still search full buffer
-    (should (eq (agent--cycle-complete-p (current-buffer) -10 9999) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer) -10 9999) 'cycle))))
 
 ;;; --- agent--load-profile tests ---
 
@@ -451,7 +451,7 @@ Tests the 'cycle is done' alternation which matches the exact phrase
 'The cycle is done' or 'cycle is done'."
   (with-temp-buffer
     (insert "The cycle is done. HISTORY.log updated.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-finished-current-cycle ()
   "agent--cycle-complete-p should match 'finished the current cycle'.
@@ -461,7 +461,7 @@ This test was originally written for the old 'finished.*cycle' pattern
 but still applies under the new bounded pattern."
   (with-temp-buffer
     (insert "I have finished the current cycle. HISTORY.log written.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-not-done-yet-no-false-positive ()
   "agent--cycle-complete-p should NOT match 'not done yet' as completion.
@@ -486,34 +486,34 @@ still works with the expanded alternations."
   "agent--cycle-complete-p should match 'all steps done' phrase."
   (with-temp-buffer
     (insert "All steps done for this cycle. HISTORY appended.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-all-steps-complete ()
   "agent--cycle-complete-p should match 'all steps complete' phrase."
   (with-temp-buffer
     (insert "All steps complete. Wrote to HISTORY.log.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-all-steps-are-done ()
   "agent--cycle-complete-p should match 'all steps are done' (with 'are').
 The regex allows optional 'are ' or 'have been ' between 'steps' and 'done'."
   (with-temp-buffer
     (insert "All steps are done. HISTORY.log updated.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-all-steps-are-complete ()
   "agent--cycle-complete-p should match 'all steps are complete' (with 'are').
 The regex allows optional 'are ' between 'steps' and 'complete'."
   (with-temp-buffer
     (insert "All steps are complete. HISTORY.log updated.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-all-steps-have-been-done ()
   "agent--cycle-complete-p should match 'all steps have been done'.
 The regex allows optional 'have been ' between 'steps' and 'done'."
   (with-temp-buffer
     (insert "All steps have been done. HISTORY updated.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-not-completed-yet-no-false-positive ()
   "agent--cycle-complete-p should NOT match 'haven't completed all steps yet'.
@@ -539,7 +539,7 @@ in the same text.  This test documents the known limitation."
     ;; negative lookbehind, which Emacs regex does not support well.
     ;; The region-scoped search (start/end) mitigates this in practice
     ;; by limiting search to the latest model response.
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 ;;; --- CYCLE_COMPLETE sentinel tests ---
 
@@ -550,7 +550,7 @@ require a HISTORY reference -- it is only produced intentionally at the
 end of a completed cycle.  The sentinel must appear on its own line."
   (with-temp-buffer
     (insert "I have completed all steps. HISTORY.log updated.\nCYCLE_COMPLETE\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-sentinel-no-history ()
   "agent--cycle-complete-p should return t with CYCLE_COMPLETE even without HISTORY.
@@ -559,7 +559,7 @@ check (completion phrase + HISTORY reference) that natural language
 phrases require.  This eliminates false negative risk."
   (with-temp-buffer
     (insert "Summary: all done.\nCYCLE_COMPLETE\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-sentinel-in-region ()
   "agent--cycle-complete-p should detect CYCLE_COMPLETE within a START/END region.
@@ -575,7 +575,7 @@ no completion markers."
                       (search-forward "---\n")))
            (region-start sep-end)
            (region-end (point-max)))
-      (should (eq (agent--cycle-complete-p (current-buffer) region-start region-end) t)))))
+      (should (eq (agent--cycle-complete-p (current-buffer) region-start region-end) 'cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-sentinel-outside-region ()
   "agent--cycle-complete-p should return nil when CYCLE_COMPLETE is outside region.
@@ -624,14 +624,14 @@ The sentinel must be on its own line, so this should NOT match."
 Tests that the \\(^\\|\n\\) anchor correctly matches at position 0."
   (with-temp-buffer
     (insert "CYCLE_COMPLETE\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-sentinel-at-buffer-end ()
   "agent--cycle-complete-p should match CYCLE_COMPLETE at end of buffer without newline.
 Tests that the \\(\n\\|\\'\\) anchor correctly matches at end of string."
   (with-temp-buffer
     (insert "Summary done.\nCYCLE_COMPLETE")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 ;;; --- Telegram success detection robustness tests ---
 
@@ -720,19 +720,19 @@ The bounded pattern allows 0-2 words between 'finished' and 'cycle',
 so 'finished the current cycle' (2 words between) should match."
   (with-temp-buffer
     (insert "I have finished the current cycle. HISTORY.log written.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-finished-my-cycle ()
   "agent--cycle-complete-p should match 'finished my cycle'."
   (with-temp-buffer
     (insert "Finished my cycle. HISTORY.log updated.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-finished-this-cycle ()
   "agent--cycle-complete-p should match 'finished this cycle'."
   (with-temp-buffer
     (insert "I have finished this cycle. history written.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-finished-review-before-cycle-no-false-positive ()
   "agent--cycle-complete-p should NOT match 'finished the review before the cycle'.
@@ -761,14 +761,14 @@ Tests that 'a' is accepted as one of the 0-2 lowercase words between
 'finished' and 'cycle'."
   (with-temp-buffer
     (insert "Finished a cycle. HISTORY.log written.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-finished-our-cycle ()
   "agent--cycle-complete-p should match 'finished our cycle'.
 Tests that 'our' is accepted as one of the 0-2 lowercase words."
   (with-temp-buffer
     (insert "Finished our cycle. HISTORY updated.\n")
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 ;;; --- Telegram curl error handling test ---
 
@@ -861,7 +861,7 @@ be missed, causing a false negative that prevents cycle termination."
     (narrow-to-region (point-min) (save-excursion
                                     (goto-char (point-min))
                                     (line-end-position)))
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-restores-narrowing ()
   "agent--cycle-complete-p should restore narrowing after searching.
@@ -892,7 +892,7 @@ The sentinel may be outside the narrowed region.  The save-restriction
     (narrow-to-region (point-min) (save-excursion
                                     (goto-char (point-min))
                                     (line-end-position)))
-    (should (eq (agent--cycle-complete-p (current-buffer)) t))))
+    (should (eq (agent--cycle-complete-p (current-buffer)) (quote cycle)))))
 
 (ert-deftest test-darwin-cycle-complete-region-with-narrowed-buffer ()
   "agent--cycle-complete-p should handle START/END with narrowed buffer.
@@ -913,7 +913,7 @@ region."
       (narrow-to-region (point-min) (save-excursion
                                       (goto-char (point-min))
                                       (line-end-position)))
-      (should (eq (agent--cycle-complete-p (current-buffer) region-start region-end) t)))))
+      (should (eq (agent--cycle-complete-p (current-buffer) region-start region-end) 'cycle)))))
 
 ;;; --- agent-cycle-timeout defensive guard tests ---
 ;; These tests verify the actual :safe predicate registered on the

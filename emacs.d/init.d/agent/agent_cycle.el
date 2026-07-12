@@ -188,7 +188,12 @@ When START or END is nil or non-integer, or START >= END,
 searches the entire buffer (backward compatibility).
 
 START and END are clamped to buffer boundaries to prevent
-args-out-of-range errors from stale positions."
+args-out-of-range errors from stale positions.
+
+Returns:
+  - nil if the cycle is not complete
+  - 'cycle if CYCLE_COMPLETE marker found
+  - 'loop if LOOP_COMPLETE marker found (task done, stop the loop)"
   (with-current-buffer buf
     (save-restriction
       (widen)
@@ -198,12 +203,21 @@ args-out-of-range errors from stale positions."
                        (min (max start (point-min)) (point-max))
                        (min (max end (point-min)) (point-max)))
                     (buffer-substring-no-properties (point-min) (point-max)))))
-        (or (and (let ((case-fold-search nil))
-                   (string-match-p "\\(^\\|\n\\)CYCLE_COMPLETE\\(\n\\|\\'\\)" text))
-                 t)
-            (and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished \\(?:[a-z]+ \\)\\{0,2\\}cycle\\>\\|cycle is done\\)" text)
-                 (string-match-p "HISTORY" text)
-                 t))))))
+        (cond
+         ;; LOOP_COMPLETE sentinel: task done, stop the loop
+         ((let ((case-fold-search nil))
+            (string-match-p "\\(^\\|\n\\)LOOP_COMPLETE\\(\n\\|\\'\\)" text))
+          'loop)
+         ;; CYCLE_COMPLETE sentinel: structured signal, no HISTORY required
+         ((let ((case-fold-search nil))
+            (string-match-p "\\(^\\|\n\\)CYCLE_COMPLETE\\(\n\\|\\'\\)" text))
+          'cycle)
+         ;; Natural language completion phrases: require HISTORY reference
+         ;; Uses case-fold-search t from outer let (case-insensitive)
+         ((and (string-match-p "\\(cycle complete\\|all steps \\(are \\|have been \\)?done\\|all steps \\(are \\|have been \\)?complete\\|cycle summary\\|done for this cycle\\|finished \\(?:[a-z]+ \\)\\{0,2\\}cycle\\>\\|cycle is done\\)" text)
+               (string-match-p "HISTORY" text))
+          'cycle)
+         (t nil))))))
 
 (defun agent-run-cycle (&rest args)
   "Run one agent cycle in batch mode.
@@ -301,31 +315,43 @@ until it either completes all steps or reaches the turn limit."
                                       (min (max start (point-min)) (point-max))
                                       (min (max end (point-min)) (point-max)))))
                        (message "[%s] Response: %.300s" agent-name response))))
-
                  (let ((max-turns (if (and (integerp agent-cycle-max-turns)
                                            (> agent-cycle-max-turns 0))
                                      agent-cycle-max-turns
                                    40)))
-                   (if (>= turn-count max-turns)
-                     (progn
+                   (cond
+                    ;; Max turns reached -- end cycle
+                    ((>= turn-count max-turns)
+                     (setq completed t)
+                     (message "[%s] Reached max turns (%d), ending cycle"
+                              agent-name max-turns)
+                     (setq agent-cycle-result-message
+                           (format "*%s Cycle: Max Turns Reached*\nTurns: %d (limit %d)\nTool calls: %d\nThe cycle hit the turn limit without completing."
+                                   (capitalize agent-name) turn-count max-turns tool-call-count))
+                     (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
+                    ;; Check for completion markers
+                    ((let ((completion-type (agent--cycle-complete-p cycle-buf start end)))
+                       completion-type)
+                     (let* ((completion-type (agent--cycle-complete-p cycle-buf start end))
+                            (elapsed (float-time (time-subtract (current-time) cycle-start))))
                        (setq completed t)
-                       (message "[%s] Reached max turns (%d), ending cycle" agent-name max-turns)
-                       (setq agent-cycle-result-message
-                             (format "*%s Cycle: Max Turns Reached*\nTurns: %d (limit %d)\nTool calls: %d\nThe cycle hit the turn limit without completing."
-                                     (capitalize agent-name) turn-count max-turns tool-call-count))
-                       (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
-
-                   (if (agent--cycle-complete-p cycle-buf start end)
-                       (progn
-                         (setq completed t)
-                         (let ((elapsed (float-time (time-subtract (current-time) cycle-start))))
-                           (message "[%s] Cycle completed in %.1fs" agent-name elapsed)
-                           (setq agent-cycle-result-message
-                                 (format "*%s Cycle Complete*\nElapsed: %.1fs\nTool calls: %d\nTurns: %d\nExit code: %d"
-                                         (capitalize agent-name) elapsed tool-call-count turn-count exit-code)))
-                         (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
-
-                     ;; Not complete yet -- re-prompt to continue
+                       (if (eq completion-type 'loop)
+                           (progn
+                             (setq exit-code 2)
+                             (message "[%s] Loop complete (task done) in %.1fs"
+                                      agent-name elapsed)
+                             (setq agent-cycle-result-message
+                                   (format "*%s Loop Complete (Task Done)*\nElapsed: %.1fs\nTool calls: %d\nTurns: %d\nExit code: %d (loop stop)"
+                                           (capitalize agent-name) elapsed
+                                           tool-call-count turn-count exit-code)))
+                         (message "[%s] Cycle completed in %.1fs" agent-name elapsed)
+                         (setq agent-cycle-result-message
+                               (format "*%s Cycle Complete*\nElapsed: %.1fs\nTool calls: %d\nTurns: %d\nExit code: %d"
+                                       (capitalize agent-name) elapsed
+                                       tool-call-count turn-count exit-code)))
+                       (run-with-timer 2 nil (lambda () (kill-emacs exit-code)))))
+                    ;; Not complete -- re-prompt to continue
+                    (t
                      (message "[%s] Re-prompting to continue cycle..." agent-name)
                      (setq continuation-pending t)
                      (run-with-timer

@@ -2,14 +2,15 @@ You are waking up for a new cycle. Follow your cycle protocol:
 
 1. Your MEMORIES.md (last 200 lines) is already in your system prompt. Do NOT read it again with read_file.
 2. Read your recent HISTORY.log using the read_history tool (do NOT use read_file -- it bypasses truncation).
-3. Read your tasks using the read_tasks tool. Each task is a separate .md file in your tasks directory.
-   If there are pending tasks, pick one instead of inventing something new. This gives you continuity
-   across cycles. If no tasks exist, look at the codebase and pick one thing that interests you.
-4. Make one change. Small. Deliberate.
+3. **MANDATORY:** Read your tasks using the read_tasks tool. Each task is a separate .md file
+   in your tasks directory. You should have exactly one task at a time -- this gives you focus
+   and continuity across cycles. If there are no tasks, use write_task to create one before
+   proceeding. Do not skip this step.
+4. Make one change. Small. Deliberate. Your change should be progress toward your current task.
 5. Delegate to the reviewer agent for code review. Fix issues if any.
    You MUST delegate to the reviewer. Use the delegate tool with agent='reviewer',
    a description of your change as the task, and include the context.
-6. Run the test suite: execute_code_local with command 'cd /root/.emacs.d && UNDERCOVER_FORCE=1 emacs --batch -l test/run-tests.el 2>&1 | tail -20'
+6. Run the test suite: execute_code_local with command 'cd /root/.emacs.d && UNDERCOVER_FORCE=1 emacs --batch -l test/run_tests.el 2>&1 | tail -20'
 7. If tests fail, revert your change with git: execute_code_local with 'cd /root/i.ar && git checkout -- .'
 8. If tests pass, commit: execute_code_local with 'cd /root/i.ar && git add -A && git commit -m "<agent-name>: <description>"'
    You MUST commit. Do not skip this step. If git fails with "not a git repository", run: cd /root/i.ar && git init first, then retry.
@@ -17,13 +18,17 @@ You are waking up for a new cycle. Follow your cycle protocol:
    You MUST write to your history. Format: [TIMESTAMP] cycle: <what you did and why>
 10. Update your MEMORIES.md with what you learned (use write_file or replace_in_file on /root/.emacs.d/audit/<agent-name>/MEMORIES.md).
     You MUST update your memories. Add what you learned this cycle.
-11. If you completed a task, use remove_task to delete the task file.
-    If you noticed something interesting that you didn't have time for this cycle,
-    use write_task to create a new task file. This is how you make long-term plans.
-12. You are done for this cycle. Respond with a summary and end with the exact text CYCLE_COMPLETE on its own line.
+11. If you completed your task, use remove_task to delete the task file, then end with the exact
+    text LOOP_COMPLETE on its own line. This tells the loop to stop -- your work is ready for
+    human review. If you noticed something interesting for later, use write_task to create a new
+    task file for the next loop run. Do NOT create a new task if you are finishing the current
+    one -- one task at a time.
+12. If your task is not yet complete, end with the exact text CYCLE_COMPLETE on its own line.
+    If your task IS complete (you called remove_task in step 11), end with LOOP_COMPLETE instead.
+    The loop will start a new cycle for CYCLE_COMPLETE, but will stop for LOOP_COMPLETE.
 
 CRITICAL: Steps 5, 8, 9, and 10 are MANDATORY. Do not skip them.
 If you skip the reviewer delegation, the commit, the history log, or the memories update,
-your work is lost and the cycle was wasted. Always complete all steps.
+your work is lost and the cycle was wasted. Always complete all steps before stopping.
 
 Go.

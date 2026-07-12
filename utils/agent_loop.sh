@@ -396,6 +396,15 @@ Failures: ${FAILURES}"
         log "${GREEN}[INF][$(timestamp)]${NC} Cycle ${CYCLE} succeeded in ${CYCLE_ELAPSED}s (exit 0)"
         tg_send "Cycle ${CYCLE}/${MAX_CYCLES}: *SUCCESS* (${CYCLE_ELAPSED}s)
 Successes: ${SUCCESSES} | Failures: ${FAILURES}"
+    elif [[ ${CYCLE_EXIT} -eq 2 ]]; then
+        SUCCESSES=$((SUCCESSES + 1))
+        log "${GREEN}[INF][$(timestamp)]${NC} Cycle ${CYCLE} completed task in ${CYCLE_ELAPSED}s (exit 2 -- loop stop)"
+        tg_send "Cycle ${CYCLE}/${MAX_CYCLES}: *TASK COMPLETE* (${CYCLE_ELAPSED}s)
+Successes: ${SUCCESSES} | Failures: ${FAILURES}
+Loop stopping -- task finished."
+        log "${BLUE}[INF][$(timestamp)]${NC} Task complete, stopping loop."
+        LOOP_REASON="task complete"
+        break
     else
         FAILURES=$((FAILURES + 1))
         CONSECUTIVE_FAILURES=$((CONSECUTIVE_FAILURES + 1))
@@ -445,9 +454,10 @@ info "  Elapsed: ${HOURS}h ${MINS}m"
 info "=========================================="
 
 tg_send "*${AGENT_NAME^} Loop Complete*
-Cycles: ${CYCLE}
+Cycles: ${CYCLE}/${MAX_CYCLES}
 Successes: ${SUCCESSES}
 Failures: ${FAILURES}
-Elapsed: ${HOURS}h ${MINS}m"
+Elapsed: ${HOURS}h ${MINS}m
+Reason: ${LOOP_REASON:-max cycles reached}"
 
 exit 0
