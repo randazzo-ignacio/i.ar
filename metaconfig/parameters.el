@@ -35,6 +35,25 @@
 ;;     file_guard.el, set by EMACBOROS_SELF_MODIFICATION env var in init.el)
 
 ;; =============================================================================
+;; Gptel Fork Path
+;; =============================================================================
+
+(defcustom my-gptel-fork-path
+  (or (getenv "EMACBOROS_GPTEL_FORK_PATH") nil)
+  "Path to a local gptel fork to use instead of the ELPA package.
+When set to a valid directory path, it is prepended to `load-path'
+before gptel is required, so the fork takes precedence over the
+installed ELPA package.
+
+Set to nil to use the ELPA package.
+
+Can also be set via the EMACBOROS_GPTEL_FORK_PATH environment variable
+(set by the --gptel-fork flag on emacboros.sh)."
+  :type '(choice (directory :tag "Path to gptel fork directory")
+                 (const :tag "Use ELPA package" nil))
+  :group 'gptel)
+
+;; =============================================================================
 ;; Delegate Tool Parameters
 ;; =============================================================================
 

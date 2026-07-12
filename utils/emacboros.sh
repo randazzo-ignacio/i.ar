@@ -50,6 +50,11 @@ Options:
   --mount-ro PATH      Mount a host directory read-only inside the container at
                        the same absolute path. Can be specified multiple times.
                        The path must exist on the host.
+  --gptel-fork PATH    Mount a local gptel fork directory read-only into the
+                       container and use it instead of the ELPA package.
+                       Useful when a fix is merged upstream but hasn't shipped
+                       in an ELPA release yet. The directory must contain
+                       gptel.el. If not specified, the ELPA package is used.
   --help, -h           Show this message and exit.
 
 Examples:
@@ -68,6 +73,7 @@ USE_LOCAL=false
 PERSONALIZATION_DIR=""
 CUSTOM_OLLAMA_HOST=""
 SELF_MODIFICATION=false
+GPTEL_FORK_PATH=""
 MOUNT_ARGS=()
 MOUNT_RO_ARGS=()
 
@@ -109,6 +115,13 @@ while [[ $# -gt 0 ]]; do
                 [[ ! -d "${PERSONALIZATION_DIR}/${subdir}" ]] && \
                     error "--personalization: missing required subdirectory: ${PERSONALIZATION_DIR}/${subdir}" && exit 1
             done
+            shift 2
+            ;;
+        --gptel-fork)
+            [[ $# -lt 2 ]] && error "--gptel-fork requires a path argument" && exit 1
+            GPTEL_FORK_PATH="$(realpath "$2")"
+            [[ ! -d "${GPTEL_FORK_PATH}" ]] && error "--gptel-fork: directory does not exist: ${GPTEL_FORK_PATH}" && exit 1
+            [[ ! -f "${GPTEL_FORK_PATH}/gptel.el" ]] && error "--gptel-fork: gptel.el not found in: ${GPTEL_FORK_PATH}" && exit 1
             shift 2
             ;;
         --help|-h)
@@ -198,6 +211,15 @@ run() {
         done < <(find "${REPO_DIR}" -maxdepth 1 -mindepth 1 | sort)
     fi
 
+    # --- Gptel fork mount ---
+    GPTEL_FORK_OPTS=""
+    if [[ -n "${GPTEL_FORK_PATH}" ]]; then
+        GPTEL_FORK_OPTS="-v ${GPTEL_FORK_PATH}:/root/.emacs.d/gptel-fork:ro,z -e EMACBOROS_GPTEL_FORK_PATH=/root/.emacs.d/gptel-fork"
+        info "Gptel fork: ${GPTEL_FORK_PATH} -> /root/.emacs.d/gptel-fork (read-only)"
+    else
+        info "Gptel fork: not specified (using ELPA package)"
+    fi
+
     # shellcheck disable=SC2086
     podman run \
         --rm -it --name "${CONTAINER_NAME}" \
@@ -208,6 +230,7 @@ run() {
         ${NET_OPTS} \
         -e "EMACBOROS_OLLAMA_HOST=${OLLAMA_HOST}" \
         ${SELF_MOD_ENV} \
+        ${GPTEL_FORK_OPTS} \
         -e "LANG=C.utf8" \
         --tmpfs /tmp:rw,size=256m \
         --tmpfs /run:rw,size=64m \

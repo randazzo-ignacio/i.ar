@@ -58,6 +58,8 @@ Options:
                        at the same absolute path. Can be specified multiple times.
   --ssh-key-dir PATH    Directory containing agent SSH keys (default: ~/.ssh).
                        Expects: <agent>_ed25519, <agent>_ed25519.pub, known_hosts
+  --gptel-fork PATH    Mount a local gptel fork directory read-only into the
+                       container and use it instead of the ELPA package.
   --help, -h            Show this message and exit.
 
 Environment:
@@ -91,6 +93,7 @@ MAX_CONSECUTIVE_FAILURES=5
 OLLAMA_HOST="${LOCAL_OLLAMA_HOST}"
 PERSONALIZATION_DIR=""
 SSH_KEY_DIR="${HOME}/.ssh"
+GPTEL_FORK_PATH=""
 MOUNT_ARGS=()
 MOUNT_RO_ARGS=()
 KNOWLEDGE_LABELS=()
@@ -160,6 +163,13 @@ while [[ $# -gt 0 ]]; do
             [[ $# -lt 2 ]] && error "--ssh-key-dir requires a value" && exit 1
             SSH_KEY_DIR="$(realpath "$2")"
             [[ ! -d "${SSH_KEY_DIR}" ]] && error "--ssh-key-dir: directory does not exist: ${SSH_KEY_DIR}" && exit 1
+            shift 2
+            ;;
+        --gptel-fork)
+            [[ $# -lt 2 ]] && error "--gptel-fork requires a path argument" && exit 1
+            GPTEL_FORK_PATH="$(realpath "$2")"
+            [[ ! -d "${GPTEL_FORK_PATH}" ]] && error "--gptel-fork: directory does not exist: ${GPTEL_FORK_PATH}" && exit 1
+            [[ ! -f "${GPTEL_FORK_PATH}/gptel.el" ]] && error "--gptel-fork: gptel.el not found in: ${GPTEL_FORK_PATH}" && exit 1
             shift 2
             ;;
         --help|-h)
@@ -285,6 +295,7 @@ run_cycle() {
         -e "EMACBOROS_OLLAMA_HOST=${OLLAMA_HOST}" \
         -e "AGENT_TELEGRAM_BOT_TOKEN=${AGENT_TELEGRAM_BOT_TOKEN:-}" \
         -e "AGENT_TELEGRAM_CHAT_ID=${AGENT_TELEGRAM_CHAT_ID:-}" \
+        $([[ -n "${GPTEL_FORK_PATH}" ]] && echo "-v ${GPTEL_FORK_PATH}:/root/.emacs.d/gptel-fork:ro,z -e EMACBOROS_GPTEL_FORK_PATH=/root/.emacs.d/gptel-fork") \
         -e "LANG=C.utf8" \
         --tmpfs /tmp:rw,size=256m \
         --tmpfs /run:rw,size=64m \
