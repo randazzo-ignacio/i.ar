@@ -425,7 +425,9 @@ until it either completes all steps or reaches the turn limit."
 
     ;; In batch mode, we need to process events until completion
     (when noninteractive
-      (let ((idle-count 0))
+      (let ((idle-count 0)
+            (last-fsm-state nil)
+            (debug-counter 0))
         (while (not completed)
           (accept-process-output nil 1)
           (unless (or completed (get-buffer-process cycle-buf) continuation-pending)
@@ -441,6 +443,21 @@ until it either completes all steps or reaches the turn limit."
               (if active-requests
                   (setq idle-count 0)
                 (let ((fsm (buffer-local-value 'gptel--fsm-last cycle-buf)))
+                  ;; Debug: log FSM state changes
+                  (let ((current-state (and fsm (gptel-fsm-p fsm)
+                                            (gptel-fsm-state fsm))))
+                    (when (and current-state (not (eq current-state last-fsm-state)))
+                      (message "[%s] FSM state changed: %s (idle: %d, turns: %d, tools: %d)"
+                               agent-name current-state idle-count turn-count tool-call-count)
+                      (setq last-fsm-state current-state))
+                    (cl-incf debug-counter)
+                    (when (zerop (% debug-counter 50))
+                      (message "[%s] Still waiting... FSM: %s idle: %d turns: %d tools: %d pending: %s active-procs: %s"
+                               agent-name
+                               (and fsm (gptel-fsm-p fsm) (gptel-fsm-state fsm))
+                               idle-count turn-count tool-call-count
+                               (if continuation-pending "yes" "no")
+                               (if (get-buffer-process cycle-buf) "yes" "no"))))
                   (cond
                    ((and fsm (gptel-fsm-p fsm)
                          (memq (gptel-fsm-state fsm) '(DONE ERRS ABRT))
