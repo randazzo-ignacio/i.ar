@@ -13,6 +13,10 @@
 ;; Declared in metaconfig/parameters.el (loaded before init.d modules).
 (defvar my-gptel-personal-file-max-lines nil
   "Maximum lines to inject from personal files. nil = no limit.")
+(defvar my-gptel-agents-path nil
+  "Relative path to agent profile directories.")
+(defvar my-gptel-audit-path nil
+  "Relative path to audit log directory.")
 
 ;;; --- Agent state variables ---
 
@@ -44,7 +48,7 @@ last N lines are returned with a truncation notice prepended.  The full
 file remains on disk -- this only affects what goes into the LLM context.
 This replaces the old #+INCLUDE approach -- personal files are injected
 programmatically from the tasks mount rather than via org-mode includes."
-  (let* ((audit-base (expand-file-name "audit" user-emacs-directory))
+  (let* ((audit-base (expand-file-name my-gptel-audit-path user-emacs-directory))
          (filepath (expand-file-name (format "%s/%s" agent-name filename) audit-base)))
     (if (file-exists-p filepath)
         (with-temp-buffer
@@ -118,7 +122,7 @@ Validates the agent name, checks for path traversal, and expands
 #+INCLUDE directives via `my-gptel-read-agent-profile'.
 Returns the profile string or nil if not found."
   (my-gptel--validate-agent-name agent-name)
-  (let* ((agent-dir (expand-file-name "agents.d/agents" user-emacs-directory))
+  (let* ((agent-dir (expand-file-name my-gptel-agents-path user-emacs-directory))
          (prompt-path (expand-file-name (format "%s/prompt.org" agent-name) agent-dir)))
     (unless (string-prefix-p agent-dir (file-truename prompt-path))
       (error "Path traversal attempt blocked for agent: '%s'" agent-name))
@@ -129,7 +133,7 @@ Returns the profile string or nil if not found."
   "Prompt user to select an agent persona and inject it into gptel.
 Discovers agent directories under agents.d/<name>/ containing prompt.org."
   (interactive)
-  (let* ((agent-dir (expand-file-name "agents.d/agents" user-emacs-directory))
+  (let* ((agent-dir (expand-file-name my-gptel-agents-path user-emacs-directory))
          (_ (unless (file-directory-p agent-dir)
               (make-directory agent-dir t)))
          ;; Find all subdirectories containing prompt.org

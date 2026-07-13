@@ -38,6 +38,10 @@
   "Default timeout for an agent cycle in seconds.")
 (defvar agent-cycle-max-turns nil
   "Maximum number of LLM response turns before forcing cycle end.")
+(defvar my-gptel-audit-path nil
+  "Relative path to audit log directory.")
+(defvar my-gptel-agents-path nil
+  "Relative path to agent profile directories.")
 
 (declare-function my-gptel--block-unknown-tools "tool_guard" (info))
 (declare-function my-gptel--load-prompt "prompt_loader" (name))
@@ -156,8 +160,8 @@ START and END are buffer positions delimiting the new response text.
 Creates the log file if it does not exist.  Prepends a timestamp."
   (when (and (integerp start) (integerp end) (< start end))
     (let* ((log-path (expand-file-name
-                      (format "audit/%s/cycle.log" agent-name)
-                      user-emacs-directory))
+                      (format "%s/cycle.log" agent-name)
+                      (expand-file-name my-gptel-audit-path user-emacs-directory)))
            (timestamp (format-time-string "[%Y-%m-%d %H:%M:%S]"))
            (response (with-current-buffer (current-buffer)
                        (save-restriction
@@ -295,8 +299,8 @@ until it either completes all steps or reaches the turn limit."
       (setq-local gptel-stream t)
       (setq-local my-gptel--current-agent-name agent-name)
       (setq-local my-gptel--current-agent-file
-                  (expand-file-name (format "agents.d/agents/%s/prompt.org" agent-name)
-                                    user-emacs-directory))
+                  (expand-file-name (format "%s/prompt.org" agent-name)
+                                    (expand-file-name my-gptel-agents-path user-emacs-directory)))
       ;; Set self-modification mode so the agent can edit init.d/**/*.el.
       ;; Use setq-local (not setq) so only THIS buffer has self-modification
       ;; enabled.  Delegate buffers inherit the global nil value.

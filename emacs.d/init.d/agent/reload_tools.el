@@ -13,6 +13,10 @@
 (require 'utils)
 (require 'agent_loader)  ; my-gptel--load-agent-profile (now defined here)
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar my-gptel-agents-path nil
+  "Relative path to agent profile directories.")
+
 ;;; --- reload_os ---
 
 (defun my-gptel-tool-reload-os ()
@@ -51,7 +55,7 @@ the gptel system message in the current buffer.
 If AGENT-NAME is provided (e.g., \"mccarthy\"), reload that agent
 instead of the currently loaded one."
   (condition-case err
-      (let* ((agent-dir (expand-file-name "agents.d/agents" user-emacs-directory))
+      (let* ((agent-dir (expand-file-name my-gptel-agents-path user-emacs-directory))
              ;; Determine which agent to load
              (target-name
               (if (and agent-name (stringp agent-name) (string-match-p "\\S-" agent-name))

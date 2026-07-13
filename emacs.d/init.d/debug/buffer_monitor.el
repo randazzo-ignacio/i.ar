@@ -23,6 +23,10 @@
 (require 'subr-x)
 (require 'utils)
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar my-gptel-audit-path nil
+  "Relative path to audit log directory.")
+
 ;; Parameters are defined in metaconfig/parameters.el (loaded early).
 ;; Forward declarations for byte-compiler.
 (defvar my-gptel-buffer-warn-size nil)
@@ -35,8 +39,8 @@
   "Return the per-agent buffer monitor log path."
   (let ((agent (my-gptel--get-agent-name)))
     (expand-file-name
-     (format "audit/%s/BUFFER.log" agent)
-     user-emacs-directory)))
+     (format "%s/BUFFER.log" agent)
+     (expand-file-name my-gptel-audit-path user-emacs-directory))))
 
 (defun my-gptel--buffer-monitor-log (buf)
   "Log buffer size for BUF to audit log and per-agent BUFFER.log.

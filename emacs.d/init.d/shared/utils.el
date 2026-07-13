@@ -16,6 +16,10 @@
 
 (require 'subr-x)
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar my-gptel-audit-path nil
+  "Relative path to audit log directory.")
+
 ;;; --- Agent name resolution ---
 
 (defun my-gptel--get-agent-name ()
@@ -49,7 +53,8 @@ Returns 0 for nil, negative, or zero input."
 ;;; --- Audit log path ---
 
 (defconst my-gptel--audit-log-path
-  (expand-file-name "audit/audit.log" user-emacs-directory)
+  (expand-file-name "audit.log"
+                    (expand-file-name my-gptel-audit-path user-emacs-directory))
   "Path to the central audit log for all agent file operations.")
 
 ;;; --- Save hook suppression ---

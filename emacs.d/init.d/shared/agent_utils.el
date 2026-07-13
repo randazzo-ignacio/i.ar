@@ -11,6 +11,12 @@
 (require 'subr-x)
 (require 'utils)  ; my-gptel--get-agent-name
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar my-gptel-tasks-path nil
+  "Relative path to task files directory.")
+(defvar my-gptel-audit-path nil
+  "Relative path to audit log directory.")
+
 ;;; --- Validation helpers ---
 
 (defun my-gptel--valid-name-p (name)
@@ -49,7 +55,11 @@ BASE is \"tasks\" or \"audit\" (a subdirectory of user-emacs-directory).
 Validates the agent name and checks for path traversal.
 Returns the resolved directory path, or signals an error if no agent
 is loaded."
-  (let* ((base-path (expand-file-name base user-emacs-directory))
+  (let* ((base-path (expand-file-name
+                     (if (equal base "tasks") my-gptel-tasks-path
+                       (if (equal base "audit") my-gptel-audit-path
+                         base))
+                     user-emacs-directory))
          (agent-name (my-gptel--get-agent-name)))
     (if (not (equal agent-name "unknown"))
         (progn

@@ -25,6 +25,10 @@
 (require 'subr-x)
 (require 'utils)
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar my-gptel-audit-path nil
+  "Relative path to audit log directory.")
+
 ;;; --- Configuration ---
 
 (defcustom my-gptel-fsm-trace-enabled t
@@ -43,8 +47,8 @@ Can be set buffer-locally to disable tracing for specific buffers."
   "Return the per-agent FSM trace log path."
   (let ((agent (my-gptel--get-agent-name)))
     (expand-file-name
-     (format "audit/%s/FSM.log" agent)
-     user-emacs-directory)))
+     (format "%s/FSM.log" agent)
+     (expand-file-name my-gptel-audit-path user-emacs-directory))))
 
 (defun my-gptel--fsm-trace-write (content)
   "Write CONTENT to the FSM trace log.

@@ -23,6 +23,10 @@
 (require 'subr-x)
 (require 'utils)
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar my-gptel-knowledge-path nil
+  "Relative path to the knowledge base directory.")
+
 (declare-function gptel-mode "gptel" (&optional arg))
 (defvar gptel-mode-map)
 
@@ -46,7 +50,7 @@ Each entry is (LABEL . CONTENT-STRING).")
 
 (defun my-gptel--knowledge-dir ()
   "Return the path to the knowledge directory."
-  (expand-file-name "knowledge" user-emacs-directory))
+  (expand-file-name my-gptel-knowledge-path user-emacs-directory))
 
 (defun my-gptel--knowledge-candidates ()
   "Build a list of selectable knowledge candidates.
