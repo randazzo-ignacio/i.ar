@@ -8,7 +8,7 @@ source "${REPO_DIR}/metaconfig/header.sh"
 # =============================================================================
 
 IMAGE_NAME="iar-emacboros"
-CONTAINER_NAME="iar-emacboros"
+CONTAINER_NAME="iar-emacboros-$$"
 
 # Default: remote Ollama instance
 REMOTE_OLLAMA_HOST="10.66.0.3:11434"

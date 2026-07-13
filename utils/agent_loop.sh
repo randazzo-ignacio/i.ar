@@ -287,7 +287,7 @@ fi
 # =============================================================================
 # Derived values
 # =============================================================================
-CONTAINER_NAME="${AGENT_NAME}-cycle"
+CONTAINER_NAME="${AGENT_NAME}-cycle-$$"
 SSH_KEY_NAME="${SSH_KEY_NAME:-emacboros_ed25519}"
 GIT_AUTHOR_NAME="$(tr '[:lower:]' '[:upper:]' <<< "${AGENT_NAME:0:1}")${AGENT_NAME:1} Agent"
 GIT_AUTHOR_EMAIL="${AGENT_NAME}@emacboros.local"

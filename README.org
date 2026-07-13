@@ -31,16 +31,99 @@ cd i.ar
 
 ** Run
 
+There are two entry points:
+
+- =emacboros.sh= -- Interactive session (you talk to the agent)
+- =agent_loop.sh= -- Autonomous loop (agent runs N cycles without you)
+
+Both require =--personalization= pointing to a directory with =knowledge/=, =tasks/=, and =audit/= subdirectories.
+
+*** Interactive Sessions (=emacboros.sh=)
+
+Drops you into an Emacs gptel chat buffer with an agent loaded. You're the conductor -- you type, the agent responds, you direct the work.
+
 #+begin_src bash
-# Basic usage (connects to remote Ollama via WireGuard):
-./utils/emacboros.sh --personalization ~/repos/iar-personalization
+# Interactive session with self-modification (for development with darwin)
+./utils/emacboros.sh \
+  --self-modification \
+  --personalization ~/repos/iar-personalization \
+  --gptel-fork ~/repos/gptel
 
-# With self-modification enabled (for development/darwin):
-./utils/emacboros.sh --personalization ~/repos/iar-personalization --self-modification
-
-# With local Ollama:
-./utils/emacboros.sh --personalization ~/repos/iar-personalization --local
+# Interactive session with a specific agent (no self-modification)
+./utils/emacboros.sh \
+  --personalization ~/repos/iar-personalization \
+  --gptel-fork ~/repos/gptel
 #+end_src
+
+*** Autonomous Loops (=agent_loop.sh=)
+
+Runs an agent for N cycles with cooldown between each. Sends Telegram notifications if =AGENT_TELEGRAM_BOT_TOKEN= and =AGENT_TELEGRAM_CHAT_ID= are set. Container names are auto-suffixed with PID so multiple loops can run in parallel without collisions.
+
+#+begin_src bash
+# Darwin autonomous loop (code changes, self-modification enabled)
+./utils/agent_loop.sh \
+  --self-modification \
+  --personalization ~/repos/iar-personalization \
+  --agent darwin \
+  --gptel-fork ~/repos/gptel \
+  --max-cycles 50
+
+# Gardener autonomous loop (prompt refinement, no self-modification)
+./utils/agent_loop.sh \
+  --personalization ~/repos/iar-personalization \
+  --agent gardener \
+  --gptel-fork ~/repos/gptel \
+  --max-cycles 10
+
+# Playground loop on GPU model (sophon, 120B, 128K context)
+./utils/agent_loop.sh \
+  --personalization ~/repos/iar-personalization \
+  --agent playground \
+  --model nemotron-3-super:120b \
+  --ctx 131072 \
+  --ollama-host 10.66.0.5:11434 \
+  --max-cycles 999 \
+  --cooldown 300
+
+# Playground loop on CPU model (daftpunk, 30B, 128K context)
+./utils/agent_loop.sh \
+  --personalization ~/repos/iar-personalization \
+  --agent playground \
+  --model granite4.1:30b \
+  --ctx 131072 \
+  --ollama-host 10.66.0.3:11434 \
+  --max-cycles 999 \
+  --cooldown 300
+#+end_src
+
+*** Model and Host Selection
+
+The =--model= and =--ctx= flags control which LLM runs and how much context window it gets. These are critical for local models -- the KV cache scales linearly with context size, so a 120B model at 1M context would need ~320GB of RAM just for the cache.
+
+| Flag | Default | Description |
+|------+---------+-------------|
+| =--model NAME= | =glm-5.2:cloud= | Model name (must be in =metaconfig/gptel.el= model list) |
+| =--ctx N= | =1048576= (1M) | Max context window in tokens. Use 131072 (128K) or 262144 (256K) for local models |
+| =--ollama-host HOST= | =10.66.0.5:11434= | Ollama API host:port |
+
+Cloud models (suffix =:cloud=) handle context server-side and can use the default 1M. Local models need explicit =--ctx= to avoid OOM.
+
+*** Running Multiple Sessions in Parallel
+
+Container names auto-include the shell PID (=--name ${AGENT}-cycle-$$=), so multiple =agent_loop.sh= or =emacboros.sh= invocations can run simultaneously without name collisions:
+
+#+begin_src bash
+# Terminal 1: interactive mirror session
+./utils/emacboros.sh --personalization ~/repos/iar-personalization --gptel-fork ~/repos/gptel
+
+# Terminal 2: darwin loop running in background
+./utils/agent_loop.sh --self-modification --personalization ~/repos/iar-personalization --agent darwin --gptel-fork ~/repos/gptel --max-cycles 50
+
+# Terminal 3: playground loop on daftpunk
+./utils/agent_loop.sh --personalization ~/repos/iar-personalization --agent playground --model granite4.1:30b --ctx 131072 --ollama-host 10.66.0.3:11434 --max-cycles 999
+#+end_src
+
+Use =podman ps= to see all running agent containers. Each is named =<agent>-cycle-<PID>= or =<agent>-interactive-<PID>=.
 
 ** Inside Emacs
 
