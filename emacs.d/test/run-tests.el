@@ -31,6 +31,13 @@
 ;; undercover's file handler evaluates files with edebug, which means
 ;; all dependencies must be available at load time.
 
+;; Add gptel fork to load-path so tests use the fork (with our fixes)
+;; instead of the stale ELPA .elc.  The fork is on load-path in
+;; production via gptel_setup.el, so tests should match.
+(let ((fork-path (expand-file-name "gptel-fork" user-emacs-directory)))
+  (when (file-directory-p fork-path)
+    (add-to-list 'load-path fork-path)))
+
 (require 'gptel)
 (require 'ert)
 (require 'cl-lib)

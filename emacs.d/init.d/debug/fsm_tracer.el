@@ -6,9 +6,18 @@
 ;; state change. Logs: timestamp, old state, new state, :tool-use count,
 ;; :tool-result count, :error status.
 ;;
-;; Also includes a Tool Call Inspector via advice-add :around on
-;; gptel--process-tool-call to log: tool name, remaining before/after,
-;; :tool-use length, whether transition was called.
+;; Tool call inspection uses advice-add :before on
+;; gptel--process-tool-call to log tool name and remaining count.
+;; The ORIGINAL function handles all state mutations and transitions.
+;; This is critical: :override was used previously, but it replaced the
+;; original function entirely. Any error in the override's
+;; condition-case would silently swallow the error and leave the FSM
+;; stuck at TOOL state forever. Using :before ensures the original
+;; always runs.
+;;
+;; Also adds :before advice on gptel--handle-tool-use to log the
+;; filtered tool-use list and tool-spec lookup, providing visibility
+;; into why tool calls may not execute.
 ;;
 ;; Log location: audit/<agent>/FSM.log
 ;; No gptel source modifications. All advice-add.
@@ -42,7 +51,8 @@ Can be set buffer-locally to disable tracing for specific buffers."
      user-emacs-directory)))
 
 (defun my-gptel--fsm-trace-write (content)
-  "Write CONTENT to the FSM trace log."
+  "Write CONTENT to the FSM trace log.
+Errors are demoted to messages -- tracing must never break the FSM."
   (condition-case err
       (let ((log-path (my-gptel--fsm-trace-log-path))
             (timestamp (format-time-string "%Y-%m-%d %H:%M:%S")))
@@ -84,11 +94,13 @@ Returns 0 if KEY is nil or not a list."
        (message "Warning: FSM trace transition failed: %s"
                 (error-message-string err))))))
 
-;;; --- Tool call inspector ---
+;;; --- Tool call inspector (:before, NOT :override) ---
 
-(defun my-gptel--fsm-trace-tool-call (fsm tool-spec tool-call result)
-  "Inspect a gptel--process-tool-call invocation.
-Logs tool name, remaining count before/after, and whether transition fired."
+(defun my-gptel--fsm-trace-tool-call-before (fsm tool-spec tool-call &rest _)
+  "Log tool call details BEFORE the original gptel--process-tool-call runs.
+This is a :before advice -- the original function handles all state
+mutations (:result, :tool-result, remaining count, FSM transition).
+We only observe and log."
   (when my-gptel-fsm-trace-enabled
     (condition-case err
         (let* ((info (gptel-fsm-info fsm))
@@ -101,36 +113,44 @@ Logs tool name, remaining count before/after, and whether transition fired."
                 (cl-loop for tc in tool-use-list
                          count (plist-get tc :result)))
                (remaining-before (- total-tools tools-with-result-before)))
-          ;; Log before the original function runs
           (my-gptel--fsm-trace-write
-           (format "TOOL-CALL name=%s | total=%d with-result-before=%d remaining-before=%d"
-                   tool-name total-tools tools-with-result-before remaining-before))
-          ;; Call the original function
-          (let ((result-str (gptel--to-string result)))
-            ;; Set the result on the tool-call (as the original does)
-            (plist-put tool-call :result result-str)
-            ;; Push to tool-result-alist (as the original does)
-            (let ((tool-result-alist (plist-get info :tool-result)))
-              (push (list tool-spec (plist-get tool-call :args) result-str)
-                    tool-result-alist)
-              (plist-put info :tool-result tool-result-alist))
-            ;; Check remaining after
-            (let* ((tools-with-result-after
-                    (cl-loop for tc in tool-use-list
-                             count (plist-get tc :result)))
-                   (remaining-after (- total-tools tools-with-result-after)))
-              (my-gptel--fsm-trace-write
-               (format "TOOL-CALL-DONE name=%s | with-result-after=%d remaining-after=%d"
-                       tool-name tools-with-result-after remaining-after))
-              ;; Transition if all done (as the original does)
-              (when (and tool-use-list
-                         (<= remaining-after 0))
-                (my-gptel--fsm-trace-write
-                 (format "TOOL-CALL-TRANSITION name=%s | calling gptel--fsm-transition"
-                         tool-name))
-                (gptel--fsm-transition fsm)))))
+           (format "TOOL-CALL name=%s | total=%d with-result=%d remaining=%d"
+                   tool-name total-tools tools-with-result-before remaining-before)))
       (error
-       (message "Warning: FSM trace tool call failed: %s"
+       (message "Warning: FSM trace tool-call-before failed: %s"
+                (error-message-string err))))))
+
+;;; --- Tool use handler inspector ---
+
+(defun my-gptel--fsm-trace-handle-tool-use-before (fsm)
+  "Log gptel--handle-tool-use internal state BEFORE it runs.
+This is a :before advice that inspects the filtered tool-use list
+and tool-spec lookup to diagnose why tool calls may not execute."
+  (when my-gptel-fsm-trace-enabled
+    (condition-case err
+        (let* ((info (gptel-fsm-info fsm))
+               (backend (plist-get info :backend))
+               (tools (plist-get info :tools))
+               (raw-tool-use (plist-get info :tool-use))
+               (filtered-tool-use
+                (and raw-tool-use
+                     (cl-remove-if (lambda (tc) (plist-get tc :result))
+                                   raw-tool-use)))
+               (tool-names
+                (and filtered-tool-use
+                     (mapcar (lambda (tc) (plist-get tc :name))
+                             filtered-tool-use)))
+               (buffer (plist-get info :buffer)))
+          (my-gptel--fsm-trace-write
+           (format "HANDLE-TOOL-USE | backend=%s raw-tool-use=%d filtered=%d names=%S tools-available=%d buffer=%s"
+                   (if backend "set" "NIL")
+                   (length (or raw-tool-use nil))
+                   (length (or filtered-tool-use nil))
+                   tool-names
+                   (length (or tools nil))
+                   (if (buffer-live-p buffer) "alive" "DEAD"))))
+      (error
+       (message "Warning: FSM trace handle-tool-use-before failed: %s"
                 (error-message-string err))))))
 
 ;;; --- Advice installation ---
@@ -139,17 +159,23 @@ Logs tool name, remaining count before/after, and whether transition fired."
 (defun my-gptel-fsm-trace-setup ()
   "Install FSM tracing via advice-add on gptel functions.
 Call this once during initialization to enable FSM tracing."
-  ;; FSM transition tracer
+  ;; FSM transition tracer -- :before, purely observational
   (advice-add 'gptel--fsm-transition :before
               (lambda (fsm &optional new-state)
                 (my-gptel--fsm-trace-transition fsm
                   (or new-state
                       (gptel--fsm-next fsm)))))
-  ;; Tool call inspector -- replace the original function entirely
-  (advice-add 'gptel--process-tool-call :override
+  ;; Tool call inspector -- :before, NOT :override
+  ;; The original gptel--process-tool-call handles all state mutations
+  ;; and FSM transitions. We only log before it runs.
+  (advice-add 'gptel--process-tool-call :before
               (lambda (fsm tool-spec tool-call result)
-                (my-gptel--fsm-trace-tool-call fsm tool-spec tool-call result)))
-  (message "[fsm-tracer] Installed on gptel FSM functions"))
+                (my-gptel--fsm-trace-tool-call-before fsm tool-spec tool-call result)))
+  ;; Tool use handler inspector -- :before, logs internal state
+  (advice-add 'gptel--handle-tool-use :before
+              (lambda (fsm)
+                (my-gptel--fsm-trace-handle-tool-use-before fsm)))
+  (message "[fsm-tracer] Installed on gptel FSM functions (:before, no override)"))
 
 (my-gptel-fsm-trace-setup)
 
