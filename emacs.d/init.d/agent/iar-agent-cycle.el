@@ -194,7 +194,7 @@ agents.d/common/agent_cycle.org.  This allows per-agent cycle prompts
   (or (condition-case nil
           (iar--load-prompt (format "%s_cycle" agent-name))
         (error nil))
-      (iar--load-prompt "iar-agent-cycle")))
+      (iar--load-prompt "agent_cycle")))
 
 (defun iar--cycle-load-continue-prompt (_agent-name)
   "Load the shared continue prompt from agents.d/common/agent_cycle_continue.org.
