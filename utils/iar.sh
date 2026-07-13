@@ -534,6 +534,7 @@ run_interactive() {
 
     # shellcheck disable=SC2086
     podman run --rm -it \
+        --read-only \
         --name "${CONTAINER_NAME}" \
         --memory="${MEMORY_LIMIT}" \
         --security-opt no-new-privileges \
@@ -579,6 +580,7 @@ run_cycle() {
     # shellcheck disable=SC2086
     podman run \
         --rm \
+        --read-only \
         --name "${CONTAINER_NAME}" \
         --memory="${MEMORY_LIMIT}" \
         --security-opt no-new-privileges \
