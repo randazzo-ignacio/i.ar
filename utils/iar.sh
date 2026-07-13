@@ -2,15 +2,18 @@
 set -euo pipefail
 
 # =============================================================================
-# Agent Loop -- Autonomous agent runner for any orchestrator agent
+# i.ar -- Unified entry point for the agent system
 #
-# Runs one or more cycles of an agent inside the Emacs container.
-# Any orchestrator agent can be run autonomously -- just need a cycle prompt
-# at agents.d/common/<agent>_cycle.org.
+# Two modes:
+#   Interactive (default)  -- Drops you into an Emacs gptel chat buffer.
+#   Loop (--loop)          -- Runs an agent autonomously for N cycles.
 #
-# Usage: agent_loop.sh --personalization PATH --agent NAME [OPTIONS]
+# Usage:
+#   ./utils/iar.sh --personalization PATH [OPTIONS]
+#   ./utils/iar.sh --loop --personalization PATH --agent NAME [OPTIONS]
 #
-# Default agent is "darwin".  For single-cycle runs, use --max-cycles 1.
+# Container names auto-include the shell PID so multiple instances can run
+# in parallel without collisions.
 # =============================================================================
 
 REPO_DIR="$(realpath "$(dirname "${BASH_SOURCE[0]}")/..")"
@@ -25,7 +28,8 @@ LOCAL_OLLAMA_HOST="${EMACBOROS_OLLAMA_HOST:-10.66.0.5:11434}"
 # =============================================================================
 usage() {
     cat <<EOF
-Usage: agent_loop.sh --personalization PATH --agent NAME [OPTIONS]
+Usage: iar.sh --personalization PATH [OPTIONS]
+       iar.sh --loop --personalization PATH --agent NAME [OPTIONS]
 
 Required:
   --personalization PATH
@@ -39,79 +43,78 @@ Required:
                          /root/.emacs.d/tasks
                          /root/.emacs.d/audit
 
-  --agent NAME          Agent profile name (default: darwin).
-                       Must exist as agents.d/agents/<name>/prompt.org and have
-                       a cycle prompt at agents.d/common/<name>_cycle.org.
+Mode:
+  --loop               Run in autonomous loop mode (requires --agent).
+                       Default: interactive mode (Emacs gptel chat buffer).
 
-Options:
-  --max-cycles N        Maximum number of cycles (default: 1).
-                       Use --max-cycles 50 for a long-running loop.
-  --cooldown SECONDS   Seconds to wait between cycles (default: 60).
-  --max-failures N     Max consecutive failures before stopping (default: 5).
-  --timeout SECONDS    Per-cycle timeout (default: 7200 = 120 min).
-  --knowledge LABEL    Knowledge directory label to load (default: iar/).
-                       Can be specified multiple times to load multiple bases.
+Options (both modes):
+  --self-modification  Enable self-modification mode. Allows agents to modify
+                       Emacs Lisp source files (init.el, init.d/**/*.el), container
+                       configuration, and git hooks. Agent prompt files and
+                       base_context.org remain protected regardless.
+                       Default: disabled (all guards active).
   --ollama-host HOST    Ollama API host:port (default: ${LOCAL_OLLAMA_HOST}).
+  --local              Shortcut for --ollama-host localhost:11434 with host networking.
   --model NAME          Ollama model name (default: glm-5.2:cloud).
                        Must be in the model list in metaconfig/gptel.el.
-                       Example: --model nemotron-3-super:120b
-  --ctx N               Max context window size in tokens (default: 1048576).
-                       Critical for local models -- KV cache scales linearly
-                       with context. Use 131072 (128K) or 262144 (256K) for
-                       local models. Cloud models can use the default 1M.
-                       Example: --ctx 131072
+  --ctx N               Max context window in tokens (default: 1048576 = 1M).
+                       Critical for local models -- KV cache scales linearly.
+                       Use 131072 (128K) or 262144 (256K) for local models.
   --mount PATH          Mount a host directory read-write inside the container
                        at the same absolute path. Can be specified multiple times.
   --mount-ro PATH       Mount a host directory read-only inside the container
                        at the same absolute path. Can be specified multiple times.
-  --ssh-key-dir PATH    Directory containing agent SSH keys (default: ~/.ssh).
+  --gptel-fork PATH    Mount a local gptel fork directory (writable) into the
+                       container and use it instead of the ELPA package.
+  --ssh-key-dir PATH    Directory containing SSH keys (default: ~/.ssh).
   --ssh-key NAME        SSH key name to use (default: emacboros_ed25519).
                        Looks for <name> and <name>.pub in --ssh-key-dir.
                        If the key does not exist, SSH mounts are skipped
                        (agent has no git push capability, but pull still works
                        via HTTPS).
-  --gptel-fork PATH    Mount a local gptel fork directory (writable) into the
-                       container and use it instead of the ELPA package.
-  --self-modification  Enable self-modification mode (tier 2 file guard relaxation).
-                       Default: OFF. Only needed for agents that edit .el files
-                       (e.g. darwin). Most agents (gardener, auditor) should NOT
-                       use this.
   --memory LIMIT       Podman memory limit (default: 8g). Caps container
                        memory to prevent host OOM kills on long sessions.
+  --knowledge LABEL    Knowledge directory label to load (default: iar/).
+                       Can be specified multiple times to load multiple bases.
   --help, -h            Show this message and exit.
+
+Options (loop mode only):
+  --agent NAME          Agent profile name (required in --loop mode).
+                       Must exist as agents.d/agents/<name>/prompt.org and have
+                       a cycle prompt at agents.d/common/<name>_cycle.org.
+  --max-cycles N        Maximum number of cycles (default: 1).
+  --cooldown SECONDS   Seconds to wait between cycles (default: 60).
+  --max-failures N     Max consecutive failures before stopping (default: 5).
+  --timeout SECONDS    Per-cycle timeout (default: 7200 = 120 min).
 
 Environment:
   EMACBOROS_OLLAMA_HOST     Ollama API host (overridden by --ollama-host)
-  AGENT_TELEGRAM_BOT_TOKEN  Telegram bot token for notifications
-  AGENT_TELEGRAM_CHAT_ID    Telegram chat ID for notifications
+  AGENT_TELEGRAM_BOT_TOKEN  Telegram bot token for notifications (loop mode)
+  AGENT_TELEGRAM_CHAT_ID    Telegram chat ID for notifications (loop mode)
 
 Examples:
-  # Single darwin cycle (needs --self-modification for code edits)
-  agent_loop.sh --personalization ~/repos/iar-personalization --self-modification
+  # Interactive session with self-modification
+  iar.sh --self-modification --personalization ~/repos/iar-personalization --gptel-fork ~/repos/gptel
 
-  # Long-running darwin loop
-  agent_loop.sh --personalization ~/repos/iar-personalization --self-modification --max-cycles 50
+  # Interactive session (no self-modification)
+  iar.sh --personalization ~/repos/iar-personalization --gptel-fork ~/repos/gptel
 
-  # Run gardener agent (single tick, no self-modification, no SSH key needed)
-  agent_loop.sh --personalization ~/repos/iar-personalization --agent gardener
+  # Darwin autonomous loop
+  iar.sh --loop --self-modification --personalization ~/repos/iar-personalization \\
+    --agent darwin --gptel-fork ~/repos/gptel --max-cycles 50
 
-  # Run auditor agent autonomously
-  agent_loop.sh --personalization ~/repos/iar-personalization --agent auditor --max-cycles 10
+  # Gardener autonomous loop
+  iar.sh --loop --personalization ~/repos/iar-personalization \\
+    --agent gardener --gptel-fork ~/repos/gptel --max-cycles 10
 
-  # Use a shared SSH key instead of per-agent key
-  agent_loop.sh --personalization ~/repos/iar-personalization --agent darwin --ssh-key emacboros_ed25519 --self-modification
-
-  # With knowledge and custom timeout
-  agent_loop.sh --personalization ~/repos/iar-personalization --knowledge infra/ --timeout 3600
-
-  # Run playground loop on GPU model on sophon (10.66.0.5)
-  agent_loop.sh --personalization ~/repos/iar-personalization \
-    --agent playground --model nemotron-3-super:120b --ctx 131072 \
+  # Playground loop on GPU model (sophon)
+  iar.sh --loop --personalization ~/repos/iar-personalization \\
+    --agent playground --model nemotron-3-super:120b --ctx 131072 \\
     --ollama-host 10.66.0.5:11434 --max-cycles 999 --cooldown 300
 
-  # Run on daftpunk CPU model (10.66.0.3)
-  agent_loop.sh --personalization ~/repos/iar-personalization \
-    --agent playground --model granite4.1:30b --ctx 131072 \
+  # Playground loop on CPU model (daftpunk)
+  iar.sh --loop --personalization ~/repos/iar-personalization \\
+    --agent playground --model granite4.1:30b --ctx 131072 \\
     --ollama-host 10.66.0.3:11434 --max-cycles 999 --cooldown 300
 EOF
 }
@@ -119,7 +122,8 @@ EOF
 # =============================================================================
 # Parse arguments
 # =============================================================================
-AGENT_NAME="darwin"
+MODE="interactive"
+AGENT_NAME=""
 MAX_CYCLES=1
 COOLDOWN=60
 TIMEOUT=7200
@@ -127,9 +131,10 @@ MAX_CONSECUTIVE_FAILURES=5
 OLLAMA_HOST="${LOCAL_OLLAMA_HOST}"
 OLLAMA_MODEL=""
 OLLAMA_CTX=""
+USE_LOCAL=false
 PERSONALIZATION_DIR=""
 SSH_KEY_DIR="${HOME}/.ssh"
-SSH_KEY_NAME=""  # set after agent name is parsed
+SSH_KEY_NAME=""
 GPTEL_FORK_PATH=""
 SELF_MODIFICATION=0
 MEMORY_LIMIT="8g"
@@ -139,6 +144,10 @@ KNOWLEDGE_LABELS=()
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --loop)
+            MODE="loop"
+            shift
+            ;;
         --personalization)
             [[ $# -lt 2 ]] && error "--personalization requires a path argument" && exit 1
             PERSONALIZATION_DIR="$(realpath "$2")"
@@ -178,6 +187,10 @@ while [[ $# -gt 0 ]]; do
             [[ $# -lt 2 ]] && error "--ollama-host requires a value" && exit 1
             OLLAMA_HOST="$2"
             shift 2
+            ;;
+        --local)
+            USE_LOCAL=true
+            shift
             ;;
         --model)
             [[ $# -lt 2 ]] && error "--model requires a value" && exit 1
@@ -255,54 +268,70 @@ if [[ -z "${PERSONALIZATION_DIR}" ]]; then
     exit 1
 fi
 
-# =============================================================================
-# Build dynamic mount arguments
-# =============================================================================
-DYNAMIC_MOUNT_OPTS=()
+# Mode-specific validation
+if [[ "${MODE}" == "loop" && -z "${AGENT_NAME}" ]]; then
+    error "--agent is required in --loop mode."
+    echo ""
+    usage
+    exit 1
+fi
 
-for path in "${MOUNT_ARGS[@]:-}"; do
-    [[ -z "${path}" ]] && continue
-    DYNAMIC_MOUNT_OPTS+=("-v" "${path}:${path}:z")
-    info "Mounting read-write: ${path}"
-done
-
-for path in "${MOUNT_RO_ARGS[@]:-}"; do
-    [[ -z "${path}" ]] && continue
-    DYNAMIC_MOUNT_OPTS+=("-v" "${path}:${path}:ro,z")
-    info "Mounting read-only:  ${path}"
-done
-
-# =============================================================================
-# Build knowledge labels for Emacs eval
-# =============================================================================
-KNOWLEDGE_EVAL=""
-if [[ ${#KNOWLEDGE_LABELS[@]} -gt 0 ]]; then
-    LABELS_LISP=""
-    for label in "${KNOWLEDGE_LABELS[@]}"; do
-        LABELS_LISP+="\"${label}\" "
-    done
-    KNOWLEDGE_EVAL=":knowledge (list ${LABELS_LISP})"
+# Warn about loop-only flags in interactive mode
+if [[ "${MODE}" == "interactive" ]]; then
+    [[ -n "${AGENT_NAME}" ]] && warn "--agent is ignored in interactive mode (load agents via C-c a inside Emacs)"
+    [[ "${MAX_CYCLES}" -ne 1 ]] && warn "--max-cycles is ignored in interactive mode"
+    [[ "${COOLDOWN}" -ne 60 ]] && warn "--cooldown is ignored in interactive mode"
+    [[ "${TIMEOUT}" -ne 7200 ]] && warn "--timeout is ignored in interactive mode"
 fi
 
 # =============================================================================
 # Derived values
 # =============================================================================
-CONTAINER_NAME="${AGENT_NAME}-cycle-$$"
 SSH_KEY_NAME="${SSH_KEY_NAME:-emacboros_ed25519}"
-GIT_AUTHOR_NAME="$(tr '[:lower:]' '[:upper:]' <<< "${AGENT_NAME:0:1}")${AGENT_NAME:1} Agent"
-GIT_AUTHOR_EMAIL="${AGENT_NAME}@emacboros.local"
-LOG_FILE="${PERSONALIZATION_DIR}/audit/${AGENT_NAME}-loop-$(date +%Y-%m-%d).log"
-mkdir -p "$(dirname "${LOG_FILE}")"
+
+if [[ "${MODE}" == "loop" ]]; then
+    CONTAINER_NAME="${AGENT_NAME}-loop-$$"
+    GIT_AUTHOR_NAME="$(tr '[:lower:]' '[:upper:]' <<< "${AGENT_NAME:0:1}")${AGENT_NAME:1} Agent"
+    GIT_AUTHOR_EMAIL="${AGENT_NAME}@emacboros.local"
+else
+    CONTAINER_NAME="iar-interactive-$$"
+    GIT_AUTHOR_NAME="i.ar Agent"
+    GIT_AUTHOR_EMAIL="agent@emacboros.local"
+fi
 
 # =============================================================================
-# Logging helper (tee to both stdout and logfile)
+# Ollama host resolution
 # =============================================================================
+if [[ "${USE_LOCAL}" == "true" ]]; then
+    OLLAMA_HOST="localhost:11434"
+    NET_OPTS="--network=host"
+    info "Local mode: using Ollama at ${OLLAMA_HOST} with host networking"
+else
+    NET_OPTS="--network=host"
+    info "Using Ollama at ${OLLAMA_HOST} with host networking"
+fi
+
+# =============================================================================
+# Logging (loop mode only)
+# =============================================================================
+if [[ "${MODE}" == "loop" ]]; then
+    LOG_FILE="${PERSONALIZATION_DIR}/audit/${AGENT_NAME}-loop-$(date +%Y-%m-%d).log"
+    mkdir -p "$(dirname "${LOG_FILE}")"
+else
+    LOG_FILE="/dev/null"
+fi
+
 log() {
-    echo -e "$@" | tee -a "${LOG_FILE}"
+    if [[ "${MODE}" == "loop" ]]; then
+        echo -e "$@" | tee -a "${LOG_FILE}"
+    else
+        echo -e "$@"
+    fi
 }
 
-# --- Telegram helpers ---
+# --- Telegram helpers (loop mode only) ---
 tg_send() {
+    [[ "${MODE}" != "loop" ]] && return
     local message="$1"
     if [[ -n "${AGENT_TELEGRAM_BOT_TOKEN:-}" && -n "${AGENT_TELEGRAM_CHAT_ID:-}" ]]; then
         curl -s -m 10 -X POST \
@@ -333,8 +362,9 @@ cleanup_container() {
     fi
 }
 
-# --- Reset working tree on failure ---
+# --- Reset working tree on failure (loop mode only) ---
 reset_worktree() {
+    [[ "${MODE}" != "loop" ]] && return
     info "Resetting working tree to clean state"
     cd "${REPO_DIR}"
     git checkout . 2>&1 || true
@@ -342,7 +372,24 @@ reset_worktree() {
 }
 
 # =============================================================================
-# Check SSH key availability
+# Build dynamic mount arguments
+# =============================================================================
+DYNAMIC_MOUNT_OPTS=()
+
+for path in "${MOUNT_ARGS[@]:-}"; do
+    [[ -z "${path}" ]] && continue
+    DYNAMIC_MOUNT_OPTS+=("-v" "${path}:${path}:z")
+    info "Mounting read-write: ${path}"
+done
+
+for path in "${MOUNT_RO_ARGS[@]:-}"; do
+    [[ -z "${path}" ]] && continue
+    DYNAMIC_MOUNT_OPTS+=("-v" "${path}:${path}:ro,z")
+    info "Mounting read-only:  ${path}"
+done
+
+# =============================================================================
+# SSH key availability
 # =============================================================================
 SSH_MOUNT_OPTS=()
 if [[ -f "${SSH_KEY_DIR}/${SSH_KEY_NAME}" ]]; then
@@ -357,26 +404,64 @@ else
 fi
 
 # =============================================================================
-# Run one cycle inside the container
+# Knowledge labels for Emacs eval (loop mode)
 # =============================================================================
-run_cycle() {
-    info "Starting ${AGENT_NAME} cycle ${CYCLE}/${MAX_CYCLES} (timeout: ${TIMEOUT}s)"
+KNOWLEDGE_EVAL=""
+if [[ ${#KNOWLEDGE_LABELS[@]} -gt 0 ]]; then
+    LABELS_LISP=""
+    for label in "${KNOWLEDGE_LABELS[@]}"; do
+        LABELS_LISP+="\"${label}\" "
+    done
+    KNOWLEDGE_EVAL=":knowledge (list ${LABELS_LISP})"
+fi
 
-    podman run \
-        --rm \
+# =============================================================================
+# Gptel fork mount
+# =============================================================================
+GPTEL_FORK_OPTS=""
+if [[ -n "${GPTEL_FORK_PATH}" ]]; then
+    GPTEL_FORK_OPTS="-v ${GPTEL_FORK_PATH}:/root/.emacs.d/gptel-fork:z -e EMACBOROS_GPTEL_FORK_PATH=/root/.emacs.d/gptel-fork"
+    info "Gptel fork: ${GPTEL_FORK_PATH} -> /root/.emacs.d/gptel-fork (writable)"
+else
+    info "Gptel fork: not specified (using ELPA package)"
+fi
+
+# =============================================================================
+# Self-modification i.ar mount
+# =============================================================================
+# In self-modification mode, mount the repo at /root/i.ar/ so agents can
+# edit code. Without self-modification, mount it read-only for reference.
+if [[ "${SELF_MODIFICATION}" -eq 1 ]]; then
+    IAR_MOUNT_OPTS=("-v" "${REPO_DIR}/:/root/i.ar/:z")
+    info "i.ar repo: ${REPO_DIR} -> /root/i.ar/ (writable, self-modification)"
+else
+    IAR_MOUNT_OPTS=("-v" "${REPO_DIR}/:/root/i.ar/:ro,z")
+    info "i.ar repo: ${REPO_DIR} -> /root/i.ar/ (read-only)"
+fi
+
+# =============================================================================
+# Build common Podman arguments
+# =============================================================================
+build_podman_args() {
+    local interactive_flag="$1"  # "-it" or ""
+    local entrypoint_cmd="$2"    # full command string for --entrypoint
+
+    echo \
+        --rm ${interactive_flag} \
         --name "${CONTAINER_NAME}" \
         --memory="${MEMORY_LIMIT}" \
         --security-opt no-new-privileges \
         --cap-drop=all \
         --cap-add=NET_RAW \
         --cap-add=NET_BIND_SERVICE \
-        --network=host \
+        ${NET_OPTS} \
         -e "EMACBOROS_OLLAMA_HOST=${OLLAMA_HOST}" \
         $([[ -n "${OLLAMA_MODEL}" ]] && echo "-e EMACBOROS_OLLAMA_MODEL=${OLLAMA_MODEL}") \
         $([[ -n "${OLLAMA_CTX}" ]] && echo "-e EMACBOROS_OLLAMA_CTX=${OLLAMA_CTX}") \
         -e "AGENT_TELEGRAM_BOT_TOKEN=${AGENT_TELEGRAM_BOT_TOKEN:-}" \
         -e "AGENT_TELEGRAM_CHAT_ID=${AGENT_TELEGRAM_CHAT_ID:-}" \
         $([[ -n "${GPTEL_FORK_PATH}" ]] && echo "-v ${GPTEL_FORK_PATH}:/root/.emacs.d/gptel-fork:z -e EMACBOROS_GPTEL_FORK_PATH=/root/.emacs.d/gptel-fork") \
+        $([[ "${SELF_MODIFICATION:-0}" -eq 1 ]] && echo "-e EMACBOROS_SELF_MODIFICATION=1") \
         -e "LANG=C.utf8" \
         --tmpfs /tmp:rw,size=256m \
         --tmpfs /run:rw,size=64m \
@@ -387,16 +472,117 @@ run_cycle() {
         -v "${PERSONALIZATION_DIR}/knowledge:/root/.emacs.d/knowledge:z" \
         -v "${PERSONALIZATION_DIR}/tasks:/root/.emacs.d/tasks:z" \
         -v "${PERSONALIZATION_DIR}/audit:/root/.emacs.d/audit:z" \
-        -v "${REPO_DIR}/:/root/i.ar/:z" \
+        "${IAR_MOUNT_OPTS[@]}" \
         "${SSH_MOUNT_OPTS[@]}" \
+        "${DYNAMIC_MOUNT_OPTS[@]}" \
         -e "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}" \
         -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}" \
         -e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" \
         -e "GIT_COMMITTER_EMAIL=${GIT_AUTHOR_EMAIL}" \
         -e "GIT_PAGER=cat" \
         -e "TERM=dumb" \
+        --entrypoint /bin/bash \
+        "${IMAGE_NAME}" \
+        -c "${entrypoint_cmd}"
+}
+
+# =============================================================================
+# Interactive mode
+# =============================================================================
+run_interactive() {
+    info "=========================================="
+    info "i.ar Interactive Session"
+    info "  Personalization: ${PERSONALIZATION_DIR}"
+    info "  Ollama: ${OLLAMA_HOST}"
+    info "  Model: ${OLLAMA_MODEL:-glm-5.2:cloud (default)}"
+    info "  Context: ${OLLAMA_CTX:-1048576 (default)}"
+    if [[ "${SELF_MODIFICATION}" -eq 1 ]]; then
+        info "  Self-modification: ENABLED"
+    else
+        info "  Self-modification: disabled"
+    fi
+    info "  Container: ${CONTAINER_NAME}"
+    info "=========================================="
+
+    # shellcheck disable=SC2086
+    podman run --rm -it \
+        --name "${CONTAINER_NAME}" \
+        --memory="${MEMORY_LIMIT}" \
+        --security-opt no-new-privileges \
+        --cap-drop=all \
+        --cap-add=NET_RAW \
+        --cap-add=NET_BIND_SERVICE \
+        ${NET_OPTS} \
+        -e "EMACBOROS_OLLAMA_HOST=${OLLAMA_HOST}" \
+        $([[ -n "${OLLAMA_MODEL}" ]] && echo "-e EMACBOROS_OLLAMA_MODEL=${OLLAMA_MODEL}") \
+        $([[ -n "${OLLAMA_CTX}" ]] && echo "-e EMACBOROS_OLLAMA_CTX=${OLLAMA_CTX}") \
+        $([[ -n "${GPTEL_FORK_PATH}" ]] && echo "-v ${GPTEL_FORK_PATH}:/root/.emacs.d/gptel-fork:z -e EMACBOROS_GPTEL_FORK_PATH=/root/.emacs.d/gptel-fork") \
         $([[ "${SELF_MODIFICATION:-0}" -eq 1 ]] && echo "-e EMACBOROS_SELF_MODIFICATION=1") \
+        -e "LANG=C.utf8" \
+        --tmpfs /tmp:rw,size=256m \
+        --tmpfs /run:rw,size=64m \
+        --tmpfs /var/tmp:rw,size=64m \
+        -v "${REPO_DIR}/emacs.d:/root/.emacs.d:z" \
+        -v "${REPO_DIR}/metaconfig:/root/.emacs.d/metaconfig:z" \
+        -v "${REPO_DIR}/prompts:/root/.emacs.d/agents.d:z" \
+        -v "${PERSONALIZATION_DIR}/knowledge:/root/.emacs.d/knowledge:z" \
+        -v "${PERSONALIZATION_DIR}/tasks:/root/.emacs.d/tasks:z" \
+        -v "${PERSONALIZATION_DIR}/audit:/root/.emacs.d/audit:z" \
+        "${IAR_MOUNT_OPTS[@]}" \
+        "${SSH_MOUNT_OPTS[@]}" \
         "${DYNAMIC_MOUNT_OPTS[@]}" \
+        -e "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}" \
+        -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}" \
+        -e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" \
+        -e "GIT_COMMITTER_EMAIL=${GIT_AUTHOR_EMAIL}" \
+        -e "GIT_PAGER=cat" \
+        "${IMAGE_NAME}" && \
+        info "Session ended" || \
+        error "Container failed to start"
+}
+
+# =============================================================================
+# Loop mode -- run one cycle
+# =============================================================================
+run_cycle() {
+    info "Starting ${AGENT_NAME} cycle ${CYCLE}/${MAX_CYCLES} (timeout: ${TIMEOUT}s)"
+
+    # shellcheck disable=SC2086
+    podman run \
+        --rm \
+        --name "${CONTAINER_NAME}" \
+        --memory="${MEMORY_LIMIT}" \
+        --security-opt no-new-privileges \
+        --cap-drop=all \
+        --cap-add=NET_RAW \
+        --cap-add=NET_BIND_SERVICE \
+        ${NET_OPTS} \
+        -e "EMACBOROS_OLLAMA_HOST=${OLLAMA_HOST}" \
+        $([[ -n "${OLLAMA_MODEL}" ]] && echo "-e EMACBOROS_OLLAMA_MODEL=${OLLAMA_MODEL}") \
+        $([[ -n "${OLLAMA_CTX}" ]] && echo "-e EMACBOROS_OLLAMA_CTX=${OLLAMA_CTX}") \
+        -e "AGENT_TELEGRAM_BOT_TOKEN=${AGENT_TELEGRAM_BOT_TOKEN:-}" \
+        -e "AGENT_TELEGRAM_CHAT_ID=${AGENT_TELEGRAM_CHAT_ID:-}" \
+        $([[ -n "${GPTEL_FORK_PATH}" ]] && echo "-v ${GPTEL_FORK_PATH}:/root/.emacs.d/gptel-fork:z -e EMACBOROS_GPTEL_FORK_PATH=/root/.emacs.d/gptel-fork") \
+        $([[ "${SELF_MODIFICATION:-0}" -eq 1 ]] && echo "-e EMACBOROS_SELF_MODIFICATION=1") \
+        -e "LANG=C.utf8" \
+        --tmpfs /tmp:rw,size=256m \
+        --tmpfs /run:rw,size=64m \
+        --tmpfs /var/tmp:rw,size=64m \
+        -v "${REPO_DIR}/emacs.d:/root/.emacs.d:z" \
+        -v "${REPO_DIR}/metaconfig:/root/.emacs.d/metaconfig:z" \
+        -v "${REPO_DIR}/prompts:/root/.emacs.d/agents.d:z" \
+        -v "${PERSONALIZATION_DIR}/knowledge:/root/.emacs.d/knowledge:z" \
+        -v "${PERSONALIZATION_DIR}/tasks:/root/.emacs.d/tasks:z" \
+        -v "${PERSONALIZATION_DIR}/audit:/root/.emacs.d/audit:z" \
+        "${IAR_MOUNT_OPTS[@]}" \
+        "${SSH_MOUNT_OPTS[@]}" \
+        "${DYNAMIC_MOUNT_OPTS[@]}" \
+        -e "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}" \
+        -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}" \
+        -e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" \
+        -e "GIT_COMMITTER_EMAIL=${GIT_AUTHOR_EMAIL}" \
+        -e "GIT_PAGER=cat" \
+        -e "TERM=dumb" \
         --entrypoint /bin/bash \
         "${IMAGE_NAME}" \
         -c "preflight.sh && emacs --batch -l /root/.emacs.d/init.el --eval '(iar-run-cycle :agent \"${AGENT_NAME}\" :timeout ${TIMEOUT} :self-modification ${SELF_MODIFICATION:-0} ${KNOWLEDGE_EVAL})'" 2>&1 | tee -a "${LOG_FILE}"
@@ -405,16 +591,25 @@ run_cycle() {
 }
 
 # =============================================================================
-# Main loop
+# Main
+# =============================================================================
+if [[ "${MODE}" == "interactive" ]]; then
+    run_interactive
+    exit $?
+fi
+
+# =============================================================================
+# Loop mode -- cycle management
 # =============================================================================
 CYCLE=0
 SUCCESSES=0
 FAILURES=0
 CONSECUTIVE_FAILURES=0
 LOOP_START=$(date +%s)
+LOOP_REASON=""
 
 info "=========================================="
-info "Agent Loop starting"
+info "i.ar Agent Loop"
 info "  Agent: ${AGENT_NAME}"
 info "  Personalization: ${PERSONALIZATION_DIR}"
 info "  Max cycles: ${MAX_CYCLES}"
@@ -441,7 +636,8 @@ tg_send "*${AGENT_NAME^} Loop Started*
 Max cycles: ${MAX_CYCLES}
 Cooldown: ${COOLDOWN}s
 Timeout: ${TIMEOUT}s per cycle
-Ollama: ${OLLAMA_HOST}"
+Ollama: ${OLLAMA_HOST}
+Model: ${OLLAMA_MODEL:-glm-5.2:cloud}"
 
 while [[ ${CYCLE} -lt ${MAX_CYCLES} ]]; do
     CYCLE=$((CYCLE + 1))
