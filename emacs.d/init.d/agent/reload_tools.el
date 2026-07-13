@@ -11,8 +11,7 @@
 (require 'gptel)
 (require 'task_tools)
 (require 'utils)
-
-(declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
+(require 'agent_loader)  ; my-gptel--load-agent-profile (now defined here)
 
 ;;; --- reload_os ---
 

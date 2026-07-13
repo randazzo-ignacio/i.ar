@@ -15,8 +15,8 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'task_tools)
+(require 'agent_loader)  ; my-gptel--load-agent-profile (moved from here)
 
-(declare-function my-gptel-read-agent-profile "agent_loader" (file))
 (declare-function my-gptel--load-prompt "prompt_loader" (name))
 
 ;;; Buffer-local state for tracking delegation depth
@@ -65,17 +65,6 @@ hallucinated tool names."
       (list :block
             (format (my-gptel--load-prompt "unknown_tool")
                     name)))))
-
-(defun my-gptel--load-agent-profile (agent-name)
-  "Load an agent profile by name from agents.d/<name>/prompt.org.
-Returns the profile string or nil if not found."
-  (my-gptel--validate-agent-name agent-name)
-  (let* ((agent-dir (expand-file-name "agents.d/agents" user-emacs-directory))
-         (prompt-path (expand-file-name (format "%s/prompt.org" agent-name) agent-dir)))
-    (unless (string-prefix-p agent-dir (file-truename prompt-path))
-      (error "Path traversal attempt blocked for agent: '%s'" agent-name))
-    (when (file-exists-p prompt-path)
-      (my-gptel-read-agent-profile prompt-path))))
 
 ;;; Timeout handler (extracted to reduce nesting depth)
 

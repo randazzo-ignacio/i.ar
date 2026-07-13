@@ -5,10 +5,10 @@
 ;; and loads them with #+INCLUDE expansion.
 
 (require 'cl-lib)
+(require 'task_tools)  ; my-gptel--validate-agent-name
 
 (declare-function gptel-mode "gptel" (&optional arg))
 (defvar gptel-mode-map)
-(declare-function my-gptel--load-agent-profile "delegate_tool" (agent-name))
 
 ;; Declared in metaconfig/parameters.el (loaded before init.d modules).
 (defvar my-gptel-personal-file-max-lines nil
@@ -111,6 +111,19 @@ The agent name is derived from FILEPATH's parent directory name."
             (buffer-string))))
     ;; Inject personal files from tasks mount
     (my-gptel--inject-personal-files profile agent-name)))
+
+(defun my-gptel--load-agent-profile (agent-name)
+  "Load an agent profile by name from agents.d/<name>/prompt.org.
+Validates the agent name, checks for path traversal, and expands
+#+INCLUDE directives via `my-gptel-read-agent-profile'.
+Returns the profile string or nil if not found."
+  (my-gptel--validate-agent-name agent-name)
+  (let* ((agent-dir (expand-file-name "agents.d/agents" user-emacs-directory))
+         (prompt-path (expand-file-name (format "%s/prompt.org" agent-name) agent-dir)))
+    (unless (string-prefix-p agent-dir (file-truename prompt-path))
+      (error "Path traversal attempt blocked for agent: '%s'" agent-name))
+    (when (file-exists-p prompt-path)
+      (my-gptel-read-agent-profile prompt-path))))
 
 (defun my-gptel-load-agent ()
   "Prompt user to select an agent persona and inject it into gptel.
