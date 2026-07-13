@@ -26,10 +26,10 @@
 Returns immediately, calls CALLBACK with the result string when done.
 TIMEOUT in seconds (default 3600) kills the process on true hangs.
 
-All commands run with GIT_PAGER=cat and TERM=dumb exported in their
-environment to prevent interactive pagers (less/more) from hanging in
-batch mode.  These are exported (not prefixed) so they persist across
-&& chains -- critical for commands like 'cd /root/i.ar && git log'."
+Uses :connection-type 'pipe to prevent pty allocation.  Without a TTY,
+programs detect non-interactive mode via isatty() and skip pagers,
+color codes, and interactive prompts.  No environment variable patches
+needed."
   (let* ((cb callback)
          (cmd command)
          (timeout (or timeout 3600))
@@ -43,8 +43,8 @@ batch mode.  These are exported (not prefixed) so they persist across
               (make-process
                :name "gptel-async-cmd"
                :buffer buf
-               :command (list shell-file-name "-c"
-                              (format "export GIT_PAGER=cat TERM=dumb; %s" cmd))
+               :connection-type 'pipe
+               :command (list shell-file-name "-c" cmd)
                :sentinel
                (lambda (proc _event)
                  (when (memq (process-status proc) '(exit signal))
