@@ -18,8 +18,8 @@
 
 ;;; --- Validation helpers ---
 
-(defun my-gptel--valid-agent-name-p (name)
-  "Return non-nil if NAME is a valid agent name.
+(defun my-gptel--valid-name-p (name)
+  "Return non-nil if NAME is a valid agent or task name.
 Valid names consist only of alphanumeric characters, hyphens, and
 underscores, with at least one character.  Uses string anchors
 to prevent multi-line bypass (line anchors match at each newline
@@ -28,68 +28,60 @@ boundary, so a string like \"valid\\n../../etc\" would pass
   (and (stringp name)
        (string-match-p "\\`[a-zA-Z0-9_-]+\\'" name)))
 
+;; Backward-compatible aliases for the old separate functions.
+(defalias 'my-gptel--valid-agent-name-p 'my-gptel--valid-name-p)
+(defalias 'my-gptel--valid-task-name-p 'my-gptel--valid-name-p)
+
 (defun my-gptel--validate-agent-name (name)
   "Validate that NAME is a safe agent name, or signal an error.
 Returns NAME if valid."
-  (unless (my-gptel--valid-agent-name-p name)
+  (unless (my-gptel--valid-name-p name)
     (error "Invalid agent name: '%s'. Only letters, digits, hyphens, and underscores are allowed." name))
   name)
-
-(defun my-gptel--valid-task-name-p (name)
-  "Return non-nil if NAME is a valid task file name.
-Valid names consist only of alphanumeric characters, hyphens, and
-underscores.  No dots, slashes, spaces, or path components.
-The .md extension is added by the tool, not by the caller."
-  (and (stringp name)
-       (string-match-p "\\`[a-zA-Z0-9_-]+\\'" name)))
 
 (defun my-gptel--validate-task-name (name)
   "Validate that NAME is a safe task file name, or signal an error.
 Returns NAME if valid."
-  (unless (my-gptel--valid-task-name-p name)
+  (unless (my-gptel--valid-name-p name)
     (error "Invalid task name: '%s'. Only letters, digits, hyphens, and underscores are allowed. No dots, slashes, or spaces." name))
   name)
 
 ;;; --- Path resolution ---
 
-(defalias 'my-gptel--get-agent-dir 'my-gptel--resolve-agent-tasks-dir
-  "Backward-compatible alias for `my-gptel--resolve-agent-tasks-dir'.
-Older code and tests may reference this name.")
-
-(defun my-gptel--resolve-agent-tasks-dir ()
-  "Return the tasks directory path for the currently loaded agent.
-Tasks live in the tasks mount at /root/.emacs.d/tasks/<agent-name>/.
-Validates the agent name and checks for path traversal."
-  (let* ((tasks-base (expand-file-name "tasks" user-emacs-directory))
+(defun my-gptel--resolve-agent-dir (base)
+  "Resolve a per-agent directory under BASE for the currently loaded agent.
+BASE is \"tasks\" or \"audit\" (a subdirectory of user-emacs-directory).
+Validates the agent name and checks for path traversal.
+Returns the resolved directory path, or signals an error if no agent
+is loaded."
+  (let* ((base-path (expand-file-name base user-emacs-directory))
          (agent-name (my-gptel--get-agent-name)))
     (if (not (equal agent-name "unknown"))
         (progn
           (my-gptel--validate-agent-name agent-name)
-          (let* ((tasks-base-real (file-truename tasks-base))
-                 (resolved (expand-file-name agent-name tasks-base))
+          (let* ((base-real (file-truename base-path))
+                 (resolved (expand-file-name agent-name base-path))
                  (resolved-real (file-truename resolved)))
-            (unless (string-prefix-p tasks-base-real resolved-real)
+            (unless (string-prefix-p base-real resolved-real)
               (error "Path traversal attempt blocked for agent: '%s'" agent-name))
             resolved))
       (error "No agent loaded. Load one with C-c a first."))))
+
+(defun my-gptel--resolve-agent-tasks-dir ()
+  "Return the tasks directory path for the currently loaded agent.
+Tasks live in the tasks mount at /root/.emacs.d/tasks/<agent-name>/."
+  (my-gptel--resolve-agent-dir "tasks"))
 
 (defun my-gptel--resolve-agent-audit-dir ()
   "Return the audit directory path for the currently loaded agent.
 Memory files (LOGS.md, SUMMARY.md, MEMORIES.md) live in the audit mount
-at /root/.emacs.d/audit/<agent-name>/.  Validates the agent name and
-checks for path traversal.  Used by memory_tools.el via alias."
-  (let* ((audit-base (expand-file-name "audit" user-emacs-directory))
-         (agent-name (my-gptel--get-agent-name)))
-    (if (not (equal agent-name "unknown"))
-        (progn
-          (my-gptel--validate-agent-name agent-name)
-          (let* ((audit-base-real (file-truename audit-base))
-                 (resolved (expand-file-name agent-name audit-base))
-                 (resolved-real (file-truename resolved)))
-            (unless (string-prefix-p audit-base-real resolved-real)
-              (error "Path traversal attempt blocked for agent: '%s'" agent-name))
-            resolved))
-      (error "No agent loaded. Load one with C-c a first."))))
+at /root/.emacs.d/audit/<agent-name>/.  Used by memory_tools.el via alias."
+  (my-gptel--resolve-agent-dir "audit"))
+
+;; Backward-compatible alias.
+(defalias 'my-gptel--get-agent-dir 'my-gptel--resolve-agent-tasks-dir
+  "Backward-compatible alias for `my-gptel--resolve-agent-tasks-dir'.
+Older code and tests may reference this name.")
 
 (defun my-gptel--resolve-task-path (task-name)
   "Resolve TASK-NAME to a full path within the current agent's tasks dir.
