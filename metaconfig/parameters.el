@@ -61,6 +61,98 @@ Contains per-agent subdirectories with .md task files
   :group 'gptel)
 
 ;; =============================================================================
+;; Keybindings
+;; =============================================================================
+;;
+;; Custom keybindings for gptel-mode. Defined here as the single source
+;; of truth. Modules register bindings via `keymap-set' using these
+;; variables. Change a binding here and reload to rebind.
+
+(defcustom my-gptel-key-load-agent "C-c a"
+  "Keybinding to load an agent personality."
+  :type 'key
+  :group 'gptel)
+
+(defcustom my-gptel-key-load-knowledge "C-c k"
+  "Keybinding to load a knowledge base folder."
+  :type 'key
+  :group 'gptel)
+
+(defcustom my-gptel-key-prompt-info "C-c p"
+  "Keybinding to display prompt size info."
+  :type 'key
+  :group 'gptel)
+
+(defcustom my-gptel-key-summarize "C-c m"
+  "Keybinding to summarize the session to SUMMARY.md."
+  :type 'key
+  :group 'gptel)
+
+(defcustom my-gptel-key-quit "C-x C-c"
+  "Keybinding for session-aware quit (summarize then kill Emacs)."
+  :type 'key
+  :group 'gptel)
+
+;; =============================================================================
+;; Delimiters and Markers
+;; =============================================================================
+;;
+;; String constants used as delimiters, markers, and wrappers throughout
+;; the agent system. Centralized here so that modules referencing the
+;; same delimiter stay in sync. Change a delimiter here and reload to
+;; update all modules.
+;;
+;; NOTE: The delegation result marker (`my-gptel-delegation-result-marker')
+;; is coupled with the prompt template at agents.d/common/delegated_task.org.
+;; If you change the defcustom, also update the .org template so sub-agents
+;; know what marker to emit.
+
+(defcustom my-gptel-knowledge-open-delimiter "=== INJECTED KNOWLEDGE [%s] ==="
+  "Format string for the opening delimiter of injected knowledge blocks.
+%s is replaced with the knowledge label (e.g., \"iar/\")."
+  :type 'string
+  :group 'gptel)
+
+(defcustom my-gptel-knowledge-close-delimiter "=== END INJECTED KNOWLEDGE ==="
+  "Closing delimiter for injected knowledge blocks."
+  :type 'string
+  :group 'gptel)
+
+(defcustom my-gptel-knowledge-file-separator "--- %s ---"
+  "Format string for separating files within a knowledge block.
+%s is replaced with the filename."
+  :type 'string
+  :group 'gptel)
+
+(defcustom my-gptel-sanitized-open "[SANITIZED EXTERNAL DATA -- control sequences stripped, injection patterns flagged]"
+  "Prefix wrapper for sanitized external data."
+  :type 'string
+  :group 'gptel)
+
+(defcustom my-gptel-sanitized-close "[END SANITIZED EXTERNAL DATA]"
+  "Suffix wrapper for sanitized external data."
+  :type 'string
+  :group 'gptel)
+
+(defcustom my-gptel-injection-suspect-prefix "[INJECTION SUSPECT]"
+  "Prefix added to lines that resemble prompt injection attempts."
+  :type 'string
+  :group 'gptel)
+
+(defcustom my-gptel-removed-tag "[REMOVED-TAG]"
+  "Replacement text for neutralized fake system message wrapper tags."
+  :type 'string
+  :group 'gptel)
+
+(defcustom my-gptel-delegation-result-marker "=== DELEGATION RESULT ==="
+  "Marker that sub-agents emit before their concise summary.
+The delegate completion hook searches for this marker and extracts
+everything after it as the delegation result.
+Coupled with agents.d/common/delegated_task.org prompt template."
+  :type 'string
+  :group 'gptel)
+
+;; =============================================================================
 ;; Gptel Fork Path
 ;; =============================================================================
 

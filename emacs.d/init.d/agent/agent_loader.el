@@ -17,6 +17,8 @@
   "Relative path to agent profile directories.")
 (defvar my-gptel-audit-path nil
   "Relative path to audit log directory.")
+(defvar my-gptel-key-load-agent nil
+  "Keybinding to load an agent personality.")
 
 ;;; --- Agent state variables ---
 
@@ -163,6 +165,6 @@ Discovers agent directories under agents.d/<name>/ containing prompt.org."
              chosen (length profile) (/ (length profile) 4))))
 
 (with-eval-after-load 'gptel
-  (keymap-set gptel-mode-map "C-c a" #'my-gptel-load-agent))
+  (keymap-set gptel-mode-map my-gptel-key-load-agent #'my-gptel-load-agent))
 
 (provide 'agent_loader)

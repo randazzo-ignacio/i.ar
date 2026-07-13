@@ -19,6 +19,10 @@
 (require 'subr-x)
 (declare-function my-gptel-summarize-session "memory_tools" ())
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar my-gptel-key-quit nil
+  "Keybinding for session-aware quit.")
+
 (defun iar-quit (&optional arg)
   "Run session summarizer then quit Emacs.
 With prefix ARG, skip summarization and quit immediately.
@@ -45,6 +49,6 @@ If summarization fails, warns the user but quits anyway."
       (run-with-timer 0.5 nil (lambda () (save-buffers-kill-emacs))))))
 
 ;; Override C-x C-c in all keymaps
-(global-set-key (kbd "C-x C-c") #'iar-quit)
+(global-set-key (kbd my-gptel-key-quit) #'iar-quit)
 
 (provide 'iar_quit)

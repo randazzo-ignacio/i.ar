@@ -26,6 +26,16 @@
 ;; Declared in metaconfig/parameters.el (loaded before init.d modules).
 (defvar my-gptel-knowledge-path nil
   "Relative path to the knowledge base directory.")
+(defvar my-gptel-key-load-knowledge nil
+  "Keybinding to load a knowledge base folder.")
+(defvar my-gptel-key-prompt-info nil
+  "Keybinding to display prompt size info.")
+(defvar my-gptel-knowledge-open-delimiter nil
+  "Format string for knowledge block opening delimiter.")
+(defvar my-gptel-knowledge-close-delimiter nil
+  "Closing delimiter for knowledge blocks.")
+(defvar my-gptel-knowledge-file-separator nil
+  "Format string for file separator within knowledge blocks.")
 
 (declare-function gptel-mode "gptel" (&optional arg))
 (defvar gptel-mode-map)
@@ -81,7 +91,7 @@ Returns nil if no content was found."
                         (insert-file-contents file)
                         (string-trim-right (buffer-string) "\n"))))
         (when (and content (string-match-p "\\S-" content))
-          (push (format "--- %s ---\n\n%s" fname content) parts))))
+          (push (format (concat my-gptel-knowledge-file-separator "\n\n%s") fname content) parts))))
     (when parts
       (mapconcat #'identity (nreverse parts) "\n\n"))))
 
@@ -100,8 +110,11 @@ Uses `my-gptel--knowledge-base-prompt' as the personality and
       (let ((label (car entry))
             (content (cdr entry)))
         (setq prompt
-              (format "%s\n\n\n=== INJECTED KNOWLEDGE [%s] ===\n\n%s\n\n=== END INJECTED KNOWLEDGE ==="
-                      prompt label content))))
+              (format "%s\n\n\n%s\n\n%s\n\n%s"
+                      prompt
+                      (format my-gptel-knowledge-open-delimiter label)
+                      content
+                      my-gptel-knowledge-close-delimiter))))
     prompt))
 
 (defun my-gptel-load-knowledge-dir (label)
@@ -198,7 +211,7 @@ breakdown of personality vs injected knowledge."
              (my-gptel--format-size total))))
 
 (with-eval-after-load 'gptel
-  (keymap-set gptel-mode-map "C-c k" #'my-gptel-load-knowledge)
-  (keymap-set gptel-mode-map "C-c p" #'my-gptel-prompt-info))
+  (keymap-set gptel-mode-map my-gptel-key-load-knowledge #'my-gptel-load-knowledge)
+  (keymap-set gptel-mode-map my-gptel-key-prompt-info #'my-gptel-prompt-info))
 
 (provide 'knowledge_loader)

@@ -15,6 +15,16 @@
 
 (require 'subr-x)
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar my-gptel-sanitized-open nil
+  "Prefix wrapper for sanitized external data.")
+(defvar my-gptel-sanitized-close nil
+  "Suffix wrapper for sanitized external data.")
+(defvar my-gptel-injection-suspect-prefix nil
+  "Prefix added to lines that resemble prompt injection attempts.")
+(defvar my-gptel-removed-tag nil
+  "Replacement text for neutralized fake system message wrapper tags.")
+
 ;;; --- Configuration ---
 
 (defconst my-gptel--sanitizer-control-patterns
@@ -104,7 +114,7 @@ fake system messages. These are neutralized by replacing with
   "Replace fake system message wrapper tags in TEXT with [REMOVED-TAG]."
   (let ((result text))
     (dolist (pattern my-gptel--sanitizer-wrapper-patterns result)
-      (setq result (replace-regexp-in-string pattern "[REMOVED-TAG]" result)))))
+      (setq result (replace-regexp-in-string pattern my-gptel-removed-tag result)))))
 
 (defun my-gptel--flag-injection-lines (text)
   "Prefix lines that resemble prompt injection with [INJECTION SUSPECT].
@@ -118,7 +128,7 @@ prefix warns the AI to treat them as data, not instructions."
         (dolist (pattern my-gptel--sanitizer-injection-markers)
           (unless matched
             (when (string-match-p pattern line)
-              (setq flagged (concat "[INJECTION SUSPECT] " line))
+              (setq flagged (concat my-gptel-injection-suspect-prefix " " line))
               (setq matched t))))
         (push flagged result)))
     (mapconcat #'identity (nreverse result) "\n")))
@@ -136,8 +146,10 @@ Returns the sanitized string."
     (let* ((cleaned (my-gptel--strip-control-chars text))
            (neutralized (my-gptel--neutralize-wrapper-tags cleaned))
            (flagged (my-gptel--flag-injection-lines neutralized)))
-      (format "[SANITIZED EXTERNAL DATA — control sequences stripped, injection patterns flagged]\n%s\n[END SANITIZED EXTERNAL DATA]"
-              flagged))))
+      (format "%s\n%s\n%s"
+              my-gptel-sanitized-open
+              flagged
+              my-gptel-sanitized-close))))
 
 ;;; --- Tool wrapper for execute_code_local ---
 ;; When operating in CTF/external mode, the sanitizer can be applied

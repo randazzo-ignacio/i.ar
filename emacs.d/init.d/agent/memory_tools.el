@@ -23,6 +23,10 @@
 (declare-function my-gptel-tool-reload-agent "reload_tools" (&optional agent-name))
 (declare-function my-gptel--load-prompt "prompt_loader" (name))
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar my-gptel-key-summarize nil
+  "Keybinding to summarize the session to SUMMARY.md.")
+
 ;;; --- Configuration ---
 ;; Parameters my-gptel-memory-max-entries, my-gptel-memory-timeout,
 ;; and my-gptel-memory-max-conversation-chars are defined in
@@ -328,6 +332,6 @@ called non-interactively (for use by iar-quit)."
 ;;; --- Keybinding ---
 
 (with-eval-after-load 'gptel
-  (keymap-set gptel-mode-map "C-c m" #'my-gptel-summarize-session))
+  (keymap-set gptel-mode-map my-gptel-key-summarize #'my-gptel-summarize-session))
 
 (provide 'memory_tools)

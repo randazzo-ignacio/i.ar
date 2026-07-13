@@ -18,6 +18,10 @@
 (require 'agent_loader)  ; my-gptel--load-agent-profile (moved from here)
 (require 'tool_guard)    ; my-gptel--block-unknown-tools (moved from here)
 
+;; Declared in metaconfig/parameters.el (loaded before init.d modules).
+(defvar my-gptel-delegation-result-marker nil
+  "Marker that sub-agents emit before their concise summary.")
+
 (declare-function my-gptel--load-prompt "prompt_loader" (name))
 
 ;;; Buffer-local state for tracking delegation depth
@@ -177,7 +181,7 @@ full response if the marker is not found."
                  ;; Search for the DELEGATION RESULT marker in the full response.
                  ;; If found, extract everything after it -- the concise summary.
                  (marker-pos
-                  (string-match "=== DELEGATION RESULT ===" full-response))
+                  (string-match my-gptel-delegation-result-marker full-response))
                  (response
                   (if marker-pos
                       (let ((after-marker
