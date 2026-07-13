@@ -14,12 +14,14 @@
 (defconst init-security-dir (expand-file-name "security" init-dir))
 (defconst init-session-dir (expand-file-name "session" init-dir))
 (defconst init-dynamic-dir (expand-file-name "dynamic" init-dir))
+(defconst init-debug-dir (expand-file-name "debug" init-dir))
 
 ;; Add all module subdirectories to load-path so that cross-module
 ;; require calls (e.g., (require 'task_tools) in delegate_tool.el) can
 ;; resolve files in sibling subdirectories.
 (dolist (subdir (list init-core-dir init-agent-dir init-tools-dir
-                       init-security-dir init-session-dir init-dynamic-dir))
+                       init-security-dir init-session-dir init-dynamic-dir
+                       init-debug-dir))
   (add-to-list 'load-path subdir))
 
 ;; Central parameter configuration (must load before any init.d modules)
@@ -108,6 +110,23 @@
 
 ;; Agent autonomous cycle runner (darwin and other orchestrator agents)
 (load (expand-file-name "agent_cycle.el" init-agent-dir))
+
+;; ──────────────────────────────────────────────────────────
+;; Debug modules
+;; ──────────────────────────────────────────────────────────
+;; Buffer size monitor -- logs buffer size before each gptel-send,
+;; warns at threshold, optional hard cap to prevent host crash.
+(load (expand-file-name "buffer_monitor.el" init-debug-dir))
+
+;; Request logger -- captures full JSON payloads sent to and received
+;; from the LLM. Settles whether the model returns 2 tool calls or gptel
+;; splits one into two.
+(load (expand-file-name "request_logger.el" init-debug-dir))
+
+;; FSM state tracer -- logs every FSM state transition and tool call
+;; inspection. Shows exactly when the FSM enters TOOL and whether it
+;; tries to leave.
+(load (expand-file-name "fsm_tracer.el" init-debug-dir))
 
 ;; ──────────────────────────────────────────────────────────
 ;; Session modules
