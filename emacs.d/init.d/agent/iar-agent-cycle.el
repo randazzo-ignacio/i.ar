@@ -2,7 +2,7 @@
 
 ;;; Agent Cycle -- Headless batch entry point for autonomous agent loops
 ;;
-;; This module provides `agent-run-cycle', a generic function that:
+;; This module provides `iar-run-cycle', a generic function that:
 ;; 1. Creates a gptel buffer with the specified agent's profile
 ;; 2. Sends the cycle prompt ("Wake up. Do your thing. Stop.")
 ;; 3. Waits for the full delegation chain to complete
@@ -16,7 +16,7 @@
 ;;
 ;; Usage (batch mode):
 ;;   emacs --batch -l /root/.emacs.d/init.el \
-;;         --eval '(agent-run-cycle :agent "darwin" :timeout 7200)'
+;;         --eval '(iar-run-cycle :agent "darwin" :timeout 7200)'
 ;;
 ;; Telegram notifications require:
 ;;   AGENT_TELEGRAM_BOT_TOKEN -- bot token from @BotFather
@@ -31,32 +31,32 @@
 (require 'subr-x)
 (require 'json)
 
-(defvar my-gptel--guard-allow-self-modification)
+(defvar iar-guard-allow-self-modification)
 
 ;; Declared in metaconfig/parameters.el (loaded before init.d modules).
-(defvar agent-cycle-timeout nil
+(defvar iar-cycle-timeout nil
   "Default timeout for an agent cycle in seconds.")
-(defvar agent-cycle-max-turns nil
+(defvar iar-cycle-max-turns nil
   "Maximum number of LLM response turns before forcing cycle end.")
-(defvar my-gptel-audit-path nil
+(defvar iar-audit-path nil
   "Relative path to audit log directory.")
-(defvar my-gptel-agents-path nil
+(defvar iar-agents-path nil
   "Relative path to agent profile directories.")
 
-(declare-function my-gptel--block-unknown-tools "tool_guard" (info))
-(declare-function my-gptel--load-prompt "prompt_loader" (name))
-(declare-function my-gptel-load-knowledge-dir "knowledge_loader" (label))
+(declare-function iar--mygptel--block-unknown-tools "iar-tool-guard" (info))
+(declare-function iar--load-prompt "iar-prompt-loader" (name))
+(declare-function iar-load-knowledge-dir "iar-knowledge-loader" (label))
 
 ;;; --- Configuration ---
 
-(defgroup agent-cycle nil
+(defgroup iar-cycle nil
   "Autonomous agent cycle configuration."
-  :group 'gptel)
+  :group 'iar)
 
-;; Parameters agent-cycle-timeout and agent-cycle-max-turns are defined
+;; Parameters iar-cycle-timeout and iar-cycle-max-turns are defined
 ;; in metaconfig/parameters.el (loaded early in init.el).
 
-(defcustom agent-telegram-bot-token
+(defcustom iar-telegram-bot-token
   (or (getenv "AGENT_TELEGRAM_BOT_TOKEN") "")
   "Telegram bot token for cycle notifications.
 Get this from @BotFather on Telegram.
@@ -67,9 +67,9 @@ prompts the user when it is set via file-local variables.  The bot
 token is a secret credential: silently accepting it from a tampered
 session file could redirect notifications to an attacker's bot."
   :type 'string
-  :group 'agent-cycle)
+  :group 'iar-cycle)
 
-(defcustom agent-telegram-chat-id
+(defcustom iar-telegram-chat-id
   (or (getenv "AGENT_TELEGRAM_CHAT_ID") "")
   "Telegram chat ID to send notifications to.
 Message @userinfobot on Telegram to get your chat ID.
@@ -80,25 +80,25 @@ prompts the user when it is set via file-local variables.  The chat
 ID controls where notifications are sent: silently accepting it from
 a tampered session file could redirect it to an attacker."
   :type 'string
-  :group 'agent-cycle)
+  :group 'iar-cycle)
 
-(defvar agent-cycle-result-message nil
+(defvar iar-cycle-result-message nil
   "Message to send via Telegram when the cycle ends.
 Set this before killing Emacs.  Nil or empty string means no
 notification.  Must be a non-empty string to trigger a send.")
 
-(defconst agent-cycle-default-continue-prompt
+(defconst iar-cycle-default-continue-prompt
   "Continue your cycle. You are not done yet. Pick up where you left off and complete all remaining steps. When all steps are complete, end with the exact text CYCLE_COMPLETE on its own line."
   "Fallback continue prompt when no agent-specific one is found.")
 
 ;;; --- Telegram notification ---
 
-(defun agent--notify-telegram (message)
+(defun iar--cycle-notify-telegram (message)
   "Send MESSAGE via Telegram bot API.
-Requires `agent-telegram-bot-token' and `agent-telegram-chat-id' to be set.
+Requires `iar-telegram-bot-token' and `iar-telegram-chat-id' to be set.
 Silently skips if either is empty.  Logs success or failure."
-  (let ((token agent-telegram-bot-token)
-        (chat-id agent-telegram-chat-id))
+  (let ((token iar-telegram-bot-token)
+        (chat-id iar-telegram-chat-id))
     (if (or (string-empty-p token)
             (string-empty-p chat-id))
         (message "[agent] Telegram notification skipped (no token/chat-id configured)")
@@ -141,27 +141,27 @@ Silently skips if either is empty.  Logs success or failure."
                              parse-error result)
                   (message "[agent] Telegram notification FAILED: %.500s" result))))))))))
 
-(defun agent--notify-on-exit ()
-  "Send Telegram notification if `agent-cycle-result-message' is set.
+(defun iar--cycle-notify-on-exit ()
+  "Send Telegram notification if `iar-cycle-result-message' is set.
 This is added to `kill-emacs-hook' so it fires automatically on exit.
 Only sends when the message is a non-empty string -- empty strings are
 truthy in Emacs Lisp but would send an empty Telegram message."
-  (when (and (stringp agent-cycle-result-message)
-             (not (string-empty-p agent-cycle-result-message)))
-    (agent--notify-telegram agent-cycle-result-message)))
+  (when (and (stringp iar-cycle-result-message)
+             (not (string-empty-p iar-cycle-result-message)))
+    (iar--cycle-notify-telegram iar-cycle-result-message)))
 
-(add-hook 'kill-emacs-hook #'agent--notify-on-exit)
+(add-hook 'kill-emacs-hook #'iar--cycle-notify-on-exit)
 
 ;;; --- Cycle logging ---
 
-(defun agent--cycle-log-append (agent-name start end)
+(defun iar--cycle-log-append (agent-name start end)
   "Append the latest LLM response to audit/<agent-name>/cycle.log.
 START and END are buffer positions delimiting the new response text.
 Creates the log file if it does not exist.  Prepends a timestamp."
   (when (and (integerp start) (integerp end) (< start end))
     (let* ((log-path (expand-file-name
                       (format "%s/cycle.log" agent-name)
-                      (expand-file-name my-gptel-audit-path user-emacs-directory)))
+                      (expand-file-name iar-audit-path user-emacs-directory)))
            (timestamp (format-time-string "[%Y-%m-%d %H:%M:%S]"))
            (response (with-current-buffer (current-buffer)
                        (save-restriction
@@ -177,35 +177,35 @@ Creates the log file if it does not exist.  Prepends a timestamp."
 
 ;;; --- Cycle execution ---
 
-(defun agent--load-profile (agent-name)
+(defun iar--cycle-load-profile (agent-name)
   "Load an agent profile from agents.d/agents/<agent-name>/prompt.org.
-Uses the shared `my-gptel--load-agent-profile' from delegate_tool.el,
+Uses the shared `iar--load-agent-profile' from iar-delegate-tool.el,
 which validates the agent name, checks for path traversal, and
 expands #+INCLUDE directives."
-  (or (my-gptel--load-agent-profile agent-name)
+  (or (iar--load-agent-profile agent-name)
       (error "Agent profile '%s' not found in agents.d/agents/%s/prompt.org"
              agent-name agent-name)))
 
-(defun agent--load-cycle-prompt (agent-name)
+(defun iar--cycle-load-cycle-prompt (agent-name)
   "Load the cycle prompt for AGENT-NAME.
 Tries agents.d/common/<agent-name>_cycle.org first, then falls back to
 agents.d/common/agent_cycle.org.  This allows per-agent cycle prompts
 (e.g. gardener_cycle.org) while maintaining backward compatibility."
   (or (condition-case nil
-          (my-gptel--load-prompt (format "%s_cycle" agent-name))
+          (iar--load-prompt (format "%s_cycle" agent-name))
         (error nil))
-      (my-gptel--load-prompt "agent_cycle")))
+      (iar--load-prompt "iar-agent-cycle")))
 
-(defun agent--load-continue-prompt (_agent-name)
+(defun iar--cycle-load-continue-prompt (_agent-name)
   "Load the shared continue prompt from agents.d/common/agent_cycle_continue.org.
 Returns a generic default if the file is not found."
   (condition-case nil
-      (my-gptel--load-prompt "agent_cycle_continue")
+      (iar--load-prompt "agent_cycle_continue")
     (error
      (message "[agent] No continue prompt found, using default")
-     agent-cycle-default-continue-prompt)))
+     iar-cycle-default-continue-prompt)))
 
-(defun agent--cycle-complete-p (buf &optional start end)
+(defun iar--cycle-complete-p (buf &optional start end)
   "Check if the cycle is truly complete by scanning BUF for completion markers.
 Looks for a completion phrase and evidence of history logging.
 
@@ -248,11 +248,11 @@ Returns:
           'cycle)
          (t nil))))))
 
-(defun agent-run-cycle (&rest args)
+(defun iar-run-cycle (&rest args)
   "Run one agent cycle in batch mode.
 Keywords args:
   :agent NAME       -- agent profile name (default: \"darwin\")
-  :timeout SECONDS -- override agent-cycle-timeout
+  :timeout SECONDS -- override iar-cycle-timeout
   :prompt STRING    -- override the cycle prompt
   :knowledge LABEL  -- knowledge directory label(s) to load (default: \"iar/\")
                       Can be a single label string or a list of labels.
@@ -267,14 +267,14 @@ text-only response (no tool calls), it is re-prompted to continue
 until it either completes all steps or reaches the turn limit."
   (interactive)
   (let* ((agent-name (or (plist-get args :agent) "darwin"))
-         (raw-timeout (or (plist-get args :timeout) agent-cycle-timeout))
+         (raw-timeout (or (plist-get args :timeout) iar-cycle-timeout))
          (timeout (if (and (integerp raw-timeout) (> raw-timeout 0))
                       raw-timeout
                     7200))
          (prompt (or (plist-get args :prompt)
-                     (agent--load-cycle-prompt agent-name)))
-         (continue-prompt (agent--load-continue-prompt agent-name))
-         (profile (agent--load-profile agent-name))
+                     (iar--cycle-load-cycle-prompt agent-name)))
+         (continue-prompt (iar--cycle-load-continue-prompt agent-name))
+         (profile (iar--cycle-load-profile agent-name))
          (knowledge-labels (let ((k (plist-get args :knowledge)))
                              (cond
                               ((null k) '("iar/"))
@@ -297,19 +297,19 @@ until it either completes all steps or reaches the turn limit."
       (setq-local gptel-system-prompt profile)
       (setq-local gptel-confirm-tool-calls nil)
       (setq-local gptel-stream t)
-      (setq-local my-gptel--current-agent-name agent-name)
-      (setq-local my-gptel--current-agent-file
+      (setq-local iar--current-agent-name agent-name)
+      (setq-local iar--current-agent-file
                   (expand-file-name (format "%s/prompt.org" agent-name)
-                                    (expand-file-name my-gptel-agents-path user-emacs-directory)))
+                                    (expand-file-name iar-agents-path user-emacs-directory)))
       ;; Set self-modification mode so the agent can edit init.d/**/*.el.
       ;; Use setq-local (not setq) so only THIS buffer has self-modification
       ;; enabled.  Delegate buffers inherit the global nil value.
       ;; Default is nil -- only darwin passes :self-modification t.
-      (setq-local my-gptel--guard-allow-self-modification self-mod)
+      (setq-local iar-guard-allow-self-modification self-mod)
 
       ;; Load knowledge bases into the cycle buffer's system prompt.
       (dolist (label knowledge-labels)
-        (my-gptel-load-knowledge-dir label))
+        (iar-load-knowledge-dir label))
 
       ;; Tool call tracker: log every tool call for debugging
       (add-hook 'gptel-post-tool-call-functions
@@ -328,7 +328,7 @@ until it either completes all steps or reaches the turn limit."
       ;; names at TPRE stage with a cleaner error message than gptel's
       ;; built-in handling in gptel--handle-tool-use (TOOL state).
       (add-hook 'gptel-pre-tool-call-functions
-                #'my-gptel--block-unknown-tools
+                #'iar--mygptel--block-unknown-tools
                 nil t)
 
       ;; Continuation hook: fires on every DONE/ERRS/ABRT state.
@@ -337,7 +337,7 @@ until it either completes all steps or reaches the turn limit."
                (unless completed
                  (cl-incf turn-count)
                  ;; Log the full response to cycle.log for debugging
-                 (agent--cycle-log-append agent-name start end)
+                 (iar--cycle-log-append agent-name start end)
                  (message "[%s] Turn #%d completed (tool calls so far: %d)"
                           agent-name turn-count tool-call-count)
                  (when (and (integerp start) (integerp end) (< start end))
@@ -347,9 +347,9 @@ until it either completes all steps or reaches the turn limit."
                                       (min (max start (point-min)) (point-max))
                                       (min (max end (point-min)) (point-max)))))
                        (message "[%s] Response: %.300s" agent-name response))))
-                 (let ((max-turns (if (and (integerp agent-cycle-max-turns)
-                                           (> agent-cycle-max-turns 0))
-                                     agent-cycle-max-turns
+                 (let ((max-turns (if (and (integerp iar-cycle-max-turns)
+                                           (> iar-cycle-max-turns 0))
+                                     iar-cycle-max-turns
                                    40)))
                    (cond
                     ;; Max turns reached -- end cycle
@@ -357,14 +357,14 @@ until it either completes all steps or reaches the turn limit."
                      (setq completed t)
                      (message "[%s] Reached max turns (%d), ending cycle"
                               agent-name max-turns)
-                     (setq agent-cycle-result-message
+                     (setq iar-cycle-result-message
                            (format "*%s Cycle: Max Turns Reached*\nTurns: %d (limit %d)\nTool calls: %d\nThe cycle hit the turn limit without completing."
                                    (capitalize agent-name) turn-count max-turns tool-call-count))
                      (run-with-timer 2 nil (lambda () (kill-emacs exit-code))))
                     ;; Check for completion markers
-                    ((let ((completion-type (agent--cycle-complete-p cycle-buf start end)))
+                    ((let ((completion-type (iar--cycle-complete-p cycle-buf start end)))
                        completion-type)
-                     (let* ((completion-type (agent--cycle-complete-p cycle-buf start end))
+                     (let* ((completion-type (iar--cycle-complete-p cycle-buf start end))
                             (elapsed (float-time (time-subtract (current-time) cycle-start))))
                        (setq completed t)
                        (if (eq completion-type 'loop)
@@ -372,12 +372,12 @@ until it either completes all steps or reaches the turn limit."
                              (setq exit-code 2)
                              (message "[%s] Loop complete (task done) in %.1fs"
                                       agent-name elapsed)
-                             (setq agent-cycle-result-message
+                             (setq iar-cycle-result-message
                                    (format "*%s Loop Complete (Task Done)*\nElapsed: %.1fs\nTool calls: %d\nTurns: %d\nExit code: %d (loop stop)"
                                            (capitalize agent-name) elapsed
                                            tool-call-count turn-count exit-code)))
                          (message "[%s] Cycle completed in %.1fs" agent-name elapsed)
-                         (setq agent-cycle-result-message
+                         (setq iar-cycle-result-message
                                (format "*%s Cycle Complete*\nElapsed: %.1fs\nTool calls: %d\nTurns: %d\nExit code: %d"
                                        (capitalize agent-name) elapsed
                                        tool-call-count turn-count exit-code)))
@@ -414,7 +414,7 @@ until it either completes all steps or reaches the turn limit."
                    (widen)
                    (let ((partial (buffer-substring-no-properties (point-min) (point-max))))
                      (message "[%s] Partial response: %.500s" agent-name partial)))))
-             (setq agent-cycle-result-message
+             (setq iar-cycle-result-message
                    (format "*%s Cycle: Timed Out*\nTimeout: %ds\nTool calls: %d\nTurns: %d\nThe cycle exceeded its time limit."
                            (capitalize agent-name) timeout tool-call-count turn-count))
              (when (buffer-live-p cycle-buf)
@@ -469,7 +469,7 @@ until it either completes all steps or reaches the turn limit."
                     (setq completed t)
                     (message "[%s] FSM reached terminal state: %s"
                              agent-name (gptel-fsm-state fsm))
-                    (setq agent-cycle-result-message
+                    (setq iar-cycle-result-message
                           (format "*%s Cycle: FSM Terminal*\nState: %s\nTool calls: %d\nTurns: %d\nThe FSM reached a terminal state without explicit completion."
                                   (capitalize agent-name) (gptel-fsm-state fsm) tool-call-count turn-count))
                     (run-with-timer 1 nil (lambda () (kill-emacs exit-code))))
@@ -480,7 +480,7 @@ until it either completes all steps or reaches the turn limit."
                    ((and (not fsm) (> idle-count 60))
                     (setq completed t)
                     (message "[%s] No FSM and idle for 60s, exiting" agent-name)
-                    (setq agent-cycle-result-message
+                    (setq iar-cycle-result-message
                           (format "*%s Cycle: No FSM*\nTool calls: %d\nTurns: %d\nNo FSM found and idle for 60s."
                                   (capitalize agent-name) tool-call-count turn-count))
                     (run-with-timer 1 nil (lambda () (kill-emacs exit-code))))
@@ -492,12 +492,12 @@ until it either completes all steps or reaches the turn limit."
                 (when (> idle-count 1800)
                   (setq completed t)
                   (message "[%s] No active requests for 1800s, exiting" agent-name)
-                  (setq agent-cycle-result-message
+                  (setq iar-cycle-result-message
                         (format "*%s Cycle: Idle Exit*\nTool calls: %d\nTurns: %d\nNo active requests for 1800s, bailing out."
                                 (capitalize agent-name) tool-call-count turn-count))
                   (run-with-timer 1 nil (lambda () (kill-emacs exit-code)))))))))))))
 
 ;; Backward compatibility alias
-(defalias 'darwin-run-cycle #'agent-run-cycle)
+(defalias 'iar-darwin-run-cycle #'iar-run-cycle)
 
-(provide 'agent_cycle)
+(provide 'iar-agent-cycle)

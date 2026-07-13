@@ -5,13 +5,13 @@
 
 (require 'gptel)
 
-(defun my-gptel--fs-read-file (filepath)
+(defun iar--mygptel--fs-read-file (filepath)
   "Read the text contents of FILEPATH into a string.
 On error, returns a string starting with \\='Error:\\='.
 
-When `my-gptel--fs-read-max-size' is a positive integer and the file
+When `iar-fs-read-max-size' is a positive integer and the file
 has more characters than that limit, only the first
-`my-gptel--fs-read-max-size' characters are returned, followed by a
+`iar-fs-read-max-size' characters are returned, followed by a
 truncation notice.  This prevents loading huge files into the AI
 context.  Uses character count (not byte count) because
 insert-file-contents decodes the file, and token consumption
@@ -20,7 +20,7 @@ correlates with characters."
     (condition-case err
         (with-temp-buffer
           (insert-file-contents expanded-path)
-          (let ((max my-gptel--fs-read-max-size))
+          (let ((max iar-fs-read-max-size))
             (if (and (integerp max) (> max 0)
                      (> (buffer-size) max))
                 (progn
@@ -38,6 +38,6 @@ correlates with characters."
   :name "read_file"
   :description "Read the text contents of a local file into context."
   :args (list '(:name "filepath" :type "string" :description "Absolute path to the file."))
-  :function #'my-gptel--fs-read-file))
+  :function #'iar--mygptel--fs-read-file))
 
 (provide 'iar-tool--read-file)

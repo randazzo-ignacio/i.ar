@@ -14,7 +14,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 
-(defun my-gptel--check-parens-in-buffer ()
+(defun iar--check-parens-in-buffer ()
   "Run `check-parens' in the current buffer and return any error message.
 Returns nil if parentheses are balanced."
   (condition-case err
@@ -24,7 +24,7 @@ Returns nil if parentheses are balanced."
     (error
      (format "Parenthesis error: %s" (error-message-string err)))))
 
-(defun my-gptel--byte-compile-check (filepath)
+(defun iar--byte-compile-check (filepath)
   "Byte-compile FILEPATH and return warnings/errors string, or nil if clean.
 Uses `byte-compile-file' with a temp .elc destination to avoid modifying
 the source or leaving .elc artifacts.  Captures the *Compile-Log* buffer."
@@ -54,7 +54,7 @@ the source or leaving .elc artifacts.  Captures the *Compile-Log* buffer."
         (delete-file dest-file)))
     result))
 
-(defun my-gptel-tool-check-elisp (filepath)
+(defun iar--mygptel--tool-check-elisp (filepath)
   "Check an Emacs Lisp file for syntax errors, unbalanced parens, and
 byte-compilation warnings. Returns a diagnostic report string.
 The source file is never modified."
@@ -69,10 +69,10 @@ The source file is never modified."
                (with-temp-buffer
                  (insert-file-contents expanded-path)
                  (emacs-lisp-mode)
-                 (my-gptel--check-parens-in-buffer))))
+                 (iar--check-parens-in-buffer))))
           (when paren-error
             (push paren-error results)))
-        (let ((compile-warnings (my-gptel--byte-compile-check expanded-path)))
+        (let ((compile-warnings (iar--byte-compile-check expanded-path)))
           (when compile-warnings
             (push compile-warnings results)))
         (if results
@@ -89,6 +89,6 @@ The source file is never modified."
   :name "check_elisp"
   :description "Check an Emacs Lisp (.el) file for syntax errors, unbalanced parentheses, and byte-compilation warnings. Returns a diagnostic report. Does NOT modify the file."
   :args (list '(:name "filepath" :type "string" :description "Absolute path to the .el file to check."))
-  :function #'my-gptel-tool-check-elisp))
+  :function #'iar--mygptel--tool-check-elisp))
 
 (provide 'iar-tool--check-elisp)

@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Tests for output_sanitizer.el
+;;; Tests for iar-output-sanitizer.el
 ;; Tests the output sanitization pipeline: control character stripping,
 ;; wrapper tag neutralization, injection line flagging, and the full
 ;; sanitize pipeline. Also tests the conditional exec output wrapper.
@@ -8,7 +8,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
-(require 'output_sanitizer)
+(require 'iar-output-sanitizer)
 
 ;;; --- Control character stripping tests ---
 

@@ -8,4 +8,4 @@
 (when (fboundp 'tool-bar-mode)
   (tool-bar-mode -1))
 (setq inhibit-startup-message t)
-(provide 'ui_cleanup)
+(provide 'iar-ui-cleanup)

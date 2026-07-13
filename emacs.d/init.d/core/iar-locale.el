@@ -1,7 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
 ;; --- UTF-8 / LOCALE CONFIGURATION ---
-;; In a containerized environment, locale may not be set via environment
+;; In a containerized environment, iar-locale may not be set via environment
 ;; variables. We enforce UTF-8 at the Emacs level to ensure proper display
 ;; of non-ASCII characters (arrows, check marks, accented letters, etc.).
 ;;
@@ -16,4 +16,4 @@
 (set-selection-coding-system 'utf-8)
 (prefer-coding-system 'utf-8)
 (set-language-environment "UTF-8")
-(provide 'locale)
+(provide 'iar-locale)

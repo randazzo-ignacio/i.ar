@@ -4,7 +4,7 @@
 ;; Tests the async shell command execution tool.
 ;; Uses :integration tag for tests that actually spawn processes.
 ;;
-;; NOTE: my-gptel--async-shell-command is now a truly async function that
+;; NOTE: iar--mygptel--async-shell-command is now a truly async function that
 ;; takes a CALLBACK as its first argument and returns immediately. Tests
 ;; use a synchronous wrapper (my-gptel--async-shell-sync) to wait for
 ;; the result.
@@ -18,14 +18,14 @@
 
 (defun my-gptel--async-shell-sync (command &optional timeout)
   "Run COMMAND synchronously for testing purposes.
-Wraps the async `my-gptel--async-shell-command' with a callback that
+Wraps the async `iar--mygptel--async-shell-command' with a callback that
 stores the result, then waits via `accept-process-output' until done.
 TIMEOUT defaults to 10 seconds."
   (let* ((timeout (or timeout 10))
          (result nil)
          (done nil)
          (deadline (time-add (current-time) (seconds-to-time timeout))))
-    (my-gptel--async-shell-command
+    (iar--mygptel--async-shell-command
      (lambda (r)
        (setq result r)
        (setq done t))
@@ -108,14 +108,14 @@ TIMEOUT defaults to 10 seconds."
 (ert-deftest test-code-legacy-sync-echo ()
   "Legacy sync convention should return command output."
   :tags '(integration)
-  (let ((result (my-gptel--async-shell-command "echo hello" 10)))
+  (let ((result (iar--mygptel--async-shell-command "echo hello" 10)))
     (should (stringp result))
     (should (string-match-p "hello" result))))
 
 (ert-deftest test-code-legacy-sync-exit-code ()
   "Legacy sync convention should report non-zero exit code."
   :tags '(integration)
-  (let ((result (my-gptel--async-shell-command "exit 42" 10)))
+  (let ((result (iar--mygptel--async-shell-command "exit 42" 10)))
     (should (stringp result))
     (should (string-match-p "exited with code 42" result))))
 
@@ -125,7 +125,7 @@ This is a regression test for the deadline computation bug where the
 while loop recomputed (current-time) inside the condition, making the
 deadline always now+timeout and the loop infinite."
   :tags '(integration)
-  (let ((result (my-gptel--async-shell-command "sleep 10" 2)))
+  (let ((result (iar--mygptel--async-shell-command "sleep 10" 2)))
     (should (stringp result))
     (should (string-match-p "TIMEOUT" result))))
 
@@ -134,14 +134,14 @@ deadline always now+timeout and the loop infinite."
 Verifies that nil timeout is handled via (or command 3600)."
   :tags '(integration)
   ;; Use a fast command so the test doesn't wait long
-  (let ((result (my-gptel--async-shell-command "echo fast")))
+  (let ((result (iar--mygptel--async-shell-command "echo fast")))
     (should (stringp result))
     (should (string-match-p "fast" result))))
 
 ;;; --- Buffer cleanup on process creation failure tests ---
 
 (ert-deftest test-code-async-shell-cleans-up-buffer-on-process-failure ()
-  "my-gptel--async-shell-command should kill the buffer if make-process fails.
+  "iar--mygptel--async-shell-command should kill the buffer if make-process fails.
 When make-process signals an error (e.g., shell-file-name is a directory),
 the buffer created by generate-new-buffer should be cleaned up, not
 leaked. The error should propagate to the caller's condition-case.
@@ -157,7 +157,7 @@ asynchronously via the sentinel."
         (progn
           (setq shell-file-name "/tmp")
           (condition-case err
-              (my-gptel--async-shell-command
+              (iar--mygptel--async-shell-command
                (lambda (_r))
                "echo hello" 10)
             (error (setq error-signal err)))
@@ -240,7 +240,7 @@ and skip sanitization."
             (setq-local my-gptel--sanitize-exec-output t)
             ;; Initiate the async command from chat-buf so the flag
             ;; is captured from this buffer's local value.
-            (my-gptel--async-shell-command
+            (iar--mygptel--async-shell-command
              (lambda (r) (setq result r done t))
              "echo hello" 10))
           ;; Switch to a different buffer where the flag is nil.

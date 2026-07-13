@@ -23,38 +23,38 @@
 
 (require 'subr-x)
 (require 'json)
-(require 'utils)
+(require 'iar-utils)
 
 ;; Declared in metaconfig/parameters.el (loaded before init.d modules).
-(defvar my-gptel-audit-path nil
+(defvar iar-audit-path nil
   "Relative path to audit log directory.")
 
 ;;; --- Configuration ---
 
-(defcustom my-gptel-request-log-enabled t
+(defcustom iar-request-log-enabled t
   "Whether request logging is enabled.
 When nil, no request/response data is logged.
 Can be set buffer-locally to disable logging for specific buffers."
   :type 'boolean
   :safe #'booleanp
-  :group 'gptel)
+  :group 'iar)
 
 ;;; --- Internal helpers ---
 
-;; my-gptel--get-agent-name is now in shared/utils.el.
+;; iar--get-agent-name is now in shared/utils.el.
 
-(defun my-gptel--request-log-path ()
+(defun iar--request-log-path ()
   "Return the per-agent request log path."
-  (let ((agent (my-gptel--get-agent-name)))
+  (let ((agent (iar--get-agent-name)))
     (expand-file-name
      (format "%s/REQUESTS.log" agent)
-     (expand-file-name my-gptel-audit-path user-emacs-directory))))
+     (expand-file-name iar-audit-path user-emacs-directory))))
 
-(defun my-gptel--request-log-write (label content)
+(defun iar--request-log-write (label content)
   "Write a labeled CONTENT block to the request log.
 LABEL is the symbol request or response. CONTENT is a string."
   (condition-case err
-      (let ((log-path (my-gptel--request-log-path))
+      (let ((log-path (iar--request-log-path))
             (timestamp (format-time-string "%Y-%m-%d %H:%M:%S")))
         (make-directory (file-name-directory log-path) t)
         (with-temp-buffer
@@ -71,12 +71,12 @@ LABEL is the symbol request or response. CONTENT is a string."
 
 ;;; --- Outgoing request capture ---
 
-(defun my-gptel--request-log-outgoing (config-str)
+(defun iar--mygptel--request-log-outgoing (config-str)
   "Extract and log the JSON payload from CONFIG-STR.
 CONFIG-STR is the return value of gptel-curl--get-config, which
 contains curl config lines followed by the JSON payload as the
 data-binary section."
-  (when my-gptel-request-log-enabled
+  (when iar-request-log-enabled
     (condition-case err
         ;; The config string is: config lines\n + JSON payload
         ;; The JSON payload is everything after the last config line.
@@ -91,17 +91,17 @@ data-binary section."
                (json-payload (if json-start
                                  (substring config-str json-start)
                                config-str)))
-          (my-gptel--request-log-write 'request json-payload))
+          (iar--request-log-write 'request json-payload))
       (error
        (message "Warning: request logger outgoing parse failed: %s"
                 (error-message-string err))))))
 
 ;;; --- Incoming response capture ---
 
-(defun my-gptel--request-log-incoming (process)
+(defun iar--mygptel--request-log-incoming (process)
   "Snapshot the raw response from PROCESS buffer before gptel parses it.
 PROCESS is the curl process. Its buffer contains HTTP headers + body."
-  (when my-gptel-request-log-enabled
+  (when iar-request-log-enabled
     (condition-case err
         (let ((proc-buf (process-buffer process)))
           (when (buffer-live-p proc-buf)
@@ -117,7 +117,7 @@ PROCESS is the curl process. Its buffer contains HTTP headers + body."
                 (when (> (length body) 100000)
                   (setq body (concat (substring body 0 100000)
                                      "\n... [truncated at 100KB] ...")))
-                (my-gptel--request-log-write 'response body)))))
+                (iar--request-log-write 'response body)))))
       (error
        (message "Warning: request logger incoming capture failed: %s"
                 (error-message-string err))))))
@@ -125,25 +125,25 @@ PROCESS is the curl process. Its buffer contains HTTP headers + body."
 ;;; --- Advice installation ---
 
 ;;;###autoload
-(defun my-gptel-request-log-setup ()
+(defun iar-request-log-setup ()
   "Install request logging via advice-add on gptel curl functions.
 Call this once during initialization to enable request logging."
   ;; Outgoing: capture the config string returned by gptel-curl--get-config
   (advice-add 'gptel-curl--get-config :around
               (lambda (orig-fn info uuid)
                 (let ((result (funcall orig-fn info uuid)))
-                  (my-gptel--request-log-outgoing result)
+                  (iar--mygptel--request-log-outgoing result)
                   result)))
   ;; Incoming (streaming): snapshot before stream-cleanup parses
   (advice-add 'gptel-curl--stream-cleanup :before
               (lambda (process _status)
-                (my-gptel--request-log-incoming process)))
+                (iar--mygptel--request-log-incoming process)))
   ;; Incoming (non-streaming): snapshot before sentinel parses
   (advice-add 'gptel-curl--sentinel :before
               (lambda (process _status)
-                (my-gptel--request-log-incoming process)))
+                (iar--mygptel--request-log-incoming process)))
   (message "[request-logger] Installed on gptel-curl functions"))
 
-(my-gptel-request-log-setup)
+(iar-request-log-setup)
 
-(provide 'request_logger)
+(provide 'iar-request-logger)

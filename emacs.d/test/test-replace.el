@@ -37,10 +37,10 @@
   "replace_in_file should replace only the first occurrence."
   (with-replace-fixture
     (let* ((target (expand-file-name "multi.txt" test-replace--tmpdir)))
-      (my-gptel--fs-write-file target "foo\nbar\nfoo\nbar\n")
-      (let ((result (my-gptel--fs-replace target "foo" "FOO")))
+      (iar--mygptel--fs-write-file target "foo\nbar\nfoo\nbar\n")
+      (let ((result (iar--mygptel--fs-replace target "foo" "FOO")))
         (should (string-match-p "Success" result))
-        (should (string= (my-gptel--fs-read-file target)
+        (should (string= (iar--mygptel--fs-read-file target)
                          "FOO\nbar\nfoo\nbar\n"))))))
 
 (ert-deftest test-replace-large-block ()
@@ -59,10 +59,10 @@
                                (cl-loop for i from 10 to 20
                                         collect (format "REPLACED %d" i))
                                "\n")))
-      (my-gptel--fs-write-file target (concat lines "\n"))
-      (let ((result (my-gptel--fs-replace target search replace)))
+      (iar--mygptel--fs-write-file target (concat lines "\n"))
+      (let ((result (iar--mygptel--fs-replace target search replace)))
         (should (string-match-p "Success" result))
-        (let ((content (my-gptel--fs-read-file target)))
+        (let ((content (iar--mygptel--fs-read-file target)))
           (should (string-match-p "REPLACED 10" content))
           (should (string-match-p "REPLACED 20" content))
           (should-not (string-match-p "\\`line 10\\'" content)))))))
@@ -71,20 +71,20 @@
   "replace_in_file should handle special characters in search and replace."
   (with-replace-fixture
     (let* ((target (expand-file-name "special.txt" test-replace--tmpdir)))
-      (my-gptel--fs-write-file target "price: $100 (USD)\n")
-      (let ((result (my-gptel--fs-replace target "$100 (USD)" "$200 (EUR)")))
+      (iar--mygptel--fs-write-file target "price: $100 (USD)\n")
+      (let ((result (iar--mygptel--fs-replace target "$100 (USD)" "$200 (EUR)")))
         (should (string-match-p "Success" result))
-        (should (string= (my-gptel--fs-read-file target)
+        (should (string= (iar--mygptel--fs-read-file target)
                          "price: $200 (EUR)\n"))))))
 
 (ert-deftest test-replace-empty-replace-text ()
   "replace_in_file with empty replace text should delete the search text."
   (with-replace-fixture
     (let* ((target (expand-file-name "delete.txt" test-replace--tmpdir)))
-      (my-gptel--fs-write-file target "keep\nremove\nkeep\n")
-      (let ((result (my-gptel--fs-replace target "remove\n" "")))
+      (iar--mygptel--fs-write-file target "keep\nremove\nkeep\n")
+      (let ((result (iar--mygptel--fs-replace target "remove\n" "")))
         (should (string-match-p "Success" result))
-        (should (string= (my-gptel--fs-read-file target)
+        (should (string= (iar--mygptel--fs-read-file target)
                          "keep\nkeep\n"))))))
 
 ;;; --- Buffer-aware replace tests ---
@@ -93,19 +93,19 @@
   "replace_in_file should update the buffer when file is open in Emacs."
   (with-replace-fixture
     (let* ((target (expand-file-name "buffered.txt" test-replace--tmpdir)))
-      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (iar--mygptel--fs-write-file target "old text\nkeep this\n")
       ;; Open the file in a buffer (simulating an Emacs editing session)
       (let ((buf (find-file-noselect target)))
         (unwind-protect
             (progn
-              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+              (let ((result (iar--mygptel--fs-replace target "old text" "new text")))
                 (should (string-match-p "Success" result))
                 ;; Buffer content should be updated
                 (with-current-buffer buf
                   (should (string-match-p "new text" (buffer-string)))
                   (should-not (string-match-p "old text" (buffer-string))))
                 ;; File on disk should also be updated
-                (should (string= (my-gptel--fs-read-file target)
+                (should (string= (iar--mygptel--fs-read-file target)
                                  "new text\nkeep this\n"))))
           (with-current-buffer buf (set-buffer-modified-p nil))
           (kill-buffer buf))))))
@@ -114,12 +114,12 @@
   "replace_in_file should use atomic write when file is not open in a buffer."
   (with-replace-fixture
     (let* ((target (expand-file-name "atomic.txt" test-replace--tmpdir)))
-      (my-gptel--fs-write-file target "original\n")
+      (iar--mygptel--fs-write-file target "original\n")
       ;; No buffer is open for this file
       (should-not (find-buffer-visiting target))
-      (let ((result (my-gptel--fs-replace target "original" "replaced")))
+      (let ((result (iar--mygptel--fs-replace target "original" "replaced")))
         (should (string-match-p "Success" result))
-        (should (string= (my-gptel--fs-read-file target)
+        (should (string= (iar--mygptel--fs-read-file target)
                          "replaced\n")))
       ;; Verify no .tmp file left behind
       (should-not (file-exists-p (concat target ".tmp"))))))
@@ -128,10 +128,10 @@
   "replace_in_file should return error when search text not found in open buffer."
   (with-replace-fixture
     (let* ((target (expand-file-name "notfound.txt" test-replace--tmpdir)))
-      (my-gptel--fs-write-file target "existing content\n")
+      (iar--mygptel--fs-write-file target "existing content\n")
       (let ((buf (find-file-noselect target)))
         (unwind-protect
-            (let ((result (my-gptel--fs-replace target "nonexistent" "replacement")))
+            (let ((result (iar--mygptel--fs-replace target "nonexistent" "replacement")))
               (should (string-match-p "Error" result))
               (should (string-match-p "not found" result))
               ;; Buffer should be unchanged
@@ -144,16 +144,16 @@
   "replace_in_file should return clear error when buffer is read-only."
   (with-replace-fixture
     (let* ((target (expand-file-name "readonly.txt" test-replace--tmpdir)))
-      (my-gptel--fs-write-file target "content here\n")
+      (iar--mygptel--fs-write-file target "content here\n")
       (let ((buf (find-file-noselect target)))
         (unwind-protect
             (progn
               (with-current-buffer buf (read-only-mode 1))
-              (let ((result (my-gptel--fs-replace target "content" "CHANGED")))
+              (let ((result (iar--mygptel--fs-replace target "content" "CHANGED")))
                 (should (string-match-p "Error" result))
                 (should (string-match-p "read-only" result))
                 ;; File on disk should be unchanged
-                (should (string= (my-gptel--fs-read-file target)
+                (should (string= (iar--mygptel--fs-read-file target)
                                  "content here\n"))
                 ;; Buffer should be unchanged
                 (with-current-buffer buf
@@ -165,7 +165,7 @@
   "replace_in_file should return error when buffer has unsaved modifications."
   (with-replace-fixture
     (let* ((target (expand-file-name "dirty.txt" test-replace--tmpdir)))
-      (my-gptel--fs-write-file target "original line\nsecond line\n")
+      (iar--mygptel--fs-write-file target "original line\nsecond line\n")
       (let ((buf (find-file-noselect target)))
         (unwind-protect
             (progn
@@ -173,11 +173,11 @@
               (with-current-buffer buf
                 (goto-char (point-min))
                 (insert "UNSAVED PREFIX\n"))
-              (let ((result (my-gptel--fs-replace target "original" "REPLACED")))
+              (let ((result (iar--mygptel--fs-replace target "original" "REPLACED")))
                 (should (string-match-p "Error" result))
                 (should (string-match-p "unsaved" result))
                 ;; File on disk should be unchanged (unsaved changes NOT persisted)
-                (should (string= (my-gptel--fs-read-file target)
+                (should (string= (iar--mygptel--fs-read-file target)
                                  "original line\nsecond line\n"))))
           (with-current-buffer buf (set-buffer-modified-p nil))
           (kill-buffer buf))))))
@@ -186,7 +186,7 @@
   "replace_in_file should widen before searching in a narrowed buffer."
   (with-replace-fixture
     (let* ((target (expand-file-name "narrowed.txt" test-replace--tmpdir)))
-      (my-gptel--fs-write-file target "AAAA\nsearchme\nBBBB\n")
+      (iar--mygptel--fs-write-file target "AAAA\nsearchme\nBBBB\n")
       (let ((buf (find-file-noselect target)))
         (unwind-protect
             (progn
@@ -197,9 +197,9 @@
                 (search-forward "searchme")
                 (narrow-to-region (point) (point-max)))
               ;; Replace should find "AAAA" despite narrowing
-              (let ((result (my-gptel--fs-replace target "AAAA" "REPLACED")))
+              (let ((result (iar--mygptel--fs-replace target "AAAA" "REPLACED")))
                 (should (string-match-p "Success" result))
-                (should (string= (my-gptel--fs-read-file target)
+                (should (string= (iar--mygptel--fs-read-file target)
                                  "REPLACED\nsearchme\nBBBB\n"))))
           (with-current-buffer buf (set-buffer-modified-p nil))
           (kill-buffer buf))))))
@@ -208,8 +208,8 @@
   "replace_in_file success message should contain the expanded (absolute) path."
   (with-replace-fixture
     (let* ((target (expand-file-name "pathcheck.txt" test-replace--tmpdir)))
-      (my-gptel--fs-write-file target "content\n")
-      (let ((result (my-gptel--fs-replace target "content" "changed")))
+      (iar--mygptel--fs-write-file target "content\n")
+      (let ((result (iar--mygptel--fs-replace target "content" "changed")))
         (should (string-match-p "Success" result))
         ;; The expanded path should appear in the message
         (should (string-match-p target result))))))
@@ -224,7 +224,7 @@ via a symlink should find and update the buffer opened with the real path."
     (let* ((target (expand-file-name "real.txt" test-replace--tmpdir))
            (link (expand-file-name "link.txt" test-replace--tmpdir)))
       ;; Create the real file
-      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (iar--mygptel--fs-write-file target "old text\nkeep this\n")
       ;; Create a symlink to it
       (make-symbolic-link target link)
       ;; Open the real file in a buffer
@@ -232,14 +232,14 @@ via a symlink should find and update the buffer opened with the real path."
         (unwind-protect
             (progn
               ;; Replace via the symlink path -- should find the buffer
-              (let ((result (my-gptel--fs-replace link "old text" "new text")))
+              (let ((result (iar--mygptel--fs-replace link "old text" "new text")))
                 (should (string-match-p "Success" result))
                 ;; Buffer content should be updated
                 (with-current-buffer buf
                   (should (string-match-p "new text" (buffer-string)))
                   (should-not (string-match-p "old text" (buffer-string))))
                 ;; File on disk should be updated
-                (should (string= (my-gptel--fs-read-file target)
+                (should (string= (iar--mygptel--fs-read-file target)
                                  "new text\nkeep this\n"))))
           (with-current-buffer buf (set-buffer-modified-p nil))
           (kill-buffer buf)
@@ -253,7 +253,7 @@ via a symlink should find and update the buffer opened with the real path."
   (with-replace-fixture
     (let* ((target (expand-file-name "hook-test.txt" test-replace--tmpdir))
            (hook-called nil))
-      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (iar--mygptel--fs-write-file target "old text\nkeep this\n")
       (let ((buf (find-file-noselect target)))
         (unwind-protect
             (progn
@@ -261,7 +261,7 @@ via a symlink should find and update the buffer opened with the real path."
                 (add-hook 'before-save-hook
                           (lambda () (setq hook-called t))
                           nil t))
-              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+              (let ((result (iar--mygptel--fs-replace target "old text" "new text")))
                 (should (string-match-p "Success" result))
                 ;; Hook should NOT have been called
                 (should (null hook-called))
@@ -276,7 +276,7 @@ via a symlink should find and update the buffer opened with the real path."
   (with-replace-fixture
     (let* ((target (expand-file-name "after-hook-test.txt" test-replace--tmpdir))
            (hook-called nil))
-      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (iar--mygptel--fs-write-file target "old text\nkeep this\n")
       (let ((buf (find-file-noselect target)))
         (unwind-protect
             (progn
@@ -284,7 +284,7 @@ via a symlink should find and update the buffer opened with the real path."
                 (add-hook 'after-save-hook
                           (lambda () (setq hook-called t))
                           nil t))
-              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+              (let ((result (iar--mygptel--fs-replace target "old text" "new text")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (with-current-buffer buf (set-buffer-modified-p nil))
@@ -297,7 +297,7 @@ or format-on-save that modifies buffer content after the replacement
 but before the save completes."
   (with-replace-fixture
     (let* ((target (expand-file-name "mutation-test.txt" test-replace--tmpdir)))
-      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (iar--mygptel--fs-write-file target "old text\nkeep this\n")
       (let ((buf (find-file-noselect target)))
         (unwind-protect
             (progn
@@ -310,7 +310,7 @@ but before the save completes."
                               (when (search-forward "new text" nil t)
                                 (replace-match "MUTATED" nil t))))
                           nil t))
-              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+              (let ((result (iar--mygptel--fs-replace target "old text" "new text")))
                 (should (string-match-p "Success" result))
                 ;; Content should be exactly what we replaced, NOT mutated by the hook
                 (with-current-buffer buf
@@ -326,7 +326,7 @@ annotate or alter the content being written."
   (with-replace-fixture
     (let* ((target (expand-file-name "annotate-test.txt" test-replace--tmpdir))
            (hook-called nil))
-      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (iar--mygptel--fs-write-file target "old text\nkeep this\n")
       (let ((buf (find-file-noselect target)))
         (unwind-protect
             (progn
@@ -334,7 +334,7 @@ annotate or alter the content being written."
                 (add-hook 'write-region-annotate-functions
                           (lambda (_start _end) (setq hook-called t) nil)
                           nil t))
-              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+              (let ((result (iar--mygptel--fs-replace target "old text" "new text")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (with-current-buffer buf (set-buffer-modified-p nil))
@@ -347,7 +347,7 @@ file writing process."
   (with-replace-fixture
     (let* ((target (expand-file-name "wff-test.txt" test-replace--tmpdir))
            (hook-called nil))
-      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (iar--mygptel--fs-write-file target "old text\nkeep this\n")
       (let ((buf (find-file-noselect target)))
         (unwind-protect
             (progn
@@ -355,7 +355,7 @@ file writing process."
                 (add-hook 'write-file-functions
                           (lambda () (setq hook-called t) nil)
                           nil t))
-              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+              (let ((result (iar--mygptel--fs-replace target "old text" "new text")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (with-current-buffer buf (set-buffer-modified-p nil))
@@ -368,7 +368,7 @@ buffer contents being written to disk."
   (with-replace-fixture
     (let* ((target (expand-file-name "wcf-test.txt" test-replace--tmpdir))
            (hook-called nil))
-      (my-gptel--fs-write-file target "old text\nkeep this\n")
+      (iar--mygptel--fs-write-file target "old text\nkeep this\n")
       (let ((buf (find-file-noselect target)))
         (unwind-protect
             (progn
@@ -376,7 +376,7 @@ buffer contents being written to disk."
                 (add-hook 'write-contents-functions
                           (lambda () (setq hook-called t) nil)
                           nil t))
-              (let ((result (my-gptel--fs-replace target "old text" "new text")))
+              (let ((result (iar--mygptel--fs-replace target "old text" "new text")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (with-current-buffer buf (set-buffer-modified-p nil))

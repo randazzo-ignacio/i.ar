@@ -1,22 +1,22 @@
 ;; -*- lexical-binding: t; -*-
 
-(defvar emacboros-ollama-host nil
+(defvar iar-ollama-host nil
   "Ollama API host. Set from EMACBOROS_OLLAMA_HOST env var or defaults to remote.")
 
-(defvar emacboros-gptel-backend nil
+(defvar iar-gptel-backend nil
   "Ollama backend instance for gptel, configured at load time.")
 
-(defvar emacboros-gptel-default-model nil
+(defvar iar-gptel-default-model nil
   "Default model symbol for gptel, configured at load time.")
 
 ;; Determine Ollama host: check environment variable first, fall back to remote default.
-(setq emacboros-ollama-host
+(setq iar-ollama-host
       (or (getenv "EMACBOROS_OLLAMA_HOST")
           "10.66.0.5:11434"))
 
-(setq emacboros-gptel-backend
+(setq iar-gptel-backend
       (gptel-make-ollama "Ollama"
-                         :host emacboros-ollama-host
+                         :host iar-ollama-host
                          :stream t
                          :models '("north-mini-code-1.0:q8_0"
                                    "granite4.1:8b-q8_0"
@@ -34,4 +34,4 @@
                                           :num_predict 65536
                                         ))))
 
-(setq emacboros-gptel-default-model 'glm-5.2:cloud)
+(setq iar-gptel-default-model 'glm-5.2:cloud)

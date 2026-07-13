@@ -17,18 +17,18 @@
 ;; sentinels run in an unpredictable buffer context.
 
 (require 'gptel)
-(require 'output_sanitizer)
-(require 'audit_log)
+(require 'iar-output-sanitizer)
+(require 'iar-audit-log)
 
-(defun my-gptel--async-shell-command (callback-or-command &optional command timeout)
+(defun iar--mygptel--async-shell-command (callback-or-command &optional command timeout)
   "Run a shell command asynchronously, returning result via CALLBACK.
 
 New async convention (for gptel :async tools):
-  (my-gptel--async-shell-command CALLBACK COMMAND &optional TIMEOUT)
+  (iar--mygptel--async-shell-command CALLBACK COMMAND &optional TIMEOUT)
   Returns immediately, calls CALLBACK with the result string when done.
 
 Legacy sync convention (for backward compatibility):
-  (my-gptel--async-shell-command COMMAND &optional TIMEOUT)
+  (iar--mygptel--async-shell-command COMMAND &optional TIMEOUT)
   Blocks via accept-process-output and returns the result string.
 
 TIMEOUT in seconds (default 3600) kills the process on true hangs.
@@ -90,7 +90,7 @@ batch mode.  These are exported (not prefixed) so they persist across
            (result nil)
            (done nil)
            (deadline (time-add (current-time) (seconds-to-time timeout))))
-      (my-gptel--async-shell-command
+      (iar--mygptel--async-shell-command
        (lambda (r) (setq result r done t))
        cmd timeout)
       (while (and (not done)
@@ -106,7 +106,7 @@ batch mode.  These are exported (not prefixed) so they persist across
   :async t
   :function (lambda (callback command)
               (condition-case err
-                  (my-gptel--async-shell-command callback command)
+                  (iar--mygptel--async-shell-command callback command)
                 (error (funcall callback
                                 (format "Error: Failed to execute command: %s\nDetail: %s"
                                         command (error-message-string err))))))))

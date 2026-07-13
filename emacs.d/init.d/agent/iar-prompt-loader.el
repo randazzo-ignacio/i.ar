@@ -15,15 +15,15 @@
 (require 'subr-x)
 
 ;; Declared in metaconfig/parameters.el (loaded before init.d modules).
-(defvar my-gptel-prompts-path nil
+(defvar iar-prompts-path nil
   "Relative path to shared prompt templates.")
 
-(defun my-gptel--load-prompt (name)
+(defun iar--load-prompt (name)
   "Load a prompt template from the common prompts directory.
 NAME is the prompt file name without extension (e.g., \"darwin_cycle\").
 Returns the file content as a string, with trailing whitespace trimmed.
 Signals an error if the file is not found."
-  (let* ((prompts-dir (expand-file-name my-gptel-prompts-path user-emacs-directory))
+  (let* ((prompts-dir (expand-file-name iar-prompts-path user-emacs-directory))
          (prompt-path (expand-file-name (format "%s.org" name) prompts-dir)))
     (unless (file-exists-p prompt-path)
       (error "Prompt template '%s' not found at %s" name prompt-path))
@@ -32,4 +32,4 @@ Signals an error if the file is not found."
       ;; Return the raw content, trimming trailing newline for clean format usage.
       (string-trim-right (buffer-string) "\n"))))
 
-(provide 'prompt_loader)
+(provide 'iar-prompt-loader)

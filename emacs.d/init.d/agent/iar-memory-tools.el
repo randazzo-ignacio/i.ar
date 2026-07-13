@@ -19,48 +19,48 @@
 (require 'json)
 (require 'cl-lib)
 (require 'subr-x)
-(require 'agent_utils)  ; my-gptel--resolve-agent-audit-dir (moved from task_tools)
-(declare-function my-gptel-tool-reload-agent "reload_tools" (&optional agent-name))
-(declare-function my-gptel--load-prompt "prompt_loader" (name))
+(require 'iar-agent-utils)  ; iar--resolve-agent-audit-dir (moved from task_tools)
+(declare-function iar--mygptel--tool-reload-agent "iar-reload-tools" (&optional agent-name))
+(declare-function iar--load-prompt "iar-prompt-loader" (name))
 
 ;; Declared in metaconfig/parameters.el (loaded before init.d modules).
-(defvar my-gptel-key-summarize nil
+(defvar iar-key-summarize nil
   "Keybinding to summarize the session to SUMMARY.md.")
 
 ;;; --- Configuration ---
-;; Parameters my-gptel-memory-max-entries, my-gptel-memory-timeout,
-;; and my-gptel-memory-max-conversation-chars are defined in
+;; Parameters iar-memory-max-entries, iar-memory-timeout,
+;; and iar-memory-max-conversation-chars are defined in
 ;; metaconfig/parameters.el (loaded early in init.el).
 
-(defun my-gptel--memory-build-system-prompt ()
+(defun iar--memory-build-system-prompt ()
   "Build the system prompt for the summarizer.
 Instructs the model to produce a concise rolling summary of the
 agent's session.  The max-entries limit is interpolated at call time
-from `my-gptel-memory-max-entries' so that Customize changes take
+from `iar-memory-max-entries' so that Customize changes take
 effect without reloading the module."
-  (let ((max-entries my-gptel-memory-max-entries))
+  (let ((max-entries iar-memory-max-entries))
     ;; Guard against non-positive max-entries: the :safe predicate rejects
     ;; non-positive values at the file-local-variable level, but a user
     ;; can setq a bad value directly.  A nil or non-integer would crash
     ;; format with wrong-type-argument.  Fall back to default 20.
     (unless (and (integerp max-entries) (> max-entries 0))
       (setq max-entries 20))
-    (format (my-gptel--load-prompt "memory_summarizer")
+    (format (iar--load-prompt "memory_summarizer")
             max-entries)))
 
 ;;; --- Internal functions ---
 
 ;; Alias to the canonical implementation in shared/agent_utils.el.
 ;; Both modules need to resolve the current agent's directory from
-;; buffer-local state (my-gptel--current-agent-name or
-;; my-gptel--current-agent-file). The logic is identical, so we
+;; buffer-local state (iar--current-agent-name or
+;; iar--current-agent-file). The logic is identical, so we
 ;; delegate to the single source of truth.
-(defalias 'my-gptel--memory-get-agent-dir 'my-gptel--resolve-agent-audit-dir
+(defalias 'iar--memory-get-agent-dir 'iar--resolve-agent-audit-dir
   "Return the audit directory path for the currently loaded agent.
 Memory files (LOGS.md, SUMMARY.md, MEMORIES.md) live in audit/<agent>/.
-This is an alias for `my-gptel--resolve-agent-audit-dir' defined in shared/agent_utils.el.")
+This is an alias for `iar--resolve-agent-audit-dir' defined in shared/agent_utils.el.")
 
-(defun my-gptel--memory-extract-summary (agent-dir)
+(defun iar--memory-extract-summary (agent-dir)
   "Read SUMMARY.md from AGENT-DIR. Returns the content string."
   (let ((summary-file (expand-file-name "SUMMARY.md" agent-dir)))
     (if (file-exists-p summary-file)
@@ -69,11 +69,11 @@ This is an alias for `my-gptel--resolve-agent-audit-dir' defined in shared/agent
           (string-trim (buffer-string)))
       "")))
 
-(defun my-gptel--memory-extract-conversation ()
+(defun iar--memory-extract-conversation ()
   "Extract conversation text from the current gptel buffer.
 Returns the plain text of the buffer up to point-max, with gptel
 text properties stripped. If the conversation exceeds
-`my-gptel-memory-max-conversation-chars', only the most recent portion
+`iar-memory-max-conversation-chars', only the most recent portion
 is retained (truncated from the beginning).
 
 Uses `save-restriction' + `widen' to ensure the full buffer content
@@ -81,7 +81,7 @@ is extracted even when the buffer is narrowed."
   (save-restriction
     (widen)
     (let ((text (buffer-substring-no-properties (point-min) (point-max)))
-          (max-chars my-gptel-memory-max-conversation-chars))
+          (max-chars iar-memory-max-conversation-chars))
       ;; Guard against non-positive max-chars: the :safe predicate rejects
       ;; non-positive values at the file-local-variable level, but a user
       ;; can setq a bad value directly.  A negative value would cause
@@ -95,11 +95,11 @@ is extracted even when the buffer is narrowed."
                     max-chars truncated))
         text))))
 
-(defun my-gptel--memory-build-payload (current-summary conversation)
+(defun iar--memory-build-payload (current-summary conversation)
   "Build the JSON payload string for the Ollama /api/chat endpoint.
 CURRENT-SUMMARY is the existing summary text.
 CONVERSATION is the conversation text to summarize."
-  (let* ((system-prompt (my-gptel--memory-build-system-prompt))
+  (let* ((system-prompt (iar--memory-build-system-prompt))
          (user-message (format "CURRENT SUMMARY:\n%s\n\nCONVERSATION:\n%s"
                                 (if (string-empty-p current-summary)
                                     "(none yet)"
@@ -120,7 +120,7 @@ CONVERSATION is the conversation text to summarize."
      :null-object :null
      :false-object :json-false)))
 
-(defun my-gptel--memory-call-ollama (payload timeout)
+(defun iar--memory-call-ollama (payload timeout)
   "Send PAYLOAD (JSON string) to the Ollama /api/chat endpoint.
 Uses `make-process' + `accept-process-output' for responsive waiting.
 TIMEOUT in seconds. Returns the response content string, or
@@ -193,7 +193,7 @@ this limit, causing execve to fail with E2BIG."
              ((and exit-code (/= exit-code 0))
               (format "Error: curl exited with code %d. Output:\n%s" exit-code raw-output))
              (t
-              (my-gptel--memory-parse-ollama-response raw-output)))))
+              (iar--memory-parse-ollama-response raw-output)))))
       ;; Cleanup: always kill process, buffer, and temp file, even if
       ;; make-process or with-temp-file signals an error.
       (when (and proc (process-live-p proc))
@@ -203,7 +203,7 @@ this limit, causing execve to fail with E2BIG."
       (when (and payload-file (file-exists-p payload-file))
         (delete-file payload-file)))))
 
-(defun my-gptel--memory-parse-ollama-response (raw-output)
+(defun iar--memory-parse-ollama-response (raw-output)
   "Parse RAW-OUTPUT (JSON string from Ollama /api/chat).
 Returns the response content string, or an error string starting
 with \"Error:\" if the response is malformed."
@@ -225,7 +225,7 @@ with \"Error:\" if the response is malformed."
      (format "Error: parsing JSON: %s\nRaw output:\n%s"
              (error-message-string err) raw-output))))
 
-(defun my-gptel--memory-write-summary (agent-dir new-summary)
+(defun iar--memory-write-summary (agent-dir new-summary)
   "Write NEW-SUMMARY to SUMMARY.md in AGENT-DIR.
 Uses atomic write (temp file + rename) for safety.
 Returns a string starting with \"Success:\" or \"Error:\".
@@ -251,7 +251,7 @@ The temp file is cleaned up on failure via unwind-protect."
       (when (and tmp-file (file-exists-p tmp-file))
         (ignore-errors (delete-file tmp-file))))))
 
-(defun my-gptel--memory-count-entries (summary-text)
+(defun iar--memory-count-entries (summary-text)
   "Count the number of bullet-point entries in SUMMARY-TEXT."
   (let ((count 0)
         (start 0))
@@ -262,7 +262,7 @@ The temp file is cleaned up on failure via unwind-protect."
 
 ;;; --- Interactive command ---
 
-(defun my-gptel-summarize-session ()
+(defun iar-summarize-session ()
   "Summarize the current conversation into the loaded agent's SUMMARY.md.
 Uses the configured Ollama backend and model to produce a rolling summary.
 Synchronous: Emacs stays responsive via accept-process-output but the user
@@ -273,10 +273,10 @@ Returns t on success, nil on failure.  Does not signal user-error when
 called non-interactively (for use by iar-quit)."
   (interactive)
   (condition-case err
-      (let* ((agent-dir (my-gptel--memory-get-agent-dir))
-             (current-summary (my-gptel--memory-extract-summary agent-dir))
-             (conversation (my-gptel--memory-extract-conversation))
-             (payload (my-gptel--memory-build-payload current-summary conversation))
+      (let* ((agent-dir (iar--memory-get-agent-dir))
+             (current-summary (iar--memory-extract-summary agent-dir))
+             (conversation (iar--memory-extract-conversation))
+             (payload (iar--memory-build-payload current-summary conversation))
              (model-name (if (symbolp gptel-model)
                              (symbol-name gptel-model)
                            gptel-model)))
@@ -284,12 +284,12 @@ called non-interactively (for use by iar-quit)."
           (if (called-interactively-p 'any)
               (user-error "Conversation is too short to summarize. Have a meaningful exchange first.")
             (message "[Summary] Conversation too short, skipping summarization.")
-            (cl-return-from my-gptel-summarize-session nil)))
+            (cl-return-from iar-summarize-session nil)))
         (message "[Summarizing session with %s... payload: %d chars, conversation: %d chars]"
                  model-name (length payload) (length conversation))
-        (let* ((timeout (let ((v my-gptel-memory-timeout))
+        (let* ((timeout (let ((v iar-memory-timeout))
                           (if (and (integerp v) (> v 0)) v 300)))
-               (result (my-gptel--memory-call-ollama payload timeout)))
+               (result (iar--memory-call-ollama payload timeout)))
           (if (string-prefix-p "Error:" result)
               (progn
                 (message "%s" result)
@@ -297,15 +297,15 @@ called non-interactively (for use by iar-quit)."
                     (user-error "%s" result)
                   nil))
             (let* ((new-summary (string-trim result))
-                   (entry-count (my-gptel--memory-count-entries new-summary))
-                   (update-result (my-gptel--memory-write-summary agent-dir new-summary)))
+                   (entry-count (iar--memory-count-entries new-summary))
+                   (update-result (iar--memory-write-summary agent-dir new-summary)))
               (if (string-prefix-p "Error:" update-result)
                   (progn
                     (message "%s" update-result)
                     (if (called-interactively-p 'any)
                         (user-error "%s" update-result)
                       nil))
-                (my-gptel-tool-reload-agent)
+                (iar--mygptel--tool-reload-agent)
                 (message "[Summary updated: %d entries written to %s/SUMMARY.md]"
                           entry-count
                           (file-name-nondirectory
@@ -326,12 +326,12 @@ called non-interactively (for use by iar-quit)."
        nil))))
 
 ;;; --- Backward compatibility alias ---
-(defalias 'my-gptel-summarize-memories #'my-gptel-summarize-session
-  "Backward compatibility alias for `my-gptel-summarize-session'.")
+(defalias 'iar-summarize-memories #'iar-summarize-session
+  "Backward compatibility alias for `iar-summarize-session'.")
 
 ;;; --- Keybinding ---
 
 (with-eval-after-load 'gptel
-  (keymap-set gptel-mode-map my-gptel-key-summarize #'my-gptel-summarize-session))
+  (keymap-set gptel-mode-map iar-key-summarize #'iar-summarize-session))
 
-(provide 'memory_tools)
+(provide 'iar-memory-tools)

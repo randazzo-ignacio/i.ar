@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Tests for loop_guard.el
+;;; Tests for iar-loop-guard.el
 ;; Tests the loop guard that detects and breaks repetitive tool call loops.
 ;; Covers: args signature hashing, recent count, history ring,
 ;; soft/hard messages, and the main hook function behavior.
@@ -8,7 +8,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
-(require 'loop_guard)
+(require 'iar-loop-guard)
 
 ;;; --- Args signature tests ---
 
@@ -78,9 +78,9 @@
     (should (equal my-gptel--loop-history '(("bar" . "xyz") ("foo" . "abc"))))))
 
 (ert-deftest test-loop-push-trims-to-max-size ()
-  "my-gptel--loop-push should trim history to my-gptel-loop-history-size."
+  "my-gptel--loop-push should trim history to iar-loop-history-size."
   (with-temp-buffer
-    (let ((my-gptel-loop-history-size 3))
+    (let ((iar-loop-history-size 3))
       (setq-local my-gptel--loop-history nil)
       (dotimes (i 5)
         (my-gptel--loop-push (cons "tool" (number-to-string i))))
@@ -119,26 +119,26 @@
 ;;; --- Main hook function tests ---
 
 (ert-deftest test-loop-guard-returns-nil-first-call ()
-  "my-gptel--loop-guard should return nil for first call (no loop)."
+  "iar--mygptel--loop-guard should return nil for first call (no loop)."
   (with-temp-buffer
     (setq-local my-gptel--loop-history nil)
-    (let ((result (my-gptel--loop-guard
+    (let ((result (iar--mygptel--loop-guard
                    (list :name "read_file"
                          :args '(:filepath "/tmp/foo")
                          :buffer (current-buffer)))))
       (should (null result)))))
 
 (ert-deftest test-loop-guard-returns-nil-below-soft-threshold ()
-  "my-gptel--loop-guard should return nil when below soft threshold."
+  "iar--mygptel--loop-guard should return nil when below soft threshold."
   (with-temp-buffer
-    (let ((my-gptel-loop-soft-threshold 3))
+    (let ((iar-loop-soft-threshold 3))
       (setq-local my-gptel--loop-history nil)
       ;; First call
-      (my-gptel--loop-guard (list :name "read_file"
+      (iar--mygptel--loop-guard (list :name "read_file"
                                   :args '(:filepath "/tmp/foo")
                                   :buffer (current-buffer)))
       ;; Second call (same args) -- still below threshold of 3
-      (let ((result (my-gptel--loop-guard
+      (let ((result (iar--mygptel--loop-guard
                      (list :name "read_file"
                            :args '(:filepath "/tmp/foo")
                            :buffer (current-buffer)))))
@@ -146,10 +146,10 @@
         (should (null result))))))
 
 (ert-deftest test-loop-guard-soft-blocks-at-threshold ()
-  "my-gptel--loop-guard should return :block when soft threshold is reached."
+  "iar--mygptel--loop-guard should return :block when soft threshold is reached."
   (with-temp-buffer
-    (let ((my-gptel-loop-soft-threshold 3)
-          (my-gptel-loop-hard-threshold 6))
+    (let ((iar-loop-soft-threshold 3)
+          (iar-loop-hard-threshold 6))
       (setq-local my-gptel--loop-history nil)
       (setq-local my-gptel--loop-block-count 0)
       (let ((info (list :name "read_file"
@@ -159,19 +159,19 @@
         (my-gptel--loop-push (cons "read_file" (my-gptel--loop-args-sig '(:filepath "/tmp/foo"))))
         (my-gptel--loop-push (cons "read_file" (my-gptel--loop-args-sig '(:filepath "/tmp/foo"))))
         ;; Third call -- total = 3, hits soft threshold
-        (let ((result (my-gptel--loop-guard info)))
+        (let ((result (iar--mygptel--loop-guard info)))
           (should (plist-get result :block))
           (should (stringp (plist-get result :block)))
           ;; Block count should be incremented
           (should (= my-gptel--loop-block-count 1)))))))
 
 (ert-deftest test-loop-guard-hard-stops-at-hard-threshold ()
-  "my-gptel--loop-guard should return :stop when hard threshold is reached.
+  "iar--mygptel--loop-guard should return :stop when hard threshold is reached.
 The stop reason should include the actual block count (3 soft blocks
 at thresholds 3, 4, 5 before hard stop at 6)."
   (with-temp-buffer
-    (let ((my-gptel-loop-soft-threshold 3)
-          (my-gptel-loop-hard-threshold 6))
+    (let ((iar-loop-soft-threshold 3)
+          (iar-loop-hard-threshold 6))
       (setq-local my-gptel--loop-history nil)
       (setq-local my-gptel--loop-block-count 0)
       (let* ((args '(:filepath "/tmp/foo"))
@@ -185,7 +185,7 @@ at thresholds 3, 4, 5 before hard stop at 6)."
         ;; Simulate 3 soft blocks (at totals 3, 4, 5)
         (setq-local my-gptel--loop-block-count 3)
         ;; Sixth call -- total = 6, hits hard threshold
-        (let ((result (my-gptel--loop-guard info)))
+        (let ((result (iar--mygptel--loop-guard info)))
           (should (plist-get result :stop))
           (should (plist-get result :stop-reason))
           (should (stringp (plist-get result :stop-reason)))
@@ -196,14 +196,14 @@ at thresholds 3, 4, 5 before hard stop at 6)."
                                   (plist-get result :stop-reason))))))))
 
 (ert-deftest test-loop-guard-resets-on-different-call ()
-  "my-gptel--loop-guard should reset block count when a different call is made."
+  "iar--mygptel--loop-guard should reset block count when a different call is made."
   (with-temp-buffer
-    (let ((my-gptel-loop-soft-threshold 3)
-          (my-gptel-loop-hard-threshold 6))
+    (let ((iar-loop-soft-threshold 3)
+          (iar-loop-hard-threshold 6))
       (setq-local my-gptel--loop-history nil)
       (setq-local my-gptel--loop-block-count 2)
       ;; Make a different call
-      (let ((result (my-gptel--loop-guard
+      (let ((result (iar--mygptel--loop-guard
                      (list :name "write_file"
                            :args '(:filepath "/tmp/bar")
                            :buffer (current-buffer)))))
@@ -213,8 +213,8 @@ at thresholds 3, 4, 5 before hard stop at 6)."
 (ert-deftest test-loop-guard-block-message-is-informative ()
   "The soft block message should tell the model to stop and reconsider."
   (with-temp-buffer
-    (let ((my-gptel-loop-soft-threshold 3)
-          (my-gptel-loop-hard-threshold 6))
+    (let ((iar-loop-soft-threshold 3)
+          (iar-loop-hard-threshold 6))
       (setq-local my-gptel--loop-history nil)
       (let* ((args '(:filepath "/tmp/foo"))
              (sig (cons "read_file" (my-gptel--loop-args-sig args)))
@@ -223,25 +223,25 @@ at thresholds 3, 4, 5 before hard stop at 6)."
                          :buffer (current-buffer))))
         (dotimes (_ 2)
           (my-gptel--loop-push sig))
-        (let ((result (my-gptel--loop-guard info)))
+        (let ((result (iar--mygptel--loop-guard info)))
           (let ((msg (plist-get result :block)))
             (should (string-match-p "LOOP DETECTED" msg))
             (should (string-match-p "read_file" msg))
             (should (string-match-p "DO NOT call" msg))))))))
 
 (ert-deftest test-loop-guard-different-args-no-block ()
-  "my-gptel--loop-guard should not block when same tool called with different args."
+  "iar--mygptel--loop-guard should not block when same tool called with different args."
   (with-temp-buffer
-    (let ((my-gptel-loop-soft-threshold 3))
+    (let ((iar-loop-soft-threshold 3))
       (setq-local my-gptel--loop-history nil)
       ;; Push several calls with different args
-      (my-gptel--loop-guard (list :name "read_file"
+      (iar--mygptel--loop-guard (list :name "read_file"
                                   :args '(:filepath "/tmp/a")
                                   :buffer (current-buffer)))
-      (my-gptel--loop-guard (list :name "read_file"
+      (iar--mygptel--loop-guard (list :name "read_file"
                                   :args '(:filepath "/tmp/b")
                                   :buffer (current-buffer)))
-      (my-gptel--loop-guard (list :name "read_file"
+      (iar--mygptel--loop-guard (list :name "read_file"
                                   :args '(:filepath "/tmp/c")
                                   :buffer (current-buffer)))
       ;; None should have been blocked -- each call has different args
@@ -250,14 +250,14 @@ at thresholds 3, 4, 5 before hard stop at 6)."
 ;;; --- Threshold misconfiguration validation tests ---
 
 (ert-deftest test-loop-guard-soft-blocks-before-hard-when-misconfigured ()
-  "my-gptel--loop-guard should still soft-block before hard-stopping even
+  "iar--mygptel--loop-guard should still soft-block before hard-stopping even
 when hard-threshold <= soft-threshold (misconfiguration).  Without the
 effective-hard guard, the cond checks hard first and the soft block is
 never reached, denying the model a chance to self-correct."
   (with-temp-buffer
     ;; Misconfiguration: hard threshold (2) < soft threshold (3)
-    (let ((my-gptel-loop-soft-threshold 3)
-          (my-gptel-loop-hard-threshold 2))
+    (let ((iar-loop-soft-threshold 3)
+          (iar-loop-hard-threshold 2))
       (setq-local my-gptel--loop-history nil)
       (setq-local my-gptel--loop-block-count 0)
       (let* ((args '(:filepath "/tmp/foo"))
@@ -272,18 +272,18 @@ never reached, denying the model a chance to self-correct."
         ;; With misconfigured hard=2, the old code would hard-stop at
         ;; total=3 (>= 2) without ever soft-blocking.  The fix ensures
         ;; effective-hard = max(2, 3+1) = 4, so soft block fires at 3.
-        (let ((result (my-gptel--loop-guard info)))
+        (let ((result (iar--mygptel--loop-guard info)))
           (should (plist-get result :block))
           (should (stringp (plist-get result :block)))
           (should (= my-gptel--loop-block-count 1)))))))
 
 (ert-deftest test-loop-guard-hard-stops-at-effective-hard-when-misconfigured ()
-  "my-gptel--loop-guard should hard-stop at effective-hard (soft+1) when
+  "iar--mygptel--loop-guard should hard-stop at effective-hard (soft+1) when
 hard-threshold is misconfigured below soft-threshold."
   (with-temp-buffer
     ;; Misconfiguration: hard threshold (1) < soft threshold (3)
-    (let ((my-gptel-loop-soft-threshold 3)
-          (my-gptel-loop-hard-threshold 1))
+    (let ((iar-loop-soft-threshold 3)
+          (iar-loop-hard-threshold 1))
       (setq-local my-gptel--loop-history nil)
       (setq-local my-gptel--loop-block-count 0)
       (let* ((args '(:filepath "/tmp/foo"))
@@ -297,7 +297,7 @@ hard-threshold is misconfigured below soft-threshold."
         ;; Simulate 1 soft block (at total=3)
         (setq-local my-gptel--loop-block-count 1)
         ;; Fourth call -- total = 4, effective-hard = max(1, 3+1) = 4
-        (let ((result (my-gptel--loop-guard info)))
+        (let ((result (iar--mygptel--loop-guard info)))
           (should (plist-get result :stop))
           (should (plist-get result :stop-reason))
           (should (stringp (plist-get result :stop-reason)))
@@ -306,12 +306,12 @@ hard-threshold is misconfigured below soft-threshold."
                                   (plist-get result :stop-reason))))))))
 
 (ert-deftest test-loop-guard-equal-thresholds-still-soft-blocks-first ()
-  "my-gptel--loop-guard should soft-block before hard-stopping when
+  "iar--mygptel--loop-guard should soft-block before hard-stopping when
 hard-threshold == soft-threshold (edge case misconfiguration)."
   (with-temp-buffer
     ;; hard threshold == soft threshold (both 3)
-    (let ((my-gptel-loop-soft-threshold 3)
-          (my-gptel-loop-hard-threshold 3))
+    (let ((iar-loop-soft-threshold 3)
+          (iar-loop-hard-threshold 3))
       (setq-local my-gptel--loop-history nil)
       (setq-local my-gptel--loop-block-count 0)
       (let* ((args '(:filepath "/tmp/foo"))
@@ -323,7 +323,7 @@ hard-threshold == soft-threshold (edge case misconfiguration)."
         (dotimes (_ 2)
           (my-gptel--loop-push sig))
         ;; Third call -- total = 3, soft threshold = 3, effective-hard = max(3, 4) = 4
-        (let ((result (my-gptel--loop-guard info)))
+        (let ((result (iar--mygptel--loop-guard info)))
           ;; Should soft-block, NOT hard-stop
           (should (plist-get result :block))
           (should (stringp (plist-get result :block)))
@@ -331,7 +331,7 @@ hard-threshold == soft-threshold (edge case misconfiguration)."
 ;;; --- Block count accuracy test ---
 
 (ert-deftest test-loop-guard-hard-stop-uses-actual-block-count ()
-  "my-gptel--loop-guard should report the actual block count, not an estimate.
+  "iar--mygptel--loop-guard should report the actual block count, not an estimate.
 This test constructs a scenario where the old estimate (repeat-count -
 soft-threshold) would differ from the actual block count:
 1. Call read_file 3 times (soft-block at total=3, block-count=1)
@@ -345,8 +345,8 @@ The old estimate would compute 6 - 3 = 3, which happens to match.
 But if we set block-count to a value that differs from the estimate,
 we prove the message reads the actual counter."
   (with-temp-buffer
-    (let ((my-gptel-loop-soft-threshold 3)
-          (my-gptel-loop-hard-threshold 6))
+    (let ((iar-loop-soft-threshold 3)
+          (iar-loop-hard-threshold 6))
       (setq-local my-gptel--loop-history nil)
       (setq-local my-gptel--loop-block-count 0)
       (let* ((args '(:filepath "/tmp/foo"))
@@ -362,7 +362,7 @@ we prove the message reads the actual counter."
           (my-gptel--loop-push sig))
         (setq-local my-gptel--loop-block-count 2)
         ;; Sixth call -- total = 6, hits hard threshold
-        (let ((result (my-gptel--loop-guard info)))
+        (let ((result (iar--mygptel--loop-guard info)))
           (should (plist-get result :stop))
           ;; Message should say "blocked 2 attempts" (actual), not
           ;; "blocked 3 attempts" (old estimate: 6 - 3 = 3)
@@ -381,7 +381,7 @@ level, but a direct setq to 0 or negative bypasses it.  A negative value
 would cause cl-subseq to signal args-out-of-range.  Zero would silently
 disable loop detection (history always trimmed to empty)."
   (with-temp-buffer
-    (let ((my-gptel-loop-history-size 0))
+    (let ((iar-loop-history-size 0))
       (setq-local my-gptel--loop-history nil)
       (my-gptel--loop-push '("foo" . "abc"))
       ;; With the guard, history-size=0 falls back to 20, so the entry
@@ -393,7 +393,7 @@ disable loop detection (history always trimmed to empty)."
 (ert-deftest test-loop-push-guards-negative-history-size ()
   "my-gptel--loop-push should fall back to 20 when history-size is negative."
   (with-temp-buffer
-    (let ((my-gptel-loop-history-size -5))
+    (let ((iar-loop-history-size -5))
       (setq-local my-gptel--loop-history nil)
       (my-gptel--loop-push '("foo" . "abc"))
       ;; With the guard, -5 falls back to 20.  Without the guard,
@@ -403,7 +403,7 @@ disable loop detection (history always trimmed to empty)."
 (ert-deftest test-loop-push-guards-nil-history-size ()
   "my-gptel--loop-push should fall back to 20 when history-size is nil."
   (with-temp-buffer
-    (let ((my-gptel-loop-history-size nil))
+    (let ((iar-loop-history-size nil))
       (setq-local my-gptel--loop-history nil)
       (my-gptel--loop-push '("foo" . "abc"))
       ;; With the guard, nil falls back to 20.  Without the guard,
@@ -413,7 +413,7 @@ disable loop detection (history always trimmed to empty)."
 (ert-deftest test-loop-push-guards-non-integer-history-size ()
   "my-gptel--loop-push should fall back to 20 when history-size is non-integer."
   (with-temp-buffer
-    (let ((my-gptel-loop-history-size "20"))
+    (let ((iar-loop-history-size "20"))
       (setq-local my-gptel--loop-history nil)
       (my-gptel--loop-push '("foo" . "abc"))
       ;; With the guard, "20" (string) falls back to 20.
@@ -425,7 +425,7 @@ disable loop detection (history always trimmed to empty)."
 With history-size=0 (invalid), the guard falls back to 20.  Pushing
 25 entries should trim to 20, keeping the most recent."
   (with-temp-buffer
-    (let ((my-gptel-loop-history-size 0))
+    (let ((iar-loop-history-size 0))
       (setq-local my-gptel--loop-history nil)
       (dotimes (i 25)
         (my-gptel--loop-push (cons "tool" (number-to-string i))))
@@ -435,15 +435,15 @@ With history-size=0 (invalid), the guard falls back to 20.  Pushing
 ;;; --- Threshold defcustom guard tests ---
 
 (ert-deftest test-loop-guard-guards-nil-soft-threshold ()
-  "my-gptel--loop-guard should fall back to 3 when soft-threshold is nil.
+  "iar--mygptel--loop-guard should fall back to 3 when soft-threshold is nil.
 Without the guard, (1+ nil) and (>= total nil) would signal
 wrong-type-argument, crashing the hook on every tool call."
   (with-temp-buffer
-    (let ((my-gptel-loop-soft-threshold nil)
-          (my-gptel-loop-hard-threshold 6))
+    (let ((iar-loop-soft-threshold nil)
+          (iar-loop-hard-threshold 6))
       (setq-local my-gptel--loop-history nil)
       (setq-local my-gptel--loop-block-count 0)
-      (let ((result (my-gptel--loop-guard
+      (let ((result (iar--mygptel--loop-guard
                      (list :name "read_file"
                            :args '(:filepath "/tmp/foo")
                            :buffer (current-buffer)))))
@@ -451,15 +451,15 @@ wrong-type-argument, crashing the hook on every tool call."
         (should (null result))))))
 
 (ert-deftest test-loop-guard-guards-zero-soft-threshold ()
-  "my-gptel--loop-guard should fall back to 3 when soft-threshold is 0.
+  "iar--mygptel--loop-guard should fall back to 3 when soft-threshold is 0.
 Without the guard, soft-threshold=0 would cause every call (total>=1>=0)
 to soft-block immediately, preventing any tool from ever executing."
   (with-temp-buffer
-    (let ((my-gptel-loop-soft-threshold 0)
-          (my-gptel-loop-hard-threshold 6))
+    (let ((iar-loop-soft-threshold 0)
+          (iar-loop-hard-threshold 6))
       (setq-local my-gptel--loop-history nil)
       (setq-local my-gptel--loop-block-count 0)
-      (let ((result (my-gptel--loop-guard
+      (let ((result (iar--mygptel--loop-guard
                      (list :name "read_file"
                            :args '(:filepath "/tmp/foo")
                            :buffer (current-buffer)))))
@@ -467,14 +467,14 @@ to soft-block immediately, preventing any tool from ever executing."
         (should (null result))))))
 
 (ert-deftest test-loop-guard-guards-nil-hard-threshold ()
-  "my-gptel--loop-guard should fall back to 6 when hard-threshold is nil.
+  "iar--mygptel--loop-guard should fall back to 6 when hard-threshold is nil.
 Without the guard, (max nil ...) would signal wrong-type-argument."
   (with-temp-buffer
-    (let ((my-gptel-loop-soft-threshold 3)
-          (my-gptel-loop-hard-threshold nil))
+    (let ((iar-loop-soft-threshold 3)
+          (iar-loop-hard-threshold nil))
       (setq-local my-gptel--loop-history nil)
       (setq-local my-gptel--loop-block-count 0)
-      (let ((result (my-gptel--loop-guard
+      (let ((result (iar--mygptel--loop-guard
                      (list :name "read_file"
                            :args '(:filepath "/tmp/foo")
                            :buffer (current-buffer)))))
@@ -482,14 +482,14 @@ Without the guard, (max nil ...) would signal wrong-type-argument."
         (should (null result))))))
 
 (ert-deftest test-loop-guard-guards-non-integer-thresholds ()
-  "my-gptel--loop-guard should fall back to defaults for non-integer thresholds.
+  "iar--mygptel--loop-guard should fall back to defaults for non-integer thresholds.
 Without the guard, (>= total \"3\") would signal wrong-type-argument."
   (with-temp-buffer
-    (let ((my-gptel-loop-soft-threshold "3")
-          (my-gptel-loop-hard-threshold "6"))
+    (let ((iar-loop-soft-threshold "3")
+          (iar-loop-hard-threshold "6"))
       (setq-local my-gptel--loop-history nil)
       (setq-local my-gptel--loop-block-count 0)
-      (let ((result (my-gptel--loop-guard
+      (let ((result (iar--mygptel--loop-guard
                      (list :name "read_file"
                            :args '(:filepath "/tmp/foo")
                            :buffer (current-buffer)))))
@@ -499,13 +499,13 @@ Without the guard, (>= total \"3\") would signal wrong-type-argument."
 ;;; --- Hook registration test ---
 
 (ert-deftest test-loop-guard-registered-in-hook ()
-  "my-gptel--loop-guard should be registered in `gptel-pre-tool-call-functions'.
-The top-level call to `my-gptel--loop-guard-setup' in loop_guard.el
+  "iar--mygptel--loop-guard should be registered in `gptel-pre-tool-call-functions'.
+The top-level call to `my-gptel--loop-guard-setup' in iar-loop-guard.el
 adds the hook at load time.  If that call is accidentally removed,
 the loop guard would silently stop working -- no other test would
-catch this because all other tests call `my-gptel--loop-guard'
+catch this because all other tests call `iar--mygptel--loop-guard'
 directly rather than through the hook mechanism."
-  (should (memq #'my-gptel--loop-guard
+  (should (memq #'iar--mygptel--loop-guard
                 (default-value 'gptel-pre-tool-call-functions))))
 
 (provide 'test-loop)

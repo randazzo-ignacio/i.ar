@@ -37,7 +37,7 @@ The model receives an error feedback message and can retry with
 the correct tool name.
 
 Our pre-tool-call hook guard
-(`my-gptel--block-unknown-tools', tested in
+(`iar--mygptel--block-unknown-tools', tested in
 test-unknown-tool-pre-hook-blocks) provides additional protection:
 it intercepts unknown tools at the TPRE stage BEFORE they reach
 gptel--handle-tool-use, and returns (:block ...) which causes gptel
@@ -83,16 +83,16 @@ stage.  This provides a cleaner error message to the model."
     (should test-unknown-tool--callback-result)))
 
 (ert-deftest test-unknown-tool-pre-hook-blocks ()
-  "Test that `my-gptel--block-unknown-tools' blocks unknown tool names.
+  "Test that `iar--mygptel--block-unknown-tools' blocks unknown tool names.
 When a model calls a tool name not in `gptel-tools', the pre-tool-call
 hook should return (:block ...) which causes gptel to inject an error
 result via `gptel--process-tool-call'.  This sets :result on the
 tool-call plist, preventing the FSM from hanging in TOOL state.
 
-This test calls the actual `my-gptel--block-unknown-tools' function
-(defined in delegate_tool.el) with a let-bound `gptel-tools' so the
+This test calls the actual `iar--mygptel--block-unknown-tools' function
+(defined in iar-delegate-tool.el) with a let-bound `gptel-tools' so the
 function reads the test tool list, not the global one."
-  (require 'tool_guard)
+  (require 'iar-tool-guard)
   (let* ((tool-spec (gptel-make-tool
                      :name "list_directory"
                      :description "List a directory"
@@ -100,42 +100,42 @@ function reads the test tool list, not the global one."
                      :function (lambda (path) (format "contents of %s" path))))
          (gptel-tools (list tool-spec)))
     ;; Hook should return (:block ...) for unknown tool
-    (let ((result (my-gptel--block-unknown-tools (list :name "read_directory"))))
+    (let ((result (iar--mygptel--block-unknown-tools (list :name "read_directory"))))
       (should result)
       (should (plist-get result :block))
       (should (string-match-p "Unknown tool" (plist-get result :block)))
       ;; Error message should contain the unknown tool name
       (should (string-match-p "read_directory" (plist-get result :block))))
     ;; Hook should return nil for known tool
-    (let ((result (my-gptel--block-unknown-tools (list :name "list_directory"))))
+    (let ((result (iar--mygptel--block-unknown-tools (list :name "list_directory"))))
       (should (null result)))))
 
 (ert-deftest test-unknown-tool-pre-hook-blocks-empty-tools ()
-  "Test that `my-gptel--block-unknown-tools' blocks ALL tools when
+  "Test that `iar--mygptel--block-unknown-tools' blocks ALL tools when
 `gptel-tools' is empty.  This verifies the function works correctly
 when no tools are registered."
-  (require 'tool_guard)
+  (require 'iar-tool-guard)
   (let ((gptel-tools nil))
-    (let ((result (my-gptel--block-unknown-tools (list :name "any_tool"))))
+    (let ((result (iar--mygptel--block-unknown-tools (list :name "any_tool"))))
       (should result)
       (should (plist-get result :block))
       (should (string-match-p "Unknown tool" (plist-get result :block))))))
 
 (ert-deftest test-unknown-tool-pre-hook-blocks-case-sensitive ()
-  "Test that `my-gptel--block-unknown-tools' is case-sensitive.
+  "Test that `iar--mygptel--block-unknown-tools' is case-sensitive.
 Tool name matching uses `equal' (via `gptel-tool-name'), so
 \"List_Directory\" should NOT match \"list_directory\".
 This documents the design decision to use case-sensitive matching."
-  (require 'tool_guard)
+  (require 'iar-tool-guard)
   (let* ((tool-spec (gptel-make-tool
                      :name "list_directory"
                      :description "List a directory"
                      :args (list '(:name "path" :type "string"))
                      :function (lambda (path) (format "contents of %s" path))))
          ;; gptel-tools is a defcustom (dynamic variable), so let-binding
-         ;; it creates a dynamic binding visible to my-gptel--block-unknown-tools.
+         ;; it creates a dynamic binding visible to iar--mygptel--block-unknown-tools.
          (gptel-tools (list tool-spec)))
-    (let ((result (my-gptel--block-unknown-tools (list :name "List_Directory"))))
+    (let ((result (iar--mygptel--block-unknown-tools (list :name "List_Directory"))))
       (should result)
       (should (plist-get result :block))
       (should (string-match-p "Unknown tool" (plist-get result :block))))))

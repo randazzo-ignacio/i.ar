@@ -5,7 +5,7 @@
 ;; =============================================================================
 ;;
 ;; This file is the single source of truth for all tunable behavioral
-;; parameters of the agent system.  Change values here to adjust agent
+;; iar-parameters of the agent system.  Change values here to adjust agent
 ;; behavior without editing individual module files.
 ;;
 ;; This file is loaded early in init.el, before any init.d modules.
@@ -14,9 +14,9 @@
 ;; the Customize integration (:group, :safe, :type).
 ;;
 ;; Parameters NOT in this file (kept in their own modules):
-;;   - agent-telegram-bot-token / agent-telegram-chat-id (env-based secrets)
-;;   - my-gptel--guard-allow-self-modification (security toggle, defined in
-;;     file_guard.el, set by EMACBOROS_SELF_MODIFICATION env var in init.el)
+;;   - iar-telegram-bot-token / iar-telegram-chat-id (env-based secrets)
+;;   - iar-guard-allow-self-modification (security toggle, defined in
+;;     iar-file-guard.el, set by EMACBOROS_SELF_MODIFICATION env var in init.el)
 
 ;; =============================================================================
 ;; Base Directory Paths
@@ -27,38 +27,38 @@
 ;; prompt templates, knowledge bases, audit logs, and task files.
 ;; Change these if your deployment uses a different directory layout.
 
-(defcustom my-gptel-agents-path "agents.d/agents"
+(defcustom iar-agents-path "agents.d/agents"
   "Relative path to agent profile directories.
 Each subdirectory contains a prompt.org file defining an agent personality."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-prompts-path "agents.d/common"
+(defcustom iar-prompts-path "agents.d/common"
   "Relative path to shared prompt templates.
 Contains .org files loaded by the prompt loader for delegation,
 cycle prompts, memory summarization, etc."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-knowledge-path "knowledge"
+(defcustom iar-knowledge-path "knowledge"
   "Relative path to the knowledge base directory.
 Each subdirectory is a loadable knowledge folder (via C-c k)."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-audit-path "audit"
+(defcustom iar-audit-path "audit"
   "Relative path to the audit log directory.
 Contains the global audit.log and per-agent subdirectories with
 HISTORY.log, LOGS.md, SUMMARY.md, BUFFER.log, REQUESTS.log, FSM.log."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-tasks-path "tasks"
+(defcustom iar-tasks-path "tasks"
   "Relative path to the task files directory.
 Contains per-agent subdirectories with .md task files
 (one file per task, file exists = work to do)."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
 ;; =============================================================================
 ;; Keybindings
@@ -68,30 +68,30 @@ Contains per-agent subdirectories with .md task files
 ;; of truth. Modules register bindings via `keymap-set' using these
 ;; variables. Change a binding here and reload to rebind.
 
-(defcustom my-gptel-key-load-agent "C-c a"
+(defcustom iar-key-load-agent "C-c a"
   "Keybinding to load an agent personality."
   :type 'key
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-key-load-knowledge "C-c k"
+(defcustom iar-key-load-knowledge "C-c k"
   "Keybinding to load a knowledge base folder."
   :type 'key
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-key-prompt-info "C-c p"
+(defcustom iar-key-prompt-info "C-c p"
   "Keybinding to display prompt size info."
   :type 'key
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-key-summarize "C-c m"
+(defcustom iar-key-summarize "C-c m"
   "Keybinding to summarize the session to SUMMARY.md."
   :type 'key
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-key-quit "C-x C-c"
+(defcustom iar-key-quit "C-x C-c"
   "Keybinding for session-aware quit (summarize then kill Emacs)."
   :type 'key
-  :group 'gptel)
+  :group 'iar)
 
 ;; =============================================================================
 ;; Delimiters and Markers
@@ -102,61 +102,61 @@ Contains per-agent subdirectories with .md task files
 ;; same delimiter stay in sync. Change a delimiter here and reload to
 ;; update all modules.
 ;;
-;; NOTE: The delegation result marker (`my-gptel-delegation-result-marker')
+;; NOTE: The delegation result marker (`iar-delegation-result-marker')
 ;; is coupled with the prompt template at agents.d/common/delegated_task.org.
 ;; If you change the defcustom, also update the .org template so sub-agents
 ;; know what marker to emit.
 
-(defcustom my-gptel-knowledge-open-delimiter "=== INJECTED KNOWLEDGE [%s] ==="
+(defcustom iar-knowledge-open-delimiter "=== INJECTED KNOWLEDGE [%s] ==="
   "Format string for the opening delimiter of injected knowledge blocks.
 %s is replaced with the knowledge label (e.g., \"iar/\")."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-knowledge-close-delimiter "=== END INJECTED KNOWLEDGE ==="
+(defcustom iar-knowledge-close-delimiter "=== END INJECTED KNOWLEDGE ==="
   "Closing delimiter for injected knowledge blocks."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-knowledge-file-separator "--- %s ---"
+(defcustom iar-knowledge-file-separator "--- %s ---"
   "Format string for separating files within a knowledge block.
 %s is replaced with the filename."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-sanitized-open "[SANITIZED EXTERNAL DATA -- control sequences stripped, injection patterns flagged]"
+(defcustom iar-sanitized-open "[SANITIZED EXTERNAL DATA -- control sequences stripped, injection patterns flagged]"
   "Prefix wrapper for sanitized external data."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-sanitized-close "[END SANITIZED EXTERNAL DATA]"
+(defcustom iar-sanitized-close "[END SANITIZED EXTERNAL DATA]"
   "Suffix wrapper for sanitized external data."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-injection-suspect-prefix "[INJECTION SUSPECT]"
+(defcustom iar-injection-suspect-prefix "[INJECTION SUSPECT]"
   "Prefix added to lines that resemble prompt injection attempts."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-removed-tag "[REMOVED-TAG]"
+(defcustom iar-removed-tag "[REMOVED-TAG]"
   "Replacement text for neutralized fake system message wrapper tags."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-delegation-result-marker "=== DELEGATION RESULT ==="
+(defcustom iar-delegation-result-marker "=== DELEGATION RESULT ==="
   "Marker that sub-agents emit before their concise summary.
 The delegate completion hook searches for this marker and extracts
 everything after it as the delegation result.
 Coupled with agents.d/common/delegated_task.org prompt template."
   :type 'string
-  :group 'gptel)
+  :group 'iar)
 
 ;; =============================================================================
 ;; Gptel Fork Path
 ;; =============================================================================
 
-(defcustom my-gptel-fork-path
+(defcustom iar-fork-path
   (or (getenv "EMACBOROS_GPTEL_FORK_PATH") nil)
   "Path to a local gptel fork to use instead of the ELPA package.
 When set to a valid directory path, it is prepended to `load-path'
@@ -169,21 +169,21 @@ Can also be set via the EMACBOROS_GPTEL_FORK_PATH environment variable
 (set by the --gptel-fork flag on emacboros.sh)."
   :type '(choice (directory :tag "Path to gptel fork directory")
                  (const :tag "Use ELPA package" nil))
-  :group 'gptel)
+  :group 'iar)
 
 ;; =============================================================================
 ;; Delegate Tool Parameters
 ;; =============================================================================
 
-(defcustom my-gptel--delegate-max-depth 3
+(defcustom iar-delegate-max-depth 3
   "Maximum delegation depth allowed.
 Prevents infinite recursion while permitting multi-hop chains.
 Depth 0 = top-level agent, 1 = first delegate, etc."
   :type 'integer
   :safe (lambda (v) (and (integerp v) (> v 0)))
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel--delegate-max-turns 15
+(defcustom iar-delegate-max-turns 15
   "Maximum number of LLM response turns for a delegate session.
 When the sub-agent produces a text-only response (no tool calls
 in the current turn), it is re-prompted to continue.
@@ -191,91 +191,91 @@ This prevents models that describe tool calls in text instead of
 actually calling them from terminating prematurely."
   :type 'integer
   :safe (lambda (v) (and (integerp v) (> v 0)))
-  :group 'gptel)
+  :group 'iar)
 
 ;; =============================================================================
 ;; Agent Cycle Parameters
 ;; =============================================================================
 
-(defcustom agent-cycle-timeout 7200
+(defcustom iar-cycle-timeout 7200
   "Default timeout for an agent cycle in seconds (120 minutes)."
   :type 'integer
   :safe (lambda (v) (and (integerp v) (> v 0)))
-  :group 'agent-cycle)
+  :group 'iar-cycle)
 
-(defcustom agent-cycle-max-turns 40
+(defcustom iar-cycle-max-turns 40
   "Maximum number of LLM response turns before forcing cycle end.
 Each turn is one model response (with or without tool calls).
 This prevents infinite loops."
   :type 'integer
   :safe (lambda (v) (and (integerp v) (> v 0)))
-  :group 'agent-cycle)
+  :group 'iar-cycle)
 
 ;; =============================================================================
 ;; Loop Guard Parameters
 ;; =============================================================================
 
-(defcustom my-gptel-loop-soft-threshold 3
+(defcustom iar-loop-soft-threshold 3
   "Number of identical consecutive tool calls before soft-blocking.
 After this many repetitions, the tool call is blocked and a
 correction message is sent to the LLM instead of executing."
   :type 'integer
   :safe (lambda (v) (and (integerp v) (> v 0)))
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-loop-hard-threshold 6
+(defcustom iar-loop-hard-threshold 6
   "Number of identical consecutive tool calls before hard-stopping.
 After this many repetitions, the entire request is stopped.
 Should be >= 2x the soft threshold to give the model a chance to
 self-correct after the first warning.
-If set <= `my-gptel-loop-soft-threshold', the effective hard
+If set <= `iar-loop-soft-threshold', the effective hard
 threshold is automatically raised to soft+1 to ensure at least
 one soft warning before hard-stopping."
   :type 'integer
   :safe (lambda (v) (and (integerp v) (> v 0)))
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-loop-history-size 20
+(defcustom iar-loop-history-size 20
   "Maximum number of tool calls to keep in the history ring."
   :type 'integer
   :safe (lambda (v) (and (integerp v) (> v 0)))
-  :group 'gptel)
+  :group 'iar)
 
 ;; =============================================================================
 ;; Memory Tool Parameters
 ;; =============================================================================
 
-(defcustom my-gptel-memory-max-entries 20
+(defcustom iar-memory-max-entries 20
   "Maximum number of memory entries the summarizer should retain.
 The summarizer is instructed to keep at most this many concise bullet points,
 prioritizing the most important and recent information."
   :type 'integer
   :safe (lambda (v) (and (integerp v) (> v 0)))
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-memory-timeout 300
+(defcustom iar-memory-timeout 300
   "Timeout in seconds for the summarization API call.
 If the model does not respond within this time, the operation is aborted
 and a partial result (if any) is returned.
 Default is 300 (5 minutes) to accommodate large contexts with slow models."
   :type 'integer
   :safe (lambda (v) (and (integerp v) (> v 0)))
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-memory-max-conversation-chars 100000
+(defcustom iar-memory-max-conversation-chars 100000
   "Maximum number of characters of conversation text to send to the summarizer.
 If the conversation exceeds this length, it is truncated to the most recent
 portion. This prevents extremely large payloads that could cause timeouts or
 exceed API limits. 100000 chars is roughly 25K tokens."
   :type 'integer
   :safe (lambda (v) (and (integerp v) (> v 0)))
-  :group 'gptel)
+  :group 'iar)
 
 ;; =============================================================================
 ;; Personal File Injection Parameters
 ;; =============================================================================
 
-(defcustom my-gptel-personal-file-max-lines 200
+(defcustom iar-personal-file-max-lines 200
   "Maximum number of lines to inject from personal files (LOGS.md, SUMMARY.md,
 MEMORIES.md) into an agent's system prompt.
 When a personal file exceeds this many lines, only the last N lines are
@@ -286,13 +286,13 @@ Set to nil to disable truncation (inject full file regardless of size)."
   :type '(choice (integer :tag "Max lines to inject")
                  (const :tag "No limit" nil))
   :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
-  :group 'gptel)
+  :group 'iar)
 
 ;; =============================================================================
 ;; Filesystem Tool Parameters
 ;; =============================================================================
 
-(defcustom my-gptel--fs-read-max-size (* 1024 1024)
+(defcustom iar-fs-read-max-size (* 1024 1024)
   "Maximum number of characters that read_file will return without truncation.
 Files with more characters than this are truncated to this limit and a
 truncation notice is appended.  This prevents accidentally loading huge
@@ -305,13 +305,13 @@ Set to nil to disable truncation (read full file regardless of size)."
   :type '(choice (integer :tag "Max characters")
                  (const :tag "No limit" nil))
   :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
-  :group 'gptel)
+  :group 'iar)
 
 ;; =============================================================================
 ;; Audit Log Parameters
 ;; =============================================================================
 
-(defcustom my-gptel--audit-log-max-size (* 10 1024 1024)
+(defcustom iar-audit-log-max-size (* 10 1024 1024)
   "Maximum size in bytes before the audit log is rotated.
 When the log exceeds this size, it is renamed to `audit.log.1'
 (overwriting any previous rotation) and a fresh log is started.
@@ -323,13 +323,13 @@ retention, configure external log rotation (e.g., logrotate) instead."
   :type '(choice (integer :tag "Max size in bytes")
                  (const :tag "No rotation" nil))
   :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
-  :group 'gptel)
+  :group 'iar)
 
 ;; =============================================================================
 ;; Buffer Monitor Parameters
 ;; =============================================================================
 
-(defcustom my-gptel-buffer-warn-size (* 5 1024 1024)
+(defcustom iar-buffer-warn-size (* 5 1024 1024)
   "Buffer size (in characters) that triggers a warning message.
 When the conversation buffer exceeds this size, a warning is
 displayed before each gptel-send.  This does not stop the send --
@@ -343,9 +343,9 @@ Set to nil or 0 to disable the warning."
   :type '(choice (integer :tag "Warning threshold (chars)")
                  (const :tag "No warning" nil))
   :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-buffer-hard-cap nil
+(defcustom iar-buffer-hard-cap nil
   "Buffer size (in characters) that triggers a hard abort of gptel-send.
 When the conversation buffer exceeds this size, the send is
 aborted with an error to prevent the catastrophic cascade of
@@ -364,7 +364,7 @@ threshold to avoid aborting legitimate long sessions."
   :type '(choice (integer :tag "Hard cap (chars)")
                  (const :tag "No hard cap" nil))
   :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
-  :group 'gptel)
+  :group 'iar)
 
 ;; =============================================================================
 ;; File Guard Protected Paths
@@ -380,10 +380,10 @@ threshold to avoid aborting legitimate long sessions."
 ;;
 ;; Always-protected paths remain protected regardless of self-modification mode.
 ;; Conditionally-protected paths are relaxed when self-modification is enabled
-;; (via `my-gptel--guard-allow-self-modification' in file_guard.el, set by
+;; (via `iar-guard-allow-self-modification' in iar-file-guard.el, set by
 ;; the EMACBOROS_SELF_MODIFICATION environment variable).
 
-(defcustom my-gptel-guard-always-protected
+(defcustom iar-guard-always-protected
   '(("/agents\\.d/agents/[^/]+/prompt\\.org\\'"
      "Agent prompt files are protected. Agents cannot modify their own or other agents' prompts."
      nil)
@@ -405,9 +405,9 @@ These protections remain active regardless of self-modification mode."
   :type '(repeat (list (regexp :tag "Regex")
                        (string :tag "Reason")
                        (boolean :tag "Append allowed")))
-  :group 'gptel)
+  :group 'iar)
 
-(defcustom my-gptel-guard-conditional-protected
+(defcustom iar-guard-conditional-protected
   '(("/init\\.el\\'"
      "Emacs Lisp source file (init.el) is protected. Agents cannot modify the entry point."
      nil)
@@ -428,10 +428,10 @@ These protections remain active regardless of self-modification mode."
      nil))
   "List of conditionally-active protected path patterns.
 Each entry is (regex reason append-allowed).
-These protections are skipped when `my-gptel--guard-allow-self-modification' is non-nil."
+These protections are skipped when `iar-guard-allow-self-modification' is non-nil."
   :type '(repeat (list (regexp :tag "Regex")
                        (string :tag "Reason")
                        (boolean :tag "Append allowed")))
-  :group 'gptel)
+  :group 'iar)
 
-(provide 'parameters)
+(provide 'iar-parameters)

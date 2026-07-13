@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Tests for delegate_tool.el
+;;; Tests for iar-delegate-tool.el
 ;; Tests depth tracking, path traversal protection, validation,
 ;; timeout edge cases, timeout handler, completion hook,
 ;; and depth limit enforcement. Full delegation tests that spawn gptel
@@ -9,30 +9,30 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
-(require 'delegate_tool)
+(require 'iar-delegate-tool)
 
 ;;; --- Validation tests ---
 
 (ert-deftest test-delegate-validates-agent-name ()
   "delegate tool should reject empty or whitespace-only agent names."
   (let ((result nil))
-    (my-gptel-tool-delegate (lambda (r) (setq result r)) "" "task" "context")
+    (iar--mygptel--tool-delegate (lambda (r) (setq result r)) "" "task" "context")
     (should result)
     (should (string-match-p "agent" result))))
 
 (ert-deftest test-delegate-validates-task ()
   "delegate tool should reject empty or whitespace-only task strings."
   (let ((result nil))
-    (my-gptel-tool-delegate (lambda (r) (setq result r)) "coder" "" "context")
+    (iar--mygptel--tool-delegate (lambda (r) (setq result r)) "coder" "" "context")
     (should result)
     (should (string-match-p "task" result))))
 
 (ert-deftest test-delegate-validates-agent-name-traversal ()
   "delegate tool should reject agent names with path traversal characters.
-The error from my-gptel--load-agent-profile propagates through the callback."
+The error from iar--load-agent-profile propagates through the callback."
   (dolist (bad-name '("../etc" "foo/bar" "foo;bar" "foo bar"))
     (condition-case err
-        (my-gptel-tool-delegate (lambda (_r)) bad-name "task" "ctx")
+        (iar--mygptel--tool-delegate (lambda (_r)) bad-name "task" "ctx")
       (error
        (should (string-match-p "Invalid agent name"
                                (error-message-string err))))
@@ -42,8 +42,8 @@ The error from my-gptel--load-agent-profile propagates through the callback."
 ;;; --- Depth tracking tests ---
 
 (ert-deftest test-delegate-max-depth-default ()
-  "my-gptel--delegate-max-depth should default to 3."
-  (should (= my-gptel--delegate-max-depth 3)))
+  "iar-delegate-max-depth should default to 3."
+  (should (= iar-delegate-max-depth 3)))
 
 (ert-deftest test-delegate-depth-default ()
   "my-gptel--delegate-depth should default to 0 in a fresh buffer."
@@ -67,83 +67,83 @@ The error from my-gptel--load-agent-profile propagates through the callback."
 ;;; --- Profile loading tests ---
 
 (ert-deftest test-delegate-load-profile-validates-name ()
-  "my-gptel--load-agent-profile should reject path traversal in agent name."
+  "iar--load-agent-profile should reject path traversal in agent name."
   (condition-case err
-      (my-gptel--load-agent-profile "../../etc/passwd")
+      (iar--load-agent-profile "../../etc/passwd")
     (error
      (should (string-match-p "Invalid agent name" (error-message-string err))))
     (:success
      (ert-fail "Expected error for path traversal"))))
 
 (ert-deftest test-delegate-load-profile-finds-real-agent ()
-  "my-gptel--load-agent-profile should load a real agent profile."
-  (let ((profile (my-gptel--load-agent-profile "reviewer")))
+  "iar--load-agent-profile should load a real agent profile."
+  (let ((profile (iar--load-agent-profile "reviewer")))
     (should (stringp profile))
     (should (string-match-p "reviewer" profile))))
 
 (ert-deftest test-delegate-load-profile-returns-nil-for-missing ()
-  "my-gptel--load-agent-profile should return nil for nonexistent agent."
-  (should (null (my-gptel--load-agent-profile "nonexistent_xyzzy_agent"))))
+  "iar--load-agent-profile should return nil for nonexistent agent."
+  (should (null (iar--load-agent-profile "nonexistent_xyzzy_agent"))))
 
 ;;; --- Timeout parsing tests ---
 
 (ert-deftest test-delegate-timeout-integer ()
   "delegate tool should accept integer timeout and pass it to spawn."
   (let ((captured-timeout nil))
-    (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
+    (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 30))
+      (iar--mygptel--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 30))
     (should (= captured-timeout 30))))
 
 (ert-deftest test-delegate-timeout-string-converted ()
   "delegate tool should convert string timeout to integer."
   (let ((captured-timeout nil))
-    (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
+    (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" "30"))
+      (iar--mygptel--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" "30"))
     (should (= captured-timeout 30))))
 
 (ert-deftest test-delegate-timeout-default-when-nil ()
   "delegate tool should default timeout to 600 when nil."
   (let ((captured-timeout nil))
-    (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
+    (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" nil))
+      (iar--mygptel--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" nil))
     (should (= captured-timeout 600))))
 
 ;;; --- Timeout edge case tests ---
-;; These tests mock my-gptel--spawn-async-delegate to capture the
+;; These tests mock iar--spawn-async-delegate to capture the
 ;; actual timeout value after parsing and clamping, verifying the
 ;; clamping behavior rather than just that the function doesn't crash.
 
 (ert-deftest test-delegate-timeout-negative-clamped-to-1 ()
   "delegate tool should clamp negative timeout to 1 second."
   (let ((captured-timeout nil))
-    (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
+    (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" -5))
+      (iar--mygptel--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" -5))
     (should (= captured-timeout 1))))
 
 (ert-deftest test-delegate-timeout-zero-clamped-to-1 ()
   "delegate tool should clamp zero timeout to 1 second."
   (let ((captured-timeout nil))
-    (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
+    (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 0))
+      (iar--mygptel--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 0))
     (should (= captured-timeout 1))))
 
 (ert-deftest test-delegate-timeout-float-floored ()
   "delegate tool should floor float timeout to integer."
   (let ((captured-timeout nil))
-    (cl-letf (((symbol-function 'my-gptel--spawn-async-delegate)
+    (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (my-gptel-tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 30.7))
+      (iar--mygptel--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 30.7))
     (should (= captured-timeout 30))))
 
 ;;; --- Timeout handler tests ---
@@ -155,7 +155,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
         (completed-sym (make-symbol "completed")))
     (set completed-sym nil)
     (kill-buffer dead-buf)
-    (my-gptel--delegate-timeout-handler
+    (iar--delegate-timeout-handler
      dead-buf (lambda (r) (setq result r)) "testagent" completed-sym 0 30)
     (should result)
     (should (string-match-p "killed before completion" result))))
@@ -168,7 +168,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (set completed-sym t)
     (unwind-protect
          (progn
-           (my-gptel--delegate-timeout-handler
+           (iar--delegate-timeout-handler
             buf (lambda (r) (setq result r)) "testagent" completed-sym 0 30)
            (should (null result)))
       (when (buffer-live-p buf) (kill-buffer buf)))))
@@ -188,13 +188,13 @@ The error from my-gptel--load-agent-profile propagates through the callback."
       (set timer-sym nil)
       (set tools-called-sym t)
       (set turn-count-sym 0)
-      (let ((fn (my-gptel--delegate-completion-fn
+      (let ((fn (iar--mygptel--delegate-completion-fn
                  (current-buffer)
                  (lambda (r) (setq result r))
                  "testagent"
                  completed-sym timer-sym 600
                  tools-called-sym turn-count-sym
-                 my-gptel--delegate-max-turns)))
+                 iar-delegate-max-turns)))
         (funcall fn 8 (point-max)))
       (should result)
       (should (string-match-p "response text" result))
@@ -213,13 +213,13 @@ The error from my-gptel--load-agent-profile propagates through the callback."
       (set timer-sym nil)
       (set tools-called-sym nil)
       (set turn-count-sym 0)
-      (let ((fn (my-gptel--delegate-completion-fn
+      (let ((fn (iar--mygptel--delegate-completion-fn
                  (current-buffer)
                  (lambda (r) (setq result r))
                  "testagent"
                  completed-sym timer-sym 600
                  tools-called-sym turn-count-sym
-                 my-gptel--delegate-max-turns)))
+                 iar-delegate-max-turns)))
         (funcall fn 8 (point-max)))
       (should (null result))
       (should (null (symbol-value completed-sym)))
@@ -238,7 +238,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
       (set timer-sym nil)
       (set tools-called-sym nil)
       (set turn-count-sym 15)
-      (let ((fn (my-gptel--delegate-completion-fn
+      (let ((fn (iar--mygptel--delegate-completion-fn
                  (current-buffer)
                  (lambda (r) (setq result r))
                  "testagent"
@@ -262,13 +262,13 @@ The error from my-gptel--load-agent-profile propagates through the callback."
       (set timer-sym nil)
       (set tools-called-sym t)
       (set turn-count-sym 0)
-      (let ((fn (my-gptel--delegate-completion-fn
+      (let ((fn (iar--mygptel--delegate-completion-fn
                  (current-buffer)
                  (lambda (r) (setq result r))
                  "testagent"
                  completed-sym timer-sym 600
                  tools-called-sym turn-count-sym
-                 my-gptel--delegate-max-turns)))
+                 iar-delegate-max-turns)))
         (funcall fn 8 8))
       (should result)
       (should (string-match-p "empty response" result))
@@ -287,13 +287,13 @@ The error from my-gptel--load-agent-profile propagates through the callback."
       (set timer-sym nil)
       (set tools-called-sym t)
       (set turn-count-sym 0)
-      (let ((fn (my-gptel--delegate-completion-fn
+      (let ((fn (iar--mygptel--delegate-completion-fn
                  (current-buffer)
                  (lambda (r) (setq result r))
                  "testagent"
                  completed-sym timer-sym 600
                  tools-called-sym turn-count-sym
-                 my-gptel--delegate-max-turns)))
+                 iar-delegate-max-turns)))
         (funcall fn 8 (point-max)))
       (should (null result)))))
 
@@ -307,7 +307,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (let ((buf nil))
       (unwind-protect
            (progn
-             (setq buf (my-gptel--spawn-async-delegate
+             (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "do something" "ctx" 30
                         "You are a test agent."))
              (should (buffer-live-p buf))
@@ -320,7 +320,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (let ((buf nil))
       (unwind-protect
            (progn
-             (setq buf (my-gptel--spawn-async-delegate
+             (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "do something" "ctx" 30
                         "You are a test agent."))
              (with-current-buffer buf
@@ -335,7 +335,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
       (let ((buf nil))
         (unwind-protect
              (progn
-               (setq buf (my-gptel--spawn-async-delegate
+               (setq buf (iar--spawn-async-delegate
                           (lambda (_r)) "testagent" "do something" "ctx" 30
                           "You are a test agent."))
                (with-current-buffer buf
@@ -348,7 +348,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (let ((buf nil))
       (unwind-protect
            (progn
-             (setq buf (my-gptel--spawn-async-delegate
+             (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "review the code" "some context" 30
                         "You are a test agent."))
              (with-current-buffer buf
@@ -363,7 +363,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (let ((buf nil))
       (unwind-protect
            (progn
-             (setq buf (my-gptel--spawn-async-delegate
+             (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "task" "ctx" 30
                         "You are a test agent profile."))
              (with-current-buffer buf
@@ -376,7 +376,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (let ((buf nil))
       (unwind-protect
            (progn
-             (setq buf (my-gptel--spawn-async-delegate
+             (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "task" "ctx" 30
                         "You are a test agent."))
              (with-current-buffer buf
@@ -389,7 +389,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (let ((buf nil))
       (unwind-protect
            (progn
-             (setq buf (my-gptel--spawn-async-delegate
+             (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "task" "ctx" 30
                         "You are a test agent."))
              (with-current-buffer buf
@@ -399,17 +399,17 @@ The error from my-gptel--load-agent-profile propagates through the callback."
 (ert-deftest test-delegate-spawn-removes-delegate-tool-at-max-depth ()
   "spawn-async-delegate should remove delegate tool when depth >= max-depth."
   (with-temp-buffer
-    (setq-local my-gptel--delegate-depth (1- my-gptel--delegate-max-depth))
+    (setq-local my-gptel--delegate-depth (1- iar-delegate-max-depth))
     (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
       (let ((buf nil)
             (original-tools (copy-sequence gptel-tools)))
         (unwind-protect
              (progn
-               (setq buf (my-gptel--spawn-async-delegate
+               (setq buf (iar--spawn-async-delegate
                           (lambda (_r)) "testagent" "task" "ctx" 30
                           "You are a test agent."))
                (with-current-buffer buf
-                 (should (= my-gptel--delegate-depth my-gptel--delegate-max-depth))
+                 (should (= my-gptel--delegate-depth iar-delegate-max-depth))
                  (let ((has-delegate
                         (cl-find-if (lambda (tool)
                                       (equal (gptel-tool-name tool) "delegate"))
@@ -424,11 +424,11 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (let ((buf nil))
       (unwind-protect
            (progn
-             (setq buf (my-gptel--spawn-async-delegate
+             (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "task" "ctx" 30
                         "You are a test agent."))
              (with-current-buffer buf
-               (should (< my-gptel--delegate-depth my-gptel--delegate-max-depth))
+               (should (< my-gptel--delegate-depth iar-delegate-max-depth))
                (let ((has-delegate
                       (cl-find-if (lambda (tool)
                                     (equal (gptel-tool-name tool) "delegate"))
@@ -451,13 +451,13 @@ The error from my-gptel--load-agent-profile propagates through the callback."
       (set timer-sym nil)
       (set tools-called-sym t)
       (set turn-count-sym 0)
-      (let ((fn (my-gptel--delegate-completion-fn
+      (let ((fn (iar--mygptel--delegate-completion-fn
                  (current-buffer)
                  (lambda (r) (setq result r))
                  "testagent"
                  completed-sym timer-sym 600
                  tools-called-sym turn-count-sym
-                 my-gptel--delegate-max-turns)))
+                 iar-delegate-max-turns)))
         (funcall fn nil nil))
       (should result)
       (should (string-match-p "empty response" result))
@@ -476,13 +476,13 @@ The error from my-gptel--load-agent-profile propagates through the callback."
       (set timer-sym nil)
       (set tools-called-sym t)
       (set turn-count-sym 0)
-      (let ((fn (my-gptel--delegate-completion-fn
+      (let ((fn (iar--mygptel--delegate-completion-fn
                  (current-buffer)
                  (lambda (r) (setq result r))
                  "testagent"
                  completed-sym timer-sym 600
                  tools-called-sym turn-count-sym
-                 my-gptel--delegate-max-turns)))
+                 iar-delegate-max-turns)))
         (funcall fn 20 5))
       (should result)
       (should (string-match-p "empty response" result))
@@ -501,13 +501,13 @@ The error from my-gptel--load-agent-profile propagates through the callback."
       (set timer-sym nil)
       (set tools-called-sym t)
       (set turn-count-sym 0)
-      (let ((fn (my-gptel--delegate-completion-fn
+      (let ((fn (iar--mygptel--delegate-completion-fn
                  (current-buffer)
                  (lambda (r) (setq result r))
                  "testagent"
                  completed-sym timer-sym 600
                  tools-called-sym turn-count-sym
-                 my-gptel--delegate-max-turns)))
+                 iar-delegate-max-turns)))
         (funcall fn "not-a-number" 10))
       (should result)
       (should (string-match-p "empty response" result))
@@ -534,12 +534,12 @@ The error from my-gptel--load-agent-profile propagates through the callback."
                ;; Mock cancel-timer to track if it was called
                (cl-letf (((symbol-function 'cancel-timer)
                           (lambda (_timer) (setq timer-cancelled t))))
-                 (let ((fn (my-gptel--delegate-completion-fn
+                 (let ((fn (iar--mygptel--delegate-completion-fn
                             buf (lambda (r) (setq result r))
                             "testagent"
                             completed-sym timer-sym 600
                             tools-called-sym turn-count-sym
-                            my-gptel--delegate-max-turns)))
+                            iar-delegate-max-turns)))
                    (funcall fn 8 (point-max))))
                ;; Cancel the real timer to prevent leak (cancel-timer was mocked above)
                (cancel-timer real-timer))
@@ -568,7 +568,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
                (set timer-sym real-timer)
                (cl-letf (((symbol-function 'cancel-timer)
                           (lambda (_timer) (setq timer-cancelled t))))
-                 (let ((fn (my-gptel--delegate-completion-fn
+                 (let ((fn (iar--mygptel--delegate-completion-fn
                             buf (lambda (r) (setq result r))
                             "testagent"
                             completed-sym timer-sym 600
@@ -587,7 +587,7 @@ The error from my-gptel--load-agent-profile propagates through the callback."
     (let ((buf nil))
       (unwind-protect
            (progn
-             (setq buf (my-gptel--spawn-async-delegate
+             (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "task" "ctx" 30
                         "You are a test agent."))
              (with-current-buffer buf
@@ -606,7 +606,7 @@ negatives, but this is defense-in-depth at the consumer level."
       (let ((buf nil))
         (unwind-protect
              (progn
-               (setq buf (my-gptel--spawn-async-delegate
+               (setq buf (iar--spawn-async-delegate
                           (lambda (_r)) "testagent" "do something" "ctx" 30
                           "You are a test agent."))
                (with-current-buffer buf

@@ -7,7 +7,7 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
-(require 'agent_utils)  ; validation + path resolution functions (moved from task_tools)
+(require 'iar-agent-utils)  ; validation + path resolution functions (moved from task_tools)
 (require 'iar-tool--read-tasks)
 (require 'iar-tool--write-task)
 (require 'iar-tool--remove-task)
@@ -57,27 +57,27 @@
 
 (defmacro with-task-fixture (&rest body)
   "Execute BODY with a temporary tasks/ and audit/ directory.
-Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
+Temporarily rebinds user-emacs-directory and iar--current-agent-name."
   (declare (indent 0))
   `(let ((old-emacs-dir user-emacs-directory)
-         (old-agent-name (and (boundp 'my-gptel--current-agent-name)
-                              my-gptel--current-agent-name)))
+         (old-agent-name (and (boundp 'iar--current-agent-name)
+                              iar--current-agent-name)))
      (unwind-protect
          (progn
            (test-task--setup)
            (let ((user-emacs-directory test-task--tmpdir))
-             (setq my-gptel--current-agent-name "testagent")
+             (setq iar--current-agent-name "testagent")
              ,@body))
        (test-task--teardown)
        (setq user-emacs-directory old-emacs-dir)
-       (setq my-gptel--current-agent-name old-agent-name))))
+       (setq iar--current-agent-name old-agent-name))))
 
 ;;; --- read_tasks tests ---
 
 (ert-deftest test-task-read-tasks-returns-all-files ()
   "read_tasks should return all .md task files with names (no .md extension)."
   (with-task-fixture
-    (let ((result (my-gptel-tool-read-tasks)))
+    (let ((result (iar--mygptel--tool-read-tasks)))
       (should (stringp result))
       (should (string-match-p "fix-bugs" result))
       (should (string-match-p "Fix Bugs" result))
@@ -91,7 +91,7 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
   (with-task-fixture
     (let* ((agent-dir (expand-file-name "tasks/testagent" test-task--tmpdir)))
       (delete-file (expand-file-name "add-feature.md" agent-dir))
-      (let ((result (my-gptel-tool-read-tasks)))
+      (let ((result (iar--mygptel--tool-read-tasks)))
         (should (stringp result))
         (should (string-match-p "fix-bugs" result))
         (should-not (string-match-p "add-feature" result))))))
@@ -99,8 +99,8 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
 (ert-deftest test-task-read-tasks-no-tasks ()
   "read_tasks should return message when no task files exist."
   (with-task-fixture
-    (let ((my-gptel--current-agent-name "otheragent"))
-      (let ((result (my-gptel-tool-read-tasks)))
+    (let ((iar--current-agent-name "otheragent"))
+      (let ((result (iar--mygptel--tool-read-tasks)))
         (should (stringp result))
         (should (string-match-p "No tasks" result))))))
 
@@ -109,7 +109,7 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
 (ert-deftest test-task-write-task-creates-file ()
   "write_task should create a new .md task file."
   (with-task-fixture
-    (let ((result (my-gptel-tool-write-task "new-task" "# New Task\n\nDo something."))
+    (let ((result (iar--mygptel--tool-write-task "new-task" "# New Task\n\nDo something."))
           (task-path (expand-file-name "tasks/testagent/new-task.md" test-task--tmpdir)))
       (should (stringp result))
       (should (string-match-p "created" result))
@@ -121,7 +121,7 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
 (ert-deftest test-task-write-task-refuses-overwrite ()
   "write_task should refuse to overwrite an existing task file."
   (with-task-fixture
-    (let ((result (my-gptel-tool-write-task "fix-bugs" "# Overwrite attempt")))
+    (let ((result (iar--mygptel--tool-write-task "fix-bugs" "# Overwrite attempt")))
       (should (stringp result))
       (should (string-match-p "Error" result))
       (should (string-match-p "already exists" result)))))
@@ -129,10 +129,10 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
 (ert-deftest test-task-write-task-rejects-invalid-name ()
   "write_task should reject names with dots, slashes, spaces."
   (with-task-fixture
-    (should (string-match-p "Error" (my-gptel-tool-write-task "foo.bar" "content")))
-    (should (string-match-p "Error" (my-gptel-tool-write-task "foo/bar" "content")))
-    (should (string-match-p "Error" (my-gptel-tool-write-task "foo bar" "content")))
-    (should (string-match-p "Error" (my-gptel-tool-write-task "../etc" "content")))))
+    (should (string-match-p "Error" (iar--mygptel--tool-write-task "foo.bar" "content")))
+    (should (string-match-p "Error" (iar--mygptel--tool-write-task "foo/bar" "content")))
+    (should (string-match-p "Error" (iar--mygptel--tool-write-task "foo bar" "content")))
+    (should (string-match-p "Error" (iar--mygptel--tool-write-task "../etc" "content")))))
 
 ;;; --- remove_task tests ---
 
@@ -140,7 +140,7 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
   "remove_task should delete the task file."
   (with-task-fixture
     (let* ((task-path (expand-file-name "tasks/testagent/fix-bugs.md" test-task--tmpdir))
-           (result (my-gptel-tool-remove-task "fix-bugs")))
+           (result (iar--mygptel--tool-remove-task "fix-bugs")))
       (should (stringp result))
       (should (string-match-p "removed" result))
       (should-not (file-exists-p task-path)))))
@@ -148,7 +148,7 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
 (ert-deftest test-task-remove-task-nonexistent ()
   "remove_task should error when task file does not exist."
   (with-task-fixture
-    (let ((result (my-gptel-tool-remove-task "nonexistent")))
+    (let ((result (iar--mygptel--tool-remove-task "nonexistent")))
       (should (stringp result))
       (should (string-match-p "Error" result))
       (should (string-match-p "does not exist" result)))))
@@ -156,16 +156,16 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
 (ert-deftest test-task-remove-task-rejects-invalid-name ()
   "remove_task should reject names with dots, slashes, spaces."
   (with-task-fixture
-    (should (string-match-p "Error" (my-gptel-tool-remove-task "foo.bar")))
-    (should (string-match-p "Error" (my-gptel-tool-remove-task "foo/bar")))
-    (should (string-match-p "Error" (my-gptel-tool-remove-task "foo bar")))))
+    (should (string-match-p "Error" (iar--mygptel--tool-remove-task "foo.bar")))
+    (should (string-match-p "Error" (iar--mygptel--tool-remove-task "foo/bar")))
+    (should (string-match-p "Error" (iar--mygptel--tool-remove-task "foo bar")))))
 
 ;;; --- read_history tests ---
 
 (ert-deftest test-task-read-history-single-agent ()
   "read_history with agent_name should return that agent's log."
   (with-task-fixture
-    (let ((result (my-gptel-tool-read-history "testagent")))
+    (let ((result (iar--mygptel--tool-read-history "testagent")))
       (should (stringp result))
       (should (string-match-p "did something" result))
       (should (string-match-p "did something else" result))
@@ -174,14 +174,14 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
 (ert-deftest test-task-read-history-missing-agent ()
   "read_history for nonexistent agent should return error."
   (with-task-fixture
-    (let ((result (my-gptel-tool-read-history "nonexistent_agent")))
+    (let ((result (iar--mygptel--tool-read-history "nonexistent_agent")))
       (should (stringp result))
       (should (string-match-p "Error" result)))))
 
 (ert-deftest test-task-read-history-unified ()
   "read_history without agent_name should merge all agents sorted by time."
   (with-task-fixture
-    (let ((result (my-gptel-tool-read-history)))
+    (let ((result (iar--mygptel--tool-read-history)))
       (should (stringp result))
       (should (string-match-p "UNIFIED" result))
       (should (string-match-p "testagent" result))
@@ -196,118 +196,118 @@ Temporarily rebinds user-emacs-directory and my-gptel--current-agent-name."
   "read_history should reject agent names with path traversal characters."
   (with-task-fixture
     ;; read_history wraps errors in condition-case and returns error string
-    (let ((result (my-gptel-tool-read-history "../../etc/passwd")))
+    (let ((result (iar--mygptel--tool-read-history "../../etc/passwd")))
       (should (stringp result))
       (should (string-match-p "Invalid agent name" result)))))
 
 ;;; --- resolve-agent-tasks-dir validation tests ---
 
 (ert-deftest test-task-resolve-agent-tasks-dir-valid-name ()
-  "my-gptel--resolve-agent-tasks-dir should return the agent tasks directory path."
+  "iar--resolve-agent-tasks-dir should return the agent tasks directory path."
   (with-task-fixture
-    (let ((result (my-gptel--resolve-agent-tasks-dir)))
+    (let ((result (iar--resolve-agent-tasks-dir)))
       (should (stringp result))
       (should (string-match-p "testagent" result))
       (should (string-match-p "tasks" result)))))
 
 (ert-deftest test-task-resolve-agent-tasks-dir-no-agent-loaded ()
-  "my-gptel--resolve-agent-tasks-dir should error when no agent is loaded."
+  "iar--resolve-agent-tasks-dir should error when no agent is loaded."
   (with-task-fixture
-    (let (my-gptel--current-agent-name
-          my-gptel--current-agent-file)
-      (should-error (my-gptel--resolve-agent-tasks-dir)))))
+    (let (iar--current-agent-name
+          iar--current-agent-file)
+      (should-error (iar--resolve-agent-tasks-dir)))))
 
 (ert-deftest test-task-resolve-agent-tasks-dir-rejects-path-traversal ()
-  "my-gptel--resolve-agent-tasks-dir should reject agent names with path traversal."
+  "iar--resolve-agent-tasks-dir should reject agent names with path traversal."
   (with-task-fixture
-    (let ((my-gptel--current-agent-name "../../etc/passwd"))
-      (should-error (my-gptel--resolve-agent-tasks-dir)))))
+    (let ((iar--current-agent-name "../../etc/passwd"))
+      (should-error (iar--resolve-agent-tasks-dir)))))
 
 (ert-deftest test-task-resolve-agent-tasks-dir-rejects-slashes ()
-  "my-gptel--resolve-agent-tasks-dir should reject agent names with slashes."
+  "iar--resolve-agent-tasks-dir should reject agent names with slashes."
   (with-task-fixture
-    (let ((my-gptel--current-agent-name "foo/bar"))
-      (should-error (my-gptel--resolve-agent-tasks-dir)))))
+    (let ((iar--current-agent-name "foo/bar"))
+      (should-error (iar--resolve-agent-tasks-dir)))))
 
 (ert-deftest test-task-resolve-agent-tasks-dir-rejects-dots ()
-  "my-gptel--resolve-agent-tasks-dir should reject agent names with dots."
+  "iar--resolve-agent-tasks-dir should reject agent names with dots."
   (with-task-fixture
-    (let ((my-gptel--current-agent-name "foo.bar"))
-      (should-error (my-gptel--resolve-agent-tasks-dir)))))
+    (let ((iar--current-agent-name "foo.bar"))
+      (should-error (iar--resolve-agent-tasks-dir)))))
 
 (ert-deftest test-task-resolve-agent-tasks-dir-rejects-spaces ()
-  "my-gptel--resolve-agent-tasks-dir should reject agent names with spaces."
+  "iar--resolve-agent-tasks-dir should reject agent names with spaces."
   (with-task-fixture
-    (let ((my-gptel--current-agent-name "foo bar"))
-      (should-error (my-gptel--resolve-agent-tasks-dir)))))
+    (let ((iar--current-agent-name "foo bar"))
+      (should-error (iar--resolve-agent-tasks-dir)))))
 
 ;;; --- valid-task-name-p and validate-task-name tests ---
 
 (ert-deftest test-task-valid-task-name-p-accepts-valid ()
   "valid-task-name-p should accept alphanumeric, hyphens, underscores."
-  (should (my-gptel--valid-task-name-p "fix-bugs"))
-  (should (my-gptel--valid-task-name-p "add-feature"))
-  (should (my-gptel--valid-task-name-p "task_123"))
-  (should (my-gptel--valid-task-name-p "A-B-C"))
-  (should (my-gptel--valid-task-name-p "a"))
-  (should (my-gptel--valid-task-name-p "123")))
+  (should (iar--valid-task-name-p "fix-bugs"))
+  (should (iar--valid-task-name-p "add-feature"))
+  (should (iar--valid-task-name-p "task_123"))
+  (should (iar--valid-task-name-p "A-B-C"))
+  (should (iar--valid-task-name-p "a"))
+  (should (iar--valid-task-name-p "123")))
 
 (ert-deftest test-task-valid-task-name-p-rejects-invalid ()
   "valid-task-name-p should reject nil, non-strings, empty, dots, slashes, spaces."
-  (should-not (my-gptel--valid-task-name-p nil))
-  (should-not (my-gptel--valid-task-name-p 42))
-  (should-not (my-gptel--valid-task-name-p ""))
-  (should-not (my-gptel--valid-task-name-p "foo/bar"))
-  (should-not (my-gptel--valid-task-name-p "foo.bar"))
-  (should-not (my-gptel--valid-task-name-p "foo bar"))
-  (should-not (my-gptel--valid-task-name-p "../../etc"))
-  (should-not (my-gptel--valid-task-name-p "valid\nmalicious")))
+  (should-not (iar--valid-task-name-p nil))
+  (should-not (iar--valid-task-name-p 42))
+  (should-not (iar--valid-task-name-p ""))
+  (should-not (iar--valid-task-name-p "foo/bar"))
+  (should-not (iar--valid-task-name-p "foo.bar"))
+  (should-not (iar--valid-task-name-p "foo bar"))
+  (should-not (iar--valid-task-name-p "../../etc"))
+  (should-not (iar--valid-task-name-p "valid\nmalicious")))
 
 (ert-deftest test-task-validate-task-name-returns-name-on-success ()
   "validate-task-name should return the name when valid."
-  (should (equal "fix-bugs" (my-gptel--validate-task-name "fix-bugs")))
-  (should (equal "add-feature" (my-gptel--validate-task-name "add-feature"))))
+  (should (equal "fix-bugs" (iar--validate-task-name "fix-bugs")))
+  (should (equal "add-feature" (iar--validate-task-name "add-feature"))))
 
 (ert-deftest test-task-validate-task-name-errors-on-invalid ()
   "validate-task-name should signal error on invalid names."
-  (should-error (my-gptel--validate-task-name ""))
-  (should-error (my-gptel--validate-task-name "foo.bar"))
-  (should-error (my-gptel--validate-task-name "foo/bar"))
-  (should-error (my-gptel--validate-task-name "../../etc")))
+  (should-error (iar--validate-task-name ""))
+  (should-error (iar--validate-task-name "foo.bar"))
+  (should-error (iar--validate-task-name "foo/bar"))
+  (should-error (iar--validate-task-name "../../etc")))
 
 ;;; --- valid-agent-name-p and validate-agent-name tests ---
 
 (ert-deftest test-task-valid-agent-name-p-accepts-valid ()
   "valid-agent-name-p should accept alphanumeric, hyphens, underscores."
-  (should (my-gptel--valid-agent-name-p "darwin"))
-  (should (my-gptel--valid-agent-name-p "my-agent"))
-  (should (my-gptel--valid-agent-name-p "agent_123"))
-  (should (my-gptel--valid-agent-name-p "A-B_C"))
-  (should (my-gptel--valid-agent-name-p "a"))
-  (should (my-gptel--valid-agent-name-p "123")))
+  (should (iar--valid-agent-name-p "darwin"))
+  (should (iar--valid-agent-name-p "my-agent"))
+  (should (iar--valid-agent-name-p "agent_123"))
+  (should (iar--valid-agent-name-p "A-B_C"))
+  (should (iar--valid-agent-name-p "a"))
+  (should (iar--valid-agent-name-p "123")))
 
 (ert-deftest test-task-valid-agent-name-p-rejects-invalid ()
   "valid-agent-name-p should reject nil, non-strings, empty, and special chars."
-  (should-not (my-gptel--valid-agent-name-p nil))
-  (should-not (my-gptel--valid-agent-name-p 42))
-  (should-not (my-gptel--valid-agent-name-p ""))
-  (should-not (my-gptel--valid-agent-name-p "foo/bar"))
-  (should-not (my-gptel--valid-agent-name-p "foo.bar"))
-  (should-not (my-gptel--valid-agent-name-p "foo bar"))
-  (should-not (my-gptel--valid-agent-name-p "../../etc"))
-  (should-not (my-gptel--valid-agent-name-p "valid\nmalicious")))
+  (should-not (iar--valid-agent-name-p nil))
+  (should-not (iar--valid-agent-name-p 42))
+  (should-not (iar--valid-agent-name-p ""))
+  (should-not (iar--valid-agent-name-p "foo/bar"))
+  (should-not (iar--valid-agent-name-p "foo.bar"))
+  (should-not (iar--valid-agent-name-p "foo bar"))
+  (should-not (iar--valid-agent-name-p "../../etc"))
+  (should-not (iar--valid-agent-name-p "valid\nmalicious")))
 
 (ert-deftest test-task-validate-agent-name-returns-name-on-success ()
   "validate-agent-name should return the name when valid."
-  (should (equal "darwin" (my-gptel--validate-agent-name "darwin")))
-  (should (equal "my-agent" (my-gptel--validate-agent-name "my-agent"))))
+  (should (equal "darwin" (iar--validate-agent-name "darwin")))
+  (should (equal "my-agent" (iar--validate-agent-name "my-agent"))))
 
 (ert-deftest test-task-validate-agent-name-errors-on-invalid ()
   "validate-agent-name should signal error on invalid names."
-  (should-error (my-gptel--validate-agent-name ""))
-  (should-error (my-gptel--validate-agent-name "foo/bar"))
-  (should-error (my-gptel--validate-agent-name "../../etc"))
-  (should-error (my-gptel--validate-agent-name "valid\nmalicious")))
+  (should-error (iar--validate-agent-name ""))
+  (should-error (iar--validate-agent-name "foo/bar"))
+  (should-error (iar--validate-agent-name "../../etc"))
+  (should-error (iar--validate-agent-name "valid\nmalicious")))
 
 (provide 'test-task)
 ;;; test-task.el ends here

@@ -14,15 +14,15 @@
 ;; 5. Container config (Containerfile, emacboros.sh, containers/) -- prevents escape
 ;; 6. Git hooks (.git/hooks/*) -- prevents scheduled execution
 ;;
-;; When `my-gptel--guard-allow-self-modification' is non-nil, categories
+;; When `iar-guard-allow-self-modification' is non-nil, categories
 ;; 4-6 are relaxed.  This is intended for development sessions where the
 ;; agent is trusted to modify tool code.  Categories 1-3 remain active
 ;; regardless — an agent should never silently rewrite its own prompt
 ;; or the shared context.
 ;;
-;; Protected path patterns are defined as defcustoms in parameters.el:
-;;   `my-gptel-guard-always-protected'
-;;   `my-gptel-guard-conditional-protected'
+;; Protected path patterns are defined as defcustoms in iar-parameters.el:
+;;   `iar-guard-always-protected'
+;;   `iar-guard-conditional-protected'
 ;; Each entry is (regex reason append-allowed).  This module implements
 ;; the guard logic (two-tier check, symlink defense, append exception)
 ;; and reads the targets from configuration.
@@ -36,18 +36,18 @@
 
 ;;; --- Configuration ---
 
-;; Forward-declare defcustoms owned by parameters.el.
+;; Forward-declare defcustoms owned by iar-parameters.el.
 ;; They are loaded before this module in init.el and run-tests.el.
-(defvar my-gptel-guard-always-protected nil
+(defvar iar-guard-always-protected nil
   "List of always-active protected path patterns.
 Each entry is (regex reason append-allowed).
-Owned by parameters.el; forward-declared here for compiler silence.")
-(defvar my-gptel-guard-conditional-protected nil
+Owned by iar-parameters.el; forward-declared here for compiler silence.")
+(defvar iar-guard-conditional-protected nil
   "List of conditionally-active protected path patterns.
 Each entry is (regex reason append-allowed).
-Owned by parameters.el; forward-declared here for compiler silence.")
+Owned by iar-parameters.el; forward-declared here for compiler silence.")
 
-(defcustom my-gptel--guard-allow-self-modification nil
+(defcustom iar-guard-allow-self-modification nil
   "When non-nil, relax file guard protections for self-modification.
 Allows agents to modify Emacs Lisp source files (init.el, init.d/**/*.el),
 container configuration, and git hooks.  Agent prompt files and
@@ -61,11 +61,11 @@ prompts the user when it is set via file-local variables.  This is a
 security-sensitive flag: silently accepting it from a tampered session
 file would bypass file guard protections without user awareness."
   :type 'boolean
-  :group 'gptel)
+  :group 'iar)
 
 ;;; --- Internal: pattern compilation ---
 
-(defun my-gptel--guard--compile-pattern (entry)
+(defun iar--guard--compile-pattern (entry)
   "Compile a single pattern entry into a guard cell.
 ENTRY is (regex reason append-allowed).
 Returns a plist: (:pred PRED-FN :reason STRING :append-allowed BOOL)."
@@ -76,28 +76,28 @@ Returns a plist: (:pred PRED-FN :reason STRING :append-allowed BOOL)."
           :reason reason
           :append-allowed append-allowed)))
 
-(defun my-gptel--guard--compile-patterns (entries)
+(defun iar--guard--compile-patterns (entries)
   "Compile a list of pattern entries into guard cells.
 ENTRIES is a list of (regex reason append-allowed) lists.
-Returns a list of plists as produced by `my-gptel--guard--compile-pattern'."
-  (mapcar #'my-gptel--guard--compile-pattern entries))
+Returns a list of plists as produced by `iar--guard--compile-pattern'."
+  (mapcar #'iar--guard--compile-pattern entries))
 
-(defun my-gptel--guard--active-patterns ()
+(defun iar--guard--active-patterns ()
   "Return the list of compiled guard cells active in the current mode.
-When `my-gptel--guard-allow-self-modification' is non-nil, returns
+When `iar-guard-allow-self-modification' is non-nil, returns
 only always-protected patterns (prompts, context, history).
 Otherwise returns the full list (always + conditional)."
-  (let ((always (my-gptel--guard--compile-patterns
-                 my-gptel-guard-always-protected))
-        (conditional (my-gptel--guard--compile-patterns
-                      my-gptel-guard-conditional-protected)))
-    (if my-gptel--guard-allow-self-modification
+  (let ((always (iar--guard--compile-patterns
+                 iar-guard-always-protected))
+        (conditional (iar--guard--compile-patterns
+                      iar-guard-conditional-protected)))
+    (if iar-guard-allow-self-modification
         always
       (append always conditional))))
 
 ;;; --- Public API ---
 
-(defun my-gptel--guard-check-write (filepath)
+(defun iar--guard-check-write (filepath)
   "Check if FILEPATH is protected against write_file operations.
 Returns nil if the path is safe to write, or a string explaining
 why the path is protected if it is not safe.
@@ -114,17 +114,17 @@ paths are checked against each pattern.  When they are the same
                  (when (or (funcall pred expanded)
                            (and has-symlink (funcall pred truename)))
                    reason)))
-             (my-gptel--guard--active-patterns))))
+             (iar--guard--active-patterns))))
 
-(defun my-gptel--guard-check-replace (filepath)
+(defun iar--guard-check-replace (filepath)
   "Check if FILEPATH is protected against replace_in_file operations.
-Delegates to `my-gptel--guard-check-write' -- replace has the same
+Delegates to `iar--guard-check-write' -- replace has the same
 protections as write.  HISTORY.log is blocked for replace (only
 append is allowed) because it is in the always-protected list,
-which `my-gptel--guard-check-write' checks."
-  (my-gptel--guard-check-write filepath))
+which `iar--guard-check-write' checks."
+  (iar--guard-check-write filepath))
 
-(defun my-gptel--guard-check-append (filepath)
+(defun iar--guard-check-append (filepath)
   "Check if FILEPATH is protected against append_file operations.
 Append is allowed for paths marked append-allowed in their pattern
 entry (e.g., HISTORY.log, LOGS.md).  All other protected paths are
@@ -138,7 +138,7 @@ paths are checked against each pattern.  When they are the same
          (has-symlink (not (string= expanded truename)))
          (patterns (cl-remove-if
                     (lambda (cell) (plist-get cell :append-allowed))
-                    (my-gptel--guard--active-patterns))))
+                    (iar--guard--active-patterns))))
     (cl-some (lambda (cell)
                (let ((pred (plist-get cell :pred))
                      (reason (plist-get cell :reason)))
@@ -147,4 +147,4 @@ paths are checked against each pattern.  When they are the same
                    reason)))
              patterns)))
 
-(provide 'file_guard)
+(provide 'iar-file-guard)

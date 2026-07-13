@@ -2,20 +2,20 @@
 
 ;;; write_file tool for gptel
 ;; Creates or overwrites a file with new content.
-;; Security: checks file_guard before writing. Logs to audit log.
+;; Security: checks iar-file-guard before writing. Logs to audit log.
 
 (require 'gptel)
-(require 'file_guard)
-(require 'audit_log)
-(require 'utils)  ; my-gptel--with-suppressed-save-hooks
+(require 'iar-file-guard)
+(require 'iar-audit-log)
+(require 'iar-utils)  ; iar--with-suppressed-save-hooks
 
-(defun my-gptel--fs-write-file (filepath content)
+(defun iar--mygptel--fs-write-file (filepath content)
   "Write CONTENT to FILEPATH, creating parent dirs if needed.
 If the file is open in an Emacs buffer, writes to that buffer and saves.
 Otherwise, uses atomic write (temp file + rename).
 Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
   (let* ((expanded-path (expand-file-name filepath))
-         (guard-reason (my-gptel--guard-check-write expanded-path)))
+         (guard-reason (iar--guard-check-write expanded-path)))
     (if guard-reason
         (format "Error: %s" guard-reason)
       (let ((buf (find-buffer-visiting expanded-path)))
@@ -33,7 +33,7 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
                      (t
                       (erase-buffer)
                       (insert content)
-                      (my-gptel--with-suppressed-save-hooks
+                      (iar--with-suppressed-save-hooks
                         (save-buffer))
                       (my-gptel--audit-log-write expanded-path)
                       (format "Success: File written to '%s'" expanded-path))))
@@ -52,6 +52,6 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
   :description "Create a new file or completely overwrite an existing file with new text content. Use this to save new agent profiles or rewrite configurations."
   :args (list '(:name "filepath" :type "string" :description "Absolute path to the destination file.")
               '(:name "content" :type "string" :description "The full text content to write into the file."))
-  :function #'my-gptel--fs-write-file))
+  :function #'iar--mygptel--fs-write-file))
 
 (provide 'iar-tool--write-file)

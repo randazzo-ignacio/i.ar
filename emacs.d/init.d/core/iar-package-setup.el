@@ -6,4 +6,4 @@
 (package-initialize)
 (unless package-archive-contents
   (package-refresh-contents))
-(provide 'package_setup)
+(provide 'iar-package-setup)

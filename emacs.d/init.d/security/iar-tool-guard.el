@@ -12,9 +12,9 @@
 
 (require 'cl-lib)
 
-(declare-function my-gptel--load-prompt "prompt_loader" (name))
+(declare-function iar--load-prompt "iar-prompt-loader" (name))
 
-(defun my-gptel--block-unknown-tools (info)
+(defun iar--mygptel--block-unknown-tools (info)
   "Pre-tool-call hook to block unknown tool names.
 INFO is the plist from `gptel-pre-tool-call-functions' containing
 :name, :args, :buffer, :backend, and :model.  Returns nil if the
@@ -37,15 +37,15 @@ hooks.  `gptel-tools' is resolved in the buffer where the hook runs
 buffer-local values (e.g., delegate tool removed at max depth) are
 correctly seen.
 
-Used by both `my-gptel--spawn-async-delegate' (delegate buffers) and
-`agent-run-cycle' (cycle buffer) to provide early interception of
+Used by both `iar--spawn-async-delegate' (delegate buffers) and
+`iar-run-cycle' (cycle buffer) to provide early interception of
 hallucinated tool names."
   (let ((name (plist-get info :name)))
     (unless (cl-find-if (lambda (ts)
                           (equal (gptel-tool-name ts) name))
                         gptel-tools)
       (list :block
-            (format (my-gptel--load-prompt "unknown_tool")
+            (format (iar--load-prompt "unknown_tool")
                     name)))))
 
-(provide 'tool_guard)
+(provide 'iar-tool-guard)

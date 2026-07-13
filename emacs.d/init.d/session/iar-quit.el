@@ -17,10 +17,10 @@
 ;; If no gptel buffer is active, skips summarization and quits directly.
 
 (require 'subr-x)
-(declare-function my-gptel-summarize-session "memory_tools" ())
+(declare-function iar-summarize-session "iar-memory-tools" ())
 
 ;; Declared in metaconfig/parameters.el (loaded before init.d modules).
-(defvar my-gptel-key-quit nil
+(defvar iar-key-quit nil
   "Keybinding for session-aware quit.")
 
 (defun iar-quit (&optional arg)
@@ -40,7 +40,7 @@ If summarization fails, warns the user but quits anyway."
           (when (and (boundp 'gptel-mode)
                      (derived-mode-p 'gptel-mode))
             (message "[iar-quit] Running session summarizer before quit...")
-            (setq summarized (my-gptel-summarize-session)))
+            (setq summarized (iar-summarize-session)))
         (error
          (message "[iar-quit] Summarization error: %s" (error-message-string err))))
       (unless summarized
@@ -49,6 +49,6 @@ If summarization fails, warns the user but quits anyway."
       (run-with-timer 0.5 nil (lambda () (save-buffers-kill-emacs))))))
 
 ;; Override C-x C-c in all keymaps
-(global-set-key (kbd my-gptel-key-quit) #'iar-quit)
+(global-set-key (kbd iar-key-quit) #'iar-quit)
 
-(provide 'iar_quit)
+(provide 'iar-quit)

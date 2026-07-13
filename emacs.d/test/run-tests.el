@@ -33,7 +33,7 @@
 
 ;; Add gptel fork to load-path so tests use the fork (with our fixes)
 ;; instead of the stale ELPA .elc.  The fork is on load-path in
-;; production via gptel_setup.el, so tests should match.
+;; production via iar-gptel-setup.el, so tests should match.
 (let ((fork-path (expand-file-name "gptel-fork" user-emacs-directory)))
   (when (file-directory-p fork-path)
     (add-to-list 'load-path fork-path)))
@@ -48,8 +48,8 @@
 ;; --- Module subdirectories (must match init.el ordering) ---
 ;; Listed in dependency order: core, security, tools, agent, session, dynamic.
 ;; This mirrors the explicit load order in init.el so that inter-module
-;; dependencies (e.g., prompt_loader before delegate_tool, output_sanitizer
-;; before code_tools, file_guard before audit_log) are satisfied.
+;; dependencies (e.g., iar-prompt-loader before iar-delegate-tool, iar-output-sanitizer
+;; before code_tools, iar-file-guard before iar-audit-log) are satisfied.
 
 (defconst test-init-dir (expand-file-name "init.d" user-emacs-directory))
 (defconst test-init-subdirs
@@ -84,28 +84,28 @@
            (list (list :report-file report-path)
                  (list :report-format 'text)))))
 
-;; --- Load central parameters (must be before init.d modules) ---
+;; --- Load central iar-parameters (must be before init.d modules) ---
 
 (load-file (expand-file-name "metaconfig/parameters.el" user-emacs-directory))
 
 ;; --- Load shared utilities (must be before all other init.d modules) ---
 
-(load (expand-file-name "utils.el"
+(load (expand-file-name "iar-utils.el"
                         (expand-file-name "shared" test-init-dir))
       nil t)
 
-;; --- Load shared agent utilities (must be before task_tools, agent_loader, etc.) ---
+;; --- Load shared agent utilities (must be before task_tools, iar-agent-loader, etc.) ---
 
-(load (expand-file-name "agent_utils.el"
+(load (expand-file-name "iar-agent-utils.el"
                         (expand-file-name "shared" test-init-dir))
       nil t)
 
 ;; --- Load prompt loader (must be before modules that use prompts) ---
-;; prompt_loader.el lives in init.d/agent/ and must load before
-;; delegate_tool, memory_tools, and loop_guard which call
-;; my-gptel--load-prompt at load time (in defconst forms).
+;; iar-prompt-loader.el lives in init.d/agent/ and must load before
+;; iar-delegate-tool, iar-memory-tools, and iar-loop-guard which call
+;; iar--load-prompt at load time (in defconst forms).
 
-(load (expand-file-name "prompt_loader.el"
+(load (expand-file-name "iar-prompt-loader.el"
                         (expand-file-name "agent" test-init-dir))
       nil t)
 

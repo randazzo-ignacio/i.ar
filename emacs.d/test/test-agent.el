@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Tests for agent_loader.el
+;;; Tests for iar-agent-loader.el
 ;; Tests agent profile loading, #+INCLUDE expansion, path resolution,
 ;; and agent name tracking.
 
@@ -8,7 +8,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'ox)
-(require 'agent_loader)
+(require 'iar-agent-loader)
 
 ;;; --- Test fixtures ---
 
@@ -64,21 +64,21 @@ Temporarily binds `user-emacs-directory' to the temp dir."
 ;;; --- Tests ---
 
 (ert-deftest test-agent-read-profile-basic ()
-  "my-gptel-read-agent-profile should read an org file and return its content."
+  "iar-read-agent-profile should read an org file and return its content."
   (with-agent-fixture
     (let* ((alpha-path (expand-file-name "agents.d/agents/alpha/prompt.org"
                                          test-agent--tmpdir))
-           (profile (my-gptel-read-agent-profile alpha-path)))
+           (profile (iar-read-agent-profile alpha-path)))
       (should (stringp profile))
       (should (string-match-p "ALPHA AGENT" profile))
       (should (string-match-p "Alpha does things" profile)))))
 
 (ert-deftest test-agent-read-profile-expands-includes ()
-  "my-gptel-read-agent-profile should expand #+INCLUDE directives."
+  "iar-read-agent-profile should expand #+INCLUDE directives."
   (with-agent-fixture
     (let* ((alpha-path (expand-file-name "agents.d/agents/alpha/prompt.org"
                                          test-agent--tmpdir))
-           (profile (my-gptel-read-agent-profile alpha-path)))
+           (profile (iar-read-agent-profile alpha-path)))
       ;; Should contain content from base_context.org
       (should (string-match-p "SHARED CONTEXT" profile))
       (should (string-match-p "shared context for all agents" profile))
@@ -89,19 +89,19 @@ Temporarily binds `user-emacs-directory' to the temp dir."
       (should-not (string-match-p "#\\+INCLUDE" profile)))))
 
 (ert-deftest test-agent-read-profile-no-includes ()
-  "my-gptel-read-agent-profile should work with files that have no includes."
+  "iar-read-agent-profile should work with files that have no includes."
   (with-agent-fixture
     (let* ((beta-path (expand-file-name "agents.d/agents/beta/prompt.org"
                                         test-agent--tmpdir))
-           (profile (my-gptel-read-agent-profile beta-path)))
+           (profile (iar-read-agent-profile beta-path)))
       (should (stringp profile))
       (should (string-match-p "BETA AGENT" profile))
       (should (string-match-p "Beta has no includes" profile)))))
 
 (ert-deftest test-agent-read-profile-missing-file ()
-  "my-gptel-read-agent-profile should signal error for missing file."
+  "iar-read-agent-profile should signal error for missing file."
   (condition-case err
-      (my-gptel-read-agent-profile "/nonexistent/agent/prompt.org")
+      (iar-read-agent-profile "/nonexistent/agent/prompt.org")
     (error
      ;; Should get an error -- any error is fine
      (should err))
@@ -109,39 +109,39 @@ Temporarily binds `user-emacs-directory' to the temp dir."
      (ert-fail "Expected error for missing file, but got success"))))
 
 (ert-deftest test-agent-load-profile-validates-name ()
-  "my-gptel--load-agent-profile should reject names with path traversal."
+  "iar--load-agent-profile should reject names with path traversal."
   (condition-case err
-      (my-gptel--load-agent-profile "../../etc/passwd")
+      (iar--load-agent-profile "../../etc/passwd")
     (error
      (should (string-match-p "Invalid agent name" (error-message-string err))))
     (:success
      (ert-fail "Expected error for path traversal attempt"))))
 
 (ert-deftest test-agent-load-profile-rejects-special-chars ()
-  "my-gptel--load-agent-profile should reject names with special characters."
+  "iar--load-agent-profile should reject names with special characters."
   (dolist (bad-name '("foo bar" "foo/bar" "foo;bar" "foo&bar" "foo|bar"))
     (condition-case err
-        (my-gptel--load-agent-profile bad-name)
+        (iar--load-agent-profile bad-name)
       (error
        (should (string-match-p "Invalid agent name" (error-message-string err))))
       (:success
        (ert-fail (format "Expected error for agent name: %s" bad-name))))))
 
 (ert-deftest test-agent-load-profile-returns-nil-for-missing ()
-  "my-gptel--load-agent-profile should return nil for nonexistent agent."
-  (let ((result (my-gptel--load-agent-profile "nonexistent_agent_xyzzy")))
+  "iar--load-agent-profile should return nil for nonexistent agent."
+  (let ((result (iar--load-agent-profile "nonexistent_agent_xyzzy")))
     (should (null result))))
 
 (ert-deftest test-agent-load-profile-finds-real-agent ()
-  "my-gptel--load-agent-profile should find a real agent in agents.d/."
-  (let ((result (my-gptel--load-agent-profile "reviewer")))
+  "iar--load-agent-profile should find a real agent in agents.d/."
+  (let ((result (iar--load-agent-profile "reviewer")))
     (should (stringp result))
     (should (string-match-p "reviewer" result))))
 
-;;; --- my-gptel-load-agent tests ---
+;;; --- iar-load-agent tests ---
 
 (ert-deftest test-agent-load-agent-errors-no-valid-agents ()
-  "my-gptel-load-agent should signal user-error when agents.d has no valid agents.
+  "iar-load-agent should signal user-error when agents.d has no valid agents.
 Uses a temp dir with agents.d/ but no agent subdirectories containing prompt.org.
 Verifies both the error type and the error message content."
   (let ((tmp-dir (make-temp-file "test-agent-load-" :dir-flag)))
@@ -150,13 +150,13 @@ Verifies both the error type and the error message content."
               (agents-dir (expand-file-name "agents.d/agents" tmp-dir)))
           (make-directory agents-dir t)
           ;; No agent directories with prompt.org -- should user-error
-          (let ((err (should-error (my-gptel-load-agent) :type 'user-error)))
+          (let ((err (should-error (iar-load-agent) :type 'user-error)))
             (should (string-match-p "No agent profiles found"
                                     (error-message-string err)))))
       (delete-directory tmp-dir t))))
 
 (ert-deftest test-agent-load-agent-creates-agents-dir ()
-  "my-gptel-load-agent should create agents.d if it doesn't exist.
+  "iar-load-agent should create agents.d if it doesn't exist.
 The function calls (make-directory agent-dir t) when the directory
 is missing. Verify the directory is created."
   (let ((tmp-dir (make-temp-file "test-agent-load-" :dir-flag)))
@@ -164,7 +164,7 @@ is missing. Verify the directory is created."
         (let ((user-emacs-directory tmp-dir))
           ;; agents.d doesn't exist yet -- load-agent creates it, then
           ;; finds no agents and signals user-error
-          (let ((err (should-error (my-gptel-load-agent) :type 'user-error)))
+          (let ((err (should-error (iar-load-agent) :type 'user-error)))
             (should (string-match-p "No agent profiles found"
                                     (error-message-string err))))
           ;; agents.d should now exist
@@ -172,7 +172,7 @@ is missing. Verify the directory is created."
       (delete-directory tmp-dir t))))
 
 (ert-deftest test-agent-load-agent-discovers-agents ()
-  "my-gptel-load-agent should discover agents with prompt.org files.
+  "iar-load-agent should discover agents with prompt.org files.
 Uses with-agent-fixture which creates alpha and beta agents.
 Mocks completing-read to select 'alpha' and verifies the profile is loaded.
 Uses text-mode (not fundamental-mode) because gptel-mode requires a
@@ -184,22 +184,22 @@ text-derived major mode."
                  (car choices))))
       (with-temp-buffer
         (text-mode)
-        (my-gptel-load-agent)
+        (iar-load-agent)
         ;; The function returns nil (message-based side effect)
         ;; but should have set buffer-local variables
-        (should (equal my-gptel--current-agent-name "alpha"))
-        (should (stringp my-gptel--current-agent-file))
+        (should (equal iar--current-agent-name "alpha"))
+        (should (stringp iar--current-agent-file))
         (should (string-prefix-p
                  (expand-file-name "agents.d/agents" test-agent--tmpdir)
-                 my-gptel--current-agent-file))
-        (should (string-match-p "prompt\\.org" my-gptel--current-agent-file))
+                 iar--current-agent-file))
+        (should (string-match-p "prompt\\.org" iar--current-agent-file))
         (should (stringp gptel-system-prompt))
         (should (string-match-p "ALPHA AGENT" gptel-system-prompt))
         ;; Verify #+INCLUDE expansion worked through the full pipeline
         (should (string-match-p "SHARED CONTEXT" gptel-system-prompt))))))
 
 (ert-deftest test-agent-load-agent-enables-gptel-mode ()
-  "my-gptel-load-agent should enable gptel-mode if not already active.
+  "iar-load-agent should enable gptel-mode if not already active.
 Uses text-mode because gptel-mode requires a text-derived major mode."
   (with-agent-fixture
     (cl-letf (((symbol-function 'completing-read)
@@ -209,12 +209,12 @@ Uses text-mode because gptel-mode requires a text-derived major mode."
         (text-mode)
         ;; gptel-mode not active yet
         (should-not (bound-and-true-p gptel-mode))
-        (my-gptel-load-agent)
+        (iar-load-agent)
         ;; gptel-mode should now be active
         (should (bound-and-true-p gptel-mode))))))
 
 (ert-deftest test-agent-load-agent-preserves-existing-gptel-mode ()
-  "my-gptel-load-agent should not error when gptel-mode is already active.
+  "iar-load-agent should not error when gptel-mode is already active.
 The (unless (bound-and-true-p gptel-mode) ...) guard should skip
 re-enabling gptel-mode when it's already active."
   (with-agent-fixture
@@ -225,11 +225,11 @@ re-enabling gptel-mode when it's already active."
         (text-mode)
         (gptel-mode 1)
         (should (bound-and-true-p gptel-mode))
-        (my-gptel-load-agent)
+        (iar-load-agent)
         (should (bound-and-true-p gptel-mode))))))
 
 (ert-deftest test-agent-load-agent-filters-invalid-names ()
-  "my-gptel-load-agent should only discover directories matching the agent name regex.
+  "iar-load-agent should only discover directories matching the agent name regex.
 The directory-files regex \\`[a-zA-Z0-9_-]+\\' filters out hidden files,
 files with extensions, and directories with special characters."
   (let ((tmp-dir (make-temp-file "test-agent-filter-" :dir-flag)))
@@ -261,14 +261,14 @@ files with extensions, and directories with special characters."
                          (car choices))))
               (with-temp-buffer
                 (text-mode)
-                (my-gptel-load-agent))
+                (iar-load-agent))
               ;; Only valid-agent should be offered
               (should (equal offered-choices '("valid-agent"))))))
       (delete-directory tmp-dir t))))
 
 (ert-deftest test-agent-load-agent-keybinding-registered ()
-  "C-c a should be bound to my-gptel-load-agent in gptel-mode-map."
+  "C-c a should be bound to iar-load-agent in gptel-mode-map."
   (with-eval-after-load 'gptel
-    (should (eq (keymap-lookup gptel-mode-map "C-c a") 'my-gptel-load-agent))))
+    (should (eq (keymap-lookup gptel-mode-map "C-c a") 'iar-load-agent))))
 
 (provide 'test-agent)

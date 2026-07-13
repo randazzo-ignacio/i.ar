@@ -2,23 +2,23 @@
 
 ;;; append_file tool for gptel
 ;; Appends text content to the end of an existing file.
-;; Security: checks file_guard before writing. Logs to audit log.
+;; Security: checks iar-file-guard before writing. Logs to audit log.
 
 (require 'gptel)
-(require 'file_guard)
-(require 'audit_log)
-(require 'utils)  ; my-gptel--with-suppressed-save-hooks
+(require 'iar-file-guard)
+(require 'iar-audit-log)
+(require 'iar-utils)  ; iar--with-suppressed-save-hooks
 
-(defun my-gptel--fs-append-file (filepath content)
+(defun iar--mygptel--fs-append-file (filepath content)
   "Append CONTENT to the end of FILEPATH.
 If the file is open in an Emacs buffer, appends to that buffer and saves.
 Otherwise, appends directly to the file on disk.
 If the file exists and does not end with a newline, one is prepended.
 If the file does not exist, it is created.  Parent directories are
-created if needed, matching `my-gptel--fs-write-file' behavior.
+created if needed, matching `iar--mygptel--fs-write-file' behavior.
 Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
   (let* ((expanded-path (expand-file-name filepath))
-         (guard-reason (my-gptel--guard-check-append expanded-path)))
+         (guard-reason (iar--guard-check-append expanded-path)))
     (if guard-reason
         (format "Error: %s" guard-reason)
       (let ((buf (find-buffer-visiting expanded-path)))
@@ -43,7 +43,7 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
                                                            (point-max))))
                           (insert "\n"))
                         (insert content))
-                      (my-gptel--with-suppressed-save-hooks
+                      (iar--with-suppressed-save-hooks
                         (save-buffer))
                       (my-gptel--audit-log-append expanded-path)
                       (format "Success: Content appended to '%s'" expanded-path))))
@@ -71,6 +71,6 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
   :description "Append text content to the end of an existing file. Use this to add new notes, logs, or subheadings to a file without erasing its current contents. Automatically prepends a newline if the file does not already end with one, ensuring appended content always starts on a fresh line."
   :args (list '(:name "filepath" :type "string" :description "Absolute path to the file.")
               '(:name "content" :type "string" :description "The text content to add to the end of the file."))
-  :function #'my-gptel--fs-append-file))
+  :function #'iar--mygptel--fs-append-file))
 
 (provide 'iar-tool--append-file)

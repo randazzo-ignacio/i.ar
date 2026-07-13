@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Tests for audit_log.el
+;;; Tests for iar-audit-log.el
 ;; Tests the audit logging system: agent name resolution, log formatting,
 ;; and the wrapper functions for each tool type (write, replace, append, exec).
 ;; Uses a temporary audit log path to avoid polluting the real audit log.
@@ -8,12 +8,12 @@
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
-(require 'audit_log)
+(require 'iar-audit-log)
 
 ;; Silence byte-compiler warnings for dynamically-bound test variables.
-(defvar my-gptel--audit-log-max-size)
-(defvar my-gptel--current-agent-name)
-(declare-function my-gptel--audit-maybe-rotate "audit_log" ())
+(defvar iar-audit-log-max-size)
+(defvar iar--current-agent-name)
+(declare-function my-gptel--audit-maybe-rotate "iar-audit-log" ())
 
 ;;; --- Test fixtures ---
 
@@ -29,9 +29,9 @@
   (setq test-audit--tmpdir (make-temp-file "test-audit-" :dir-flag))
   (setq test-audit--log-path (expand-file-name "audit.log" test-audit--tmpdir))
   (setq test-audit--old-agent-name
-        (and (boundp 'my-gptel--current-agent-name)
-             my-gptel--current-agent-name))
-  (setq my-gptel--current-agent-name "testagent"))
+        (and (boundp 'iar--current-agent-name)
+             iar--current-agent-name))
+  (setq iar--current-agent-name "testagent"))
 
 (defun test-audit--teardown ()
   "Remove the temporary directory and restore agent name."
@@ -39,16 +39,16 @@
     (delete-directory test-audit--tmpdir t))
   (setq test-audit--tmpdir nil)
   (setq test-audit--log-path nil)
-  (setq my-gptel--current-agent-name test-audit--old-agent-name))
+  (setq iar--current-agent-name test-audit--old-agent-name))
 
 (defmacro with-audit-fixture (&rest body)
   "Execute BODY with a temporary audit log path and test agent name.
-Temporarily rebinds `my-gptel--audit-log-path' to a temp file."
+Temporarily rebinds `iar--audit-log-path' to a temp file."
   (declare (indent 0))
   `(unwind-protect
        (progn
          (test-audit--setup)
-         (let ((my-gptel--audit-log-path test-audit--log-path))
+         (let ((iar--audit-log-path test-audit--log-path))
            ,@body))
      (test-audit--teardown)))
 
@@ -63,19 +63,19 @@ Temporarily rebinds `my-gptel--audit-log-path' to a temp file."
 ;;; --- Agent name resolution tests ---
 
 (ert-deftest test-audit-get-agent-name-when-set ()
-  "my-gptel--get-agent-name should return the current agent name."
-  (let ((my-gptel--current-agent-name "darwin"))
-    (should (string= (my-gptel--get-agent-name) "darwin"))))
+  "iar--get-agent-name should return the current agent name."
+  (let ((iar--current-agent-name "darwin"))
+    (should (string= (iar--get-agent-name) "darwin"))))
 
 (ert-deftest test-audit-get-agent-name-when-unset ()
-  "my-gptel--get-agent-name should return 'unknown' when no agent is set."
-  (let (my-gptel--current-agent-name)
-    (should (string= (my-gptel--get-agent-name) "unknown"))))
+  "iar--get-agent-name should return 'unknown' when no agent is set."
+  (let (iar--current-agent-name)
+    (should (string= (iar--get-agent-name) "unknown"))))
 
 (ert-deftest test-audit-get-agent-name-when-nil ()
-  "my-gptel--get-agent-name should return 'unknown' when agent name is nil."
-  (let ((my-gptel--current-agent-name nil))
-    (should (string= (my-gptel--get-agent-name) "unknown"))))
+  "iar--get-agent-name should return 'unknown' when agent name is nil."
+  (let ((iar--current-agent-name nil))
+    (should (string= (iar--get-agent-name) "unknown"))))
 
 ;;; --- Core audit log tests ---
 
@@ -105,19 +105,19 @@ Temporarily rebinds `my-gptel--audit-log-path' to a temp file."
   (let ((test-audit--tmpdir (make-temp-file "test-audit-" :dir-flag))
         (test-audit--log-path nil)
         (test-audit--old-agent-name
-         (and (boundp 'my-gptel--current-agent-name)
-              my-gptel--current-agent-name)))
-    (setq my-gptel--current-agent-name "testagent")
+         (and (boundp 'iar--current-agent-name)
+              iar--current-agent-name)))
+    (setq iar--current-agent-name "testagent")
     (setq test-audit--log-path
           (expand-file-name "workspace/audit.log" test-audit--tmpdir))
     (unwind-protect
-        (let ((my-gptel--audit-log-path test-audit--log-path))
+        (let ((iar--audit-log-path test-audit--log-path))
           (should-not (file-exists-p (file-name-directory test-audit--log-path)))
           (my-gptel--audit-log "write_file" "/test.txt")
           (should (file-exists-p test-audit--log-path)))
       (when (and test-audit--tmpdir (file-exists-p test-audit--tmpdir))
         (delete-directory test-audit--tmpdir t))
-      (setq my-gptel--current-agent-name test-audit--old-agent-name))))
+      (setq iar--current-agent-name test-audit--old-agent-name))))
 
 ;;; --- Wrapper function tests ---
 
@@ -191,8 +191,8 @@ The condition-case should catch the error and log it via `message'
 instead of propagating it.  The function returns the result of the
 `message' call (a string) on error, not nil."
   ;; Bind to an unwritable path -- the condition-case should swallow the error
-  (let ((my-gptel--audit-log-path "/proc/cannot/write/audit.log")
-        (my-gptel--current-agent-name "testagent"))
+  (let ((iar--audit-log-path "/proc/cannot/write/audit.log")
+        (iar--current-agent-name "testagent"))
     ;; This should not signal an error.  The condition-case catches it
     ;; and the error handler calls `message', which returns a string.
     (should (stringp (my-gptel--audit-log "write_file" "/test.txt")))))
@@ -278,7 +278,7 @@ audit log as exit=-1."
 After rotation, the old log is renamed to audit.log.1 and a fresh
 log is started with the new entry."
   (with-audit-fixture
-    (let ((my-gptel--audit-log-max-size 100)) ; 100 bytes -- very small
+    (let ((iar-audit-log-max-size 100)) ; 100 bytes -- very small
       ;; Write enough entries to exceed 100 bytes
       (my-gptel--audit-log "write_file" "/path/that/is/long/enough/to/trigger/rotation/1")
       (my-gptel--audit-log "write_file" "/path/that/is/long/enough/to/trigger/rotation/2")
@@ -302,7 +302,7 @@ log is started with the new entry."
 (ert-deftest test-audit-no-rotation-when-under-max-size ()
   "my-gptel--audit-log should NOT rotate when the log is under max-size."
   (with-audit-fixture
-    (let ((my-gptel--audit-log-max-size (* 10 1024 1024))) ; 10MB
+    (let ((iar-audit-log-max-size (* 10 1024 1024))) ; 10MB
       (my-gptel--audit-log "write_file" "/small/path.txt")
       (should-not (file-exists-p (concat test-audit--log-path ".1")))
       (let ((content (test-audit--read-log)))
@@ -311,7 +311,7 @@ log is started with the new entry."
 (ert-deftest test-audit-no-rotation-when-max-size-nil ()
   "my-gptel--audit-log should NOT rotate when max-size is nil."
   (with-audit-fixture
-    (let ((my-gptel--audit-log-max-size nil))
+    (let ((iar-audit-log-max-size nil))
       ;; Write many entries
       (dotimes (i 10)
         (my-gptel--audit-log "write_file" (format "/path/number/%d/abcdefghijklmnopqrstuvwxyz" i)))
@@ -323,7 +323,7 @@ log is started with the new entry."
 (ert-deftest test-audit-rotation-overwrites-old-rotated-file ()
   "my-gptel--audit-log rotation should overwrite any existing .1 file."
   (with-audit-fixture
-    (let ((my-gptel--audit-log-max-size 50))
+    (let ((iar-audit-log-max-size 50))
       ;; Create a fake old rotated file with stale content
       (let ((rotated-path (concat test-audit--log-path ".1")))
         (with-temp-file rotated-path
@@ -344,7 +344,7 @@ log is started with the new entry."
   "my-gptel--audit-maybe-rotate should handle non-existent log gracefully.
 When the log file doesn't exist yet, rotation should be a no-op."
   (with-audit-fixture
-    (let ((my-gptel--audit-log-max-size 100))
+    (let ((iar-audit-log-max-size 100))
       ;; Log doesn't exist yet -- should not crash
       (should-not (file-exists-p test-audit--log-path))
       (my-gptel--audit-maybe-rotate)
@@ -357,8 +357,8 @@ When the log file doesn't exist yet, rotation should be a no-op."
 The condition-case should catch the error and log it via `message'
 instead of silently swallowing it.  This makes audit log failures
 observable in *Messages*."
-  (let ((my-gptel--audit-log-path "/proc/cannot/write/audit.log")
-        (my-gptel--current-agent-name "testagent")
+  (let ((iar--audit-log-path "/proc/cannot/write/audit.log")
+        (iar--current-agent-name "testagent")
         (logged-messages nil))
     (cl-letf (((symbol-function 'message)
                (lambda (fmt &rest args)
@@ -373,7 +373,7 @@ observable in *Messages*."
 If rename-file fails (e.g., permissions), the error should be logged
 via `message' instead of silently swallowed."
   (with-audit-fixture
-    (let ((my-gptel--audit-log-max-size 1) ; tiny -- triggers rotation
+    (let ((iar-audit-log-max-size 1) ; tiny -- triggers rotation
           (logged-messages nil))
       ;; Write an entry to create the log file
       (my-gptel--audit-log "write_file" "/test.txt")
@@ -397,7 +397,7 @@ via `message' instead of silently swallowed."
 nil is the documented 'disable rotation' value, but the guard must
 also handle it gracefully without crashing on (> nil 0)."
   (with-audit-fixture
-    (let ((my-gptel--audit-log-max-size nil))
+    (let ((iar-audit-log-max-size nil))
       ;; Write an entry to create the log
       (my-gptel--audit-log "write_file" "/test.txt")
       ;; Should not crash, should not rotate
@@ -411,7 +411,7 @@ also handle it gracefully without crashing on (> nil 0)."
 Zero is not a positive integer.  Without the guard, (> size 0) would
 be true for any non-empty log, causing rotation on every write."
   (with-audit-fixture
-    (let ((my-gptel--audit-log-max-size 0))
+    (let ((iar-audit-log-max-size 0))
       (my-gptel--audit-log "write_file" "/test.txt")
       ;; Should not crash, should not rotate
       (should-not (file-exists-p (concat test-audit--log-path ".1")))
@@ -423,7 +423,7 @@ be true for any non-empty log, causing rotation on every write."
 A negative value would cause (> size negative) to always be true,
 triggering rotation on every write."
   (with-audit-fixture
-    (let ((my-gptel--audit-log-max-size -1))
+    (let ((iar-audit-log-max-size -1))
       (my-gptel--audit-log "write_file" "/test.txt")
       ;; Should not crash, should not rotate
       (should-not (file-exists-p (concat test-audit--log-path ".1")))
@@ -436,7 +436,7 @@ A non-integer value (e.g., string) would crash > with wrong-type-argument
 without the guard.  The :safe predicate rejects non-integers at the
 file-local-variable level, but a direct setq bypasses it."
   (with-audit-fixture
-    (let ((my-gptel--audit-log-max-size "100"))
+    (let ((iar-audit-log-max-size "100"))
       (my-gptel--audit-log "write_file" "/test.txt")
       ;; Should not crash, should not rotate
       (should-not (file-exists-p (concat test-audit--log-path ".1")))

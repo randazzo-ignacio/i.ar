@@ -9,17 +9,17 @@
 ;;               the gptel system message in the current chat buffer.
 
 (require 'gptel)
-(require 'agent_utils)  ; validation (moved from task_tools)
-(require 'utils)
-(require 'agent_loader)  ; my-gptel--load-agent-profile (now defined here)
+(require 'iar-agent-utils)  ; validation (moved from task_tools)
+(require 'iar-utils)
+(require 'iar-agent-loader)  ; iar--load-agent-profile (now defined here)
 
 ;; Declared in metaconfig/parameters.el (loaded before init.d modules).
-(defvar my-gptel-agents-path nil
+(defvar iar-agents-path nil
   "Relative path to agent profile directories.")
 
 ;;; --- reload_os ---
 
-(defun my-gptel-tool-reload-os ()
+(defun iar--mygptel--tool-reload-os ()
   "Reload Emacs init.el to pick up modifications to .el files.
 Resets the global gptel-tools list first to avoid duplicate tool
 registrations, then re-loads init.el so all add-to-list calls
@@ -45,26 +45,26 @@ in the current buffer so it inherits the fresh defaults."
   :name "reload_os"
   :description "Reload Emacs init.el to pick up modifications to .el files. Use after modifying Emacs Lisp files to test changes without restarting Emacs. Resets and rebuilds gptel-tools automatically."
   :args (list)
-  :function #'my-gptel-tool-reload-os))
+  :function #'iar--mygptel--tool-reload-os))
 
 ;;; --- reload_agent ---
 
-(defun my-gptel-tool-reload-agent (&optional agent-name)
+(defun iar--mygptel--tool-reload-agent (&optional agent-name)
   "Reload the current agent's profile from its prompt.org file and update
 the gptel system message in the current buffer.
 If AGENT-NAME is provided (e.g., \"mccarthy\"), reload that agent
 instead of the currently loaded one."
   (condition-case err
-      (let* ((agent-dir (expand-file-name my-gptel-agents-path user-emacs-directory))
+      (let* ((agent-dir (expand-file-name iar-agents-path user-emacs-directory))
              ;; Determine which agent to load
              (target-name
               (if (and agent-name (stringp agent-name) (string-match-p "\\S-" agent-name))
                   (progn
-                    (my-gptel--validate-agent-name agent-name)
+                    (iar--validate-agent-name agent-name)
                     agent-name)
-                 ;; Note: my-gptel--load-agent-profile also validates,
+                 ;; Note: iar--load-agent-profile also validates,
                  ;; so this is defense-in-depth, not the primary check.
-                (let ((current (my-gptel--get-agent-name)))
+                (let ((current (iar--get-agent-name)))
                   (if (not (equal "unknown" current))
                       current
                     (error "No agent currently loaded in this buffer. Pass agent_name to reload a specific agent.")))))
@@ -74,14 +74,14 @@ instead of the currently loaded one."
                   (error "Path traversal blocked for agent reload")))
              ;; Read the profile via the shared loader (validates name,
              ;; checks path traversal, expands #+INCLUDE directives)
-             (profile (my-gptel--load-agent-profile target-name)))
+             (profile (iar--load-agent-profile target-name)))
         (unless profile
           (error "Agent profile '%s' not found in agents.d/" target-name))
         ;; Update system prompt in current buffer
         (setq-local gptel-system-prompt profile)
         ;; Track the loaded agent file and name
-        (setq-local my-gptel--current-agent-file target-file)
-        (setq-local my-gptel--current-agent-name target-name)
+        (setq-local iar--current-agent-file target-file)
+        (setq-local iar--current-agent-name target-name)
         (format "Success: Reloaded agent profile '%s'. System message updated in current buffer (%d chars)."
                 target-name (length profile)))
     (error
@@ -92,6 +92,6 @@ instead of the currently loaded one."
   :name "reload_agent"
   :description "Reload the current agent's gptel prompt from its .org file, updating the system message in the current chat buffer. Use after modifying an agent's .org profile to test changes without killing the chat. Optionally pass agent_name to reload a specific agent."
   :args (list '(:name "agent_name" :type "string" :description "Optional: name of agent to reload (e.g., 'mccarthy'). If omitted, reloads the currently loaded agent." :optional t))
-  :function #'my-gptel-tool-reload-agent))
+  :function #'iar--mygptel--tool-reload-agent))
 
-(provide 'reload_tools)
+(provide 'iar-reload-tools)

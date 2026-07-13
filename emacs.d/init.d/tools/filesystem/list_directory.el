@@ -6,7 +6,7 @@
 (require 'gptel)
 (require 'cl-lib)
 
-(defun my-gptel--fs-list-directory (path)
+(defun iar--mygptel--fs-list-directory (path)
   "List the contents of directory PATH.
 Returns newline-separated file names, including hidden files (dotfiles).
 Excludes only the . and .. directory entries.
@@ -31,6 +31,6 @@ On error, returns a string starting with \\='Error:\\='."
   :name "list_directory"
   :description "List the contents of a local directory. Use this to find files on the machine running Emacs."
   :args (list '(:name "path" :type "string" :description "Absolute path to the directory."))
-  :function #'my-gptel--fs-list-directory))
+  :function #'iar--mygptel--fs-list-directory))
 
 (provide 'iar-tool--list-directory)

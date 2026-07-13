@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Tests for gptel_setup.el
+;;; Tests for iar-gptel-setup.el
 ;; Tests that the gptel backend is configured correctly.
 
 (require 'ert)

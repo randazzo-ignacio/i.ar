@@ -1,47 +1,47 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Tests for request_logger.el and fsm_tracer.el
+;;; Tests for iar-request-logger.el and iar-fsm-tracer.el
 
 (require 'ert)
 (require 'subr-x)
 (require 'cl-lib)
 
 ;; Declare special variables
-(defvar my-gptel-request-log-enabled nil)
-(defvar my-gptel-fsm-trace-enabled nil)
-(defvar my-gptel--current-agent-name nil)
+(defvar iar-request-log-enabled nil)
+(defvar iar-fsm-trace-enabled nil)
+(defvar iar--current-agent-name nil)
 
-;; Load shared utils first (dependency of debug modules)
-(load-file (expand-file-name "init.d/shared/utils.el" user-emacs-directory))
+;; Load shared iar-utils first (dependency of debug modules)
+(load-file (expand-file-name "init.d/shared/iar-utils.el" user-emacs-directory))
 ;; Load the modules under test
-(load-file (expand-file-name "init.d/debug/request_logger.el" user-emacs-directory))
-(load-file (expand-file-name "init.d/debug/fsm_tracer.el" user-emacs-directory))
+(load-file (expand-file-name "init.d/debug/iar-request-logger.el" user-emacs-directory))
+(load-file (expand-file-name "init.d/debug/iar-fsm-tracer.el" user-emacs-directory))
 
 ;;; --- Request Logger Tests ---
 
 (ert-deftest test-request-logger-agent-name ()
   "Agent name should fall back to unknown when not set."
-  (let ((my-gptel--current-agent-name nil))
-    (should (equal (my-gptel--get-agent-name) "unknown")))
-  (let ((my-gptel--current-agent-name "darwin"))
-    (should (equal (my-gptel--get-agent-name) "darwin"))))
+  (let ((iar--current-agent-name nil))
+    (should (equal (iar--get-agent-name) "unknown")))
+  (let ((iar--current-agent-name "darwin"))
+    (should (equal (iar--get-agent-name) "darwin"))))
 
 (ert-deftest test-request-logger-log-path ()
   "Log path should include agent name and be under audit/."
-  (let ((my-gptel--current-agent-name "test-agent"))
-    (let ((path (my-gptel--request-log-path)))
+  (let ((iar--current-agent-name "test-agent"))
+    (let ((path (iar--request-log-path)))
       (should (string-match-p "audit/test-agent/REQUESTS\\.log$" path)))))
 
 (ert-deftest test-request-logger-write ()
   "Write function should create log file with labeled content."
   (let* ((test-dir (make-temp-file "reqlog-test-" t))
-         (my-gptel--current-agent-name "test-agent")
+         (iar--current-agent-name "test-agent")
          (mock-log-path (expand-file-name "REQUESTS.log" test-dir)))
     (unwind-protect
         (progn
-          (cl-letf (((symbol-function 'my-gptel--request-log-path)
+          (cl-letf (((symbol-function 'iar--request-log-path)
                      (lambda () mock-log-path)))
-            (my-gptel--request-log-write 'request "{\"test\": true}")
+            (iar--request-log-write 'request "{\"test\": true}")
             (should (file-exists-p mock-log-path))
             (let ((content (with-temp-buffer
                              (insert-file-contents mock-log-path)
@@ -54,15 +54,15 @@
 (ert-deftest test-request-logger-outgoing-extracts-json ()
   "Outgoing parser should extract JSON from config string."
   (let* ((test-dir (make-temp-file "reqlog-out-" t))
-         (my-gptel--current-agent-name "test-agent")
-         (my-gptel-request-log-enabled t)
+         (iar--current-agent-name "test-agent")
+         (iar-request-log-enabled t)
          (mock-log-path (expand-file-name "REQUESTS.log" test-dir)))
     (unwind-protect
         (progn
-          (cl-letf (((symbol-function 'my-gptel--request-log-path)
+          (cl-letf (((symbol-function 'iar--request-log-path)
                      (lambda () mock-log-path)))
             ;; Config string format: config lines + newline + JSON
-            (my-gptel--request-log-outgoing
+            (iar--mygptel--request-log-outgoing
              "url = http://localhost:11434\nheader = Content-Type: application/json\ndata-binary = @-\n\n{\"model\": \"test\", \"messages\": []}")
             (should (file-exists-p mock-log-path))
             (let ((content (with-temp-buffer
@@ -77,14 +77,14 @@
 (ert-deftest test-request-logger-disabled ()
   "When disabled, no logging should occur."
   (let* ((test-dir (make-temp-file "reqlog-dis-" t))
-         (my-gptel--current-agent-name "test-agent")
-         (my-gptel-request-log-enabled nil)
+         (iar--current-agent-name "test-agent")
+         (iar-request-log-enabled nil)
          (mock-log-path (expand-file-name "REQUESTS.log" test-dir)))
     (unwind-protect
         (progn
-          (cl-letf (((symbol-function 'my-gptel--request-log-path)
+          (cl-letf (((symbol-function 'iar--request-log-path)
                      (lambda () mock-log-path)))
-            (my-gptel--request-log-outgoing "{\"test\": true}")
+            (iar--mygptel--request-log-outgoing "{\"test\": true}")
             (should-not (file-exists-p mock-log-path))))
       (when (file-exists-p test-dir)
         (delete-directory test-dir t)))))
@@ -93,27 +93,27 @@
 
 (ert-deftest test-fsm-tracer-agent-name ()
   "Agent name should fall back to unknown when not set."
-  (let ((my-gptel--current-agent-name nil))
-    (should (equal (my-gptel--get-agent-name) "unknown")))
-  (let ((my-gptel--current-agent-name "gardener"))
-    (should (equal (my-gptel--get-agent-name) "gardener"))))
+  (let ((iar--current-agent-name nil))
+    (should (equal (iar--get-agent-name) "unknown")))
+  (let ((iar--current-agent-name "gardener"))
+    (should (equal (iar--get-agent-name) "gardener"))))
 
 (ert-deftest test-fsm-tracer-log-path ()
   "Log path should include agent name and be under audit/."
-  (let ((my-gptel--current-agent-name "test-agent"))
-    (let ((path (my-gptel--fsm-trace-log-path)))
+  (let ((iar--current-agent-name "test-agent"))
+    (let ((path (iar--fsm-trace-log-path)))
       (should (string-match-p "audit/test-agent/FSM\\.log$" path)))))
 
 (ert-deftest test-fsm-tracer-write ()
   "Write function should create log file with timestamped content."
   (let* ((test-dir (make-temp-file "fsmlog-test-" t))
-         (my-gptel--current-agent-name "test-agent")
+         (iar--current-agent-name "test-agent")
          (mock-log-path (expand-file-name "FSM.log" test-dir)))
     (unwind-protect
         (progn
-          (cl-letf (((symbol-function 'my-gptel--fsm-trace-log-path)
+          (cl-letf (((symbol-function 'iar--fsm-trace-log-path)
                      (lambda () mock-log-path)))
-            (my-gptel--fsm-trace-write "FSM INIT -> WAIT")
+            (iar--fsm-trace-write "FSM INIT -> WAIT")
             (should (file-exists-p mock-log-path))
             (let ((content (with-temp-buffer
                              (insert-file-contents mock-log-path)
@@ -124,23 +124,23 @@
 
 (ert-deftest test-fsm-tracer-count-plist ()
   "Count plist function should return length of list value or 0."
-  (should (= (my-gptel--fsm-trace-count-plist '(:tool-use (a b c)) :tool-use) 3))
-  (should (= (my-gptel--fsm-trace-count-plist '(:tool-result nil) :tool-result) 0))
-  (should (= (my-gptel--fsm-trace-count-plist '(:other t) :tool-use) 0))
-  (should (= (my-gptel--fsm-trace-count-plist nil :tool-use) 0)))
+  (should (= (iar--fsm-trace-count-plist '(:tool-use (a b c)) :tool-use) 3))
+  (should (= (iar--fsm-trace-count-plist '(:tool-result nil) :tool-result) 0))
+  (should (= (iar--fsm-trace-count-plist '(:other t) :tool-use) 0))
+  (should (= (iar--fsm-trace-count-plist nil :tool-use) 0)))
 
 (ert-deftest test-fsm-tracer-disabled ()
   "When disabled, no tracing should occur."
   (let* ((test-dir (make-temp-file "fsmlog-dis-" t))
-         (my-gptel--current-agent-name "test-agent")
-         (my-gptel-fsm-trace-enabled nil)
+         (iar--current-agent-name "test-agent")
+         (iar-fsm-trace-enabled nil)
          (mock-log-path (expand-file-name "FSM.log" test-dir)))
     (unwind-protect
         (progn
-          (cl-letf (((symbol-function 'my-gptel--fsm-trace-log-path)
+          (cl-letf (((symbol-function 'iar--fsm-trace-log-path)
                      (lambda () mock-log-path)))
-            (my-gptel--fsm-trace-write "should not appear")
-            ;; my-gptel--fsm-trace-write itself is not gated by the enabled flag.
+            (iar--fsm-trace-write "should not appear")
+            ;; iar--fsm-trace-write itself is not gated by the enabled flag.
             ;; Only the advice functions check the flag. So this test verifies
             ;; the write function works but the advice functions respect the flag.
             ;; For a proper disabled test, we check that the tracer function

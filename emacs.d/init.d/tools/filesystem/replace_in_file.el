@@ -2,14 +2,14 @@
 
 ;;; replace_in_file tool for gptel
 ;; Surgically replaces a specific block of text in an existing file.
-;; Security: checks file_guard before writing. Logs to audit log.
+;; Security: checks iar-file-guard before writing. Logs to audit log.
 
 (require 'gptel)
-(require 'file_guard)
-(require 'audit_log)
-(require 'utils)  ; my-gptel--with-suppressed-save-hooks
+(require 'iar-file-guard)
+(require 'iar-audit-log)
+(require 'iar-utils)  ; iar--with-suppressed-save-hooks
 
-(defun my-gptel--fs-replace (path search-text replace-text)
+(defun iar--mygptel--fs-replace (path search-text replace-text)
   "Find SEARCH-TEXT in PATH and replace it with REPLACE-TEXT.
 SEARCH-TEXT is matched exactly as provided -- whitespace is significant.
 If the file is open in an Emacs buffer, performs the replacement in
@@ -21,7 +21,7 @@ If the buffer is read-only or has unsaved modifications, returns an
 error rather than silently persisting unrelated changes or failing
 with a misleading message."
   (let* ((expanded-path (expand-file-name path))
-         (guard-reason (my-gptel--guard-check-replace expanded-path)))
+         (guard-reason (iar--guard-check-replace expanded-path)))
     (if guard-reason
         (format "Error: %s" guard-reason)
       (condition-case err
@@ -41,7 +41,7 @@ with a misleading message."
                       (if (search-forward search-text nil t)
                           (progn
                             (replace-match replace-text t t)
-                            (my-gptel--with-suppressed-save-hooks
+                            (iar--with-suppressed-save-hooks
                               (save-buffer))
                             (my-gptel--audit-log-replace expanded-path)
                             (format "Success: Replaced text in '%s'" expanded-path))
@@ -68,6 +68,6 @@ with a misleading message."
   :args (list '(:name "path" :type "string")
               '(:name "search_text" :type "string")
               '(:name "replace_text" :type "string"))
-  :function #'my-gptel--fs-replace))
+  :function #'iar--mygptel--fs-replace))
 
 (provide 'iar-tool--replace-in-file)

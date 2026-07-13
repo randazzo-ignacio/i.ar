@@ -23,7 +23,7 @@
   "check_elisp should report no issues for a clean .el file."
   (let* ((tmpfile (test-check--write-temp-el
                    ";; -*- lexical-binding: t; -*-\n(defun foo () 1)\n"))
-         (result (my-gptel-tool-check-elisp tmpfile)))
+         (result (iar--mygptel--tool-check-elisp tmpfile)))
     (should (stringp result))
     (should (string-match-p "OK" result))
     ;; The success message contains "No issues found" -- check for that
@@ -35,7 +35,7 @@
   "check_elisp should detect unbalanced parentheses."
   (let* ((tmpfile (test-check--write-temp-el
                    "(defun foo ()\n  (message \"hello\"\n")) ; missing close paren
-         (result (my-gptel-tool-check-elisp tmpfile)))
+         (result (iar--mygptel--tool-check-elisp tmpfile)))
     (should (stringp result))
     (should (string-match-p "ISSUES" result))
     (should (string-match-p "[Pp]aren" result))
@@ -43,7 +43,7 @@
 
 (ert-deftest test-check-missing-file ()
   "check_elisp should return error for nonexistent file."
-  (let ((result (my-gptel-tool-check-elisp "/nonexistent/file.el")))
+  (let ((result (iar--mygptel--tool-check-elisp "/nonexistent/file.el")))
     (should (stringp result))
     (should (string-match-p "Error" result))))
 
@@ -53,7 +53,7 @@
   (let ((tmpfile (make-temp-file "test-check-" nil ".txt")))
     (with-temp-file tmpfile (insert "not elisp"))
     (unwind-protect
-        (let ((result (my-gptel-tool-check-elisp tmpfile)))
+        (let ((result (iar--mygptel--tool-check-elisp tmpfile)))
           (should (stringp result))
           (should (string-match-p "Error" result))
           (should (string-match-p "\\.el" result)))
@@ -63,7 +63,7 @@
   "check_elisp should not modify the source file."
   (let* ((content ";; -*- lexical-binding: t; -*-\n(defun foo () 1)\n")
          (tmpfile (test-check--write-temp-el content)))
-    (my-gptel-tool-check-elisp tmpfile)
+    (iar--mygptel--tool-check-elisp tmpfile)
     (let ((after (with-temp-buffer
                    (insert-file-contents tmpfile)
                    (buffer-string))))
@@ -74,64 +74,64 @@
   "check_elisp should not leave .elc artifacts."
   (let* ((tmpfile (test-check--write-temp-el
                    "(defun foo () 1)\n")))
-    (my-gptel-tool-check-elisp tmpfile)
+    (iar--mygptel--tool-check-elisp tmpfile)
     (should-not (file-exists-p (concat tmpfile "c")))
     (delete-file tmpfile)))
 
 ;;; --- Internal function tests ---
 
 (ert-deftest test-check-parens-in-buffer-balanced ()
-  "my-gptel--check-parens-in-buffer returns nil for balanced parens."
+  "iar--check-parens-in-buffer returns nil for balanced parens."
   (with-temp-buffer
     (insert "(defun foo ()\n  (message \"hello\"))\n")
     (emacs-lisp-mode)
-    (should (null (my-gptel--check-parens-in-buffer)))))
+    (should (null (iar--check-parens-in-buffer)))))
 
 (ert-deftest test-check-parens-in-buffer-unbalanced ()
-  "my-gptel--check-parens-in-buffer returns error string for unbalanced parens."
+  "iar--check-parens-in-buffer returns error string for unbalanced parens."
   (with-temp-buffer
     (insert "(defun foo ()\n  (message \"hello\"\n") ; missing close paren
     (emacs-lisp-mode)
-    (let ((result (my-gptel--check-parens-in-buffer)))
+    (let ((result (iar--check-parens-in-buffer)))
       (should (stringp result))
       (should (string-match-p "[Pp]aren" result)))))
 
 (ert-deftest test-check-parens-in-buffer-empty ()
-  "my-gptel--check-parens-in-buffer returns nil for empty buffer."
+  "iar--check-parens-in-buffer returns nil for empty buffer."
   (with-temp-buffer
     (emacs-lisp-mode)
-    (should (null (my-gptel--check-parens-in-buffer)))))
+    (should (null (iar--check-parens-in-buffer)))))
 
 (ert-deftest test-check-byte-compile-clean ()
-  "my-gptel--byte-compile-check returns nil for a clean file."
+  "iar--byte-compile-check returns nil for a clean file."
   (let ((tmpfile (test-check--write-temp-el
                   ";; -*- lexical-binding: t; -*-\n(defun foo () 1)\n")))
     (unwind-protect
-        (should (null (my-gptel--byte-compile-check tmpfile)))
+        (should (null (iar--byte-compile-check tmpfile)))
       (delete-file tmpfile))))
 
 (ert-deftest test-check-byte-compile-warnings ()
-  "my-gptel--byte-compile-check returns warnings string for a file with issues.
+  "iar--byte-compile-check returns warnings string for a file with issues.
 The byte-compiler produces a 'reference to free variable' warning for
 undefined-free-var, which we match on.  This depends on the byte-compiler's
 warning text format, which has been stable across Emacs versions."
   (let ((tmpfile (test-check--write-temp-el
                   ";; -*- lexical-binding: t; -*-\n(defun foo ()\n  undefined-free-var)\n")))
     (unwind-protect
-        (let ((result (my-gptel--byte-compile-check tmpfile)))
+        (let ((result (iar--byte-compile-check tmpfile)))
           (should (stringp result))
           (should (string-match-p "free variable" result)))
       (delete-file tmpfile))))
 
 (ert-deftest test-check-byte-compile-cleans-up-elc ()
-  "my-gptel--byte-compile-check should not leave .elc artifacts.
+  "iar--byte-compile-check should not leave .elc artifacts.
 The function uses a separate temp .elc (via make-temp-file elc-check-),
 not tmpfile+c.  We verify neither the source .elc nor any elc-check-
 temp files remain after the call."
   (let ((tmpfile (test-check--write-temp-el "(defun foo () 1)\n")))
     (unwind-protect
         (progn
-          (my-gptel--byte-compile-check tmpfile)
+          (iar--byte-compile-check tmpfile)
           ;; Source .elc should not exist (function uses temp .elc)
           (should-not (file-exists-p (concat tmpfile "c")))
           ;; Internal temp .elc should also be cleaned up

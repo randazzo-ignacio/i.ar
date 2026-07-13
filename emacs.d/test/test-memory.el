@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Tests for memory_tools.el
+;;; Tests for iar-memory-tools.el
 ;; Tests payload construction, summary extraction, entry counting,
 ;; and file I/O. Mocks the Ollama API call to avoid network dependency.
 
@@ -8,8 +8,8 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'json)
-(require 'memory_tools)
-(declare-function my-gptel--memory-build-system-prompt "memory_tools" ())
+(require 'iar-memory-tools)
+(declare-function iar--memory-build-system-prompt "iar-memory-tools" ())
 
 ;;; --- Test fixtures ---
 
@@ -34,12 +34,12 @@
 
 (defmacro with-memory-fixture (&rest body)
   "Execute BODY with a temporary agent directory.
-Temporarily rebinds `my-gptel--memory-get-agent-dir' to return the temp dir."
+Temporarily rebinds `iar--memory-get-agent-dir' to return the temp dir."
   (declare (indent 0))
   `(unwind-protect
        (progn
          (test-memory--setup)
-         (cl-letf (((symbol-function 'my-gptel--memory-get-agent-dir)
+         (cl-letf (((symbol-function 'iar--memory-get-agent-dir)
                     (lambda () (expand-file-name "testagent" test-memory--tmpdir))))
            ,@body))
      (test-memory--teardown)))
@@ -47,9 +47,9 @@ Temporarily rebinds `my-gptel--memory-get-agent-dir' to return the temp dir."
 ;;; --- Summary extraction tests ---
 
 (ert-deftest test-memory-extract-from-existing-file ()
-  "my-gptel--memory-extract-summary should read SUMMARY.md content."
+  "iar--memory-extract-summary should read SUMMARY.md content."
   (with-memory-fixture
-    (let ((result (my-gptel--memory-extract-summary
+    (let ((result (iar--memory-extract-summary
                    (expand-file-name "testagent" test-memory--tmpdir))))
       (should (stringp result))
       (should (string-match-p "First summary entry" result))
@@ -57,40 +57,40 @@ Temporarily rebinds `my-gptel--memory-get-agent-dir' to return the temp dir."
       (should (string-match-p "Third summary entry" result)))))
 
 (ert-deftest test-memory-extract-from-missing-file ()
-  "my-gptel--memory-extract-summary should return empty string for missing file."
-  (let ((result (my-gptel--memory-extract-summary "/nonexistent/dir")))
+  "iar--memory-extract-summary should return empty string for missing file."
+  (let ((result (iar--memory-extract-summary "/nonexistent/dir")))
     (should (string= result ""))))
 
 ;;; --- Entry counting tests ---
 
 (ert-deftest test-memory-count-entries-three ()
-  "my-gptel--memory-count-entries should count 3 bullet entries."
+  "iar--memory-count-entries should count 3 bullet entries."
   (let ((text "- First entry\n- Second entry\n- Third entry\n"))
-    (should (= (my-gptel--memory-count-entries text) 3))))
+    (should (= (iar--memory-count-entries text) 3))))
 
 (ert-deftest test-memory-count-entries-zero ()
-  "my-gptel--memory-count-entries should return 0 for non-bullet text."
+  "iar--memory-count-entries should return 0 for non-bullet text."
   (let ((text "This is just text.\nNo bullets here.\n"))
-    (should (= (my-gptel--memory-count-entries text) 0))))
+    (should (= (iar--memory-count-entries text) 0))))
 
 (ert-deftest test-memory-count-entries-empty ()
-  "my-gptel--memory-count-entries should return 0 for empty string."
-  (should (= (my-gptel--memory-count-entries "") 0)))
+  "iar--memory-count-entries should return 0 for empty string."
+  (should (= (iar--memory-count-entries "") 0)))
 
 (ert-deftest test-memory-count-entries-mixed ()
-  "my-gptel--memory-count-entries should only count lines starting with '- '."
+  "iar--memory-count-entries should only count lines starting with '- '."
   (let ((text "Some intro text\n- bullet 1\nregular line\n- bullet 2\n"))
-    (should (= (my-gptel--memory-count-entries text) 2))))
+    (should (= (iar--memory-count-entries text) 2))))
 
 ;;; --- Payload construction tests ---
 
 (ert-deftest test-memory-build-payload-valid-json ()
-  "my-gptel--memory-build-payload should produce valid JSON."
+  "iar--memory-build-payload should produce valid JSON."
   (let* ((current-summary "- Test summary\n")
          (conversation "User: hello\nAssistant: hi there\n")
          (gptel-model "test-model")
          (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
-         (payload (my-gptel--memory-build-payload current-summary conversation)))
+         (payload (iar--memory-build-payload current-summary conversation)))
     (should (stringp payload))
     ;; Should be valid JSON
     (let ((json-object-type 'plist)
@@ -104,51 +104,51 @@ Temporarily rebinds `my-gptel--memory-get-agent-dir' to return the temp dir."
           (should (equal (plist-get parsed :stream) :json-false)))))))
 
 (ert-deftest test-memory-build-payload-contains-summary ()
-  "my-gptel--memory-build-payload should embed current summary in user message."
+  "iar--memory-build-payload should embed current summary in user message."
   (let* ((current-summary "- Important fact: the answer is 42\n")
          (conversation "User: what is the answer?\n")
          (gptel-model "test-model")
          (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
-         (payload (my-gptel--memory-build-payload current-summary conversation)))
+         (payload (iar--memory-build-payload current-summary conversation)))
     (should (string-match-p "Important fact: the answer is 42" payload))))
 
 (ert-deftest test-memory-build-payload-contains-conversation ()
-  "my-gptel--memory-build-payload should embed conversation in user message."
+  "iar--memory-build-payload should embed conversation in user message."
   (let* ((current-summary "- Summary\n")
          (conversation "User: tell me about X\nAssistant: X is interesting\n")
          (gptel-model "test-model")
          (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
-         (payload (my-gptel--memory-build-payload current-summary conversation)))
+         (payload (iar--memory-build-payload current-summary conversation)))
     (should (string-match-p "tell me about X" payload))
     (should (string-match-p "X is interesting" payload))))
 
 (ert-deftest test-memory-build-payload-contains-system-prompt ()
-  "my-gptel--memory-build-payload should embed system prompt in messages."
+  "iar--memory-build-payload should embed system prompt in messages."
   (let* ((current-summary "- Summary\n")
          (conversation "User: hi\n")
          (gptel-model "test-model")
          (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
-         (payload (my-gptel--memory-build-payload current-summary conversation)))
+         (payload (iar--memory-build-payload current-summary conversation)))
     (should (string-match-p "session summarization engine" payload))))
 
 (ert-deftest test-memory-build-payload-empty-summary ()
-  "my-gptel--memory-build-payload should handle empty summary gracefully."
+  "iar--memory-build-payload should handle empty summary gracefully."
   (let* ((current-summary "")
          (conversation "User: hi\n")
          (gptel-model "test-model")
          (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
-         (payload (my-gptel--memory-build-payload current-summary conversation)))
+         (payload (iar--memory-build-payload current-summary conversation)))
     (should (stringp payload))
     (should (string-match-p "(none yet)" payload))))
 
 ;;; --- Summary writing tests ---
 
 (ert-deftest test-memory-write-creates-file ()
-  "my-gptel--memory-write-summary should write content to SUMMARY.md."
+  "iar--memory-write-summary should write content to SUMMARY.md."
   (with-memory-fixture
     (let* ((dir (expand-file-name "testagent" test-memory--tmpdir))
            (new-content "- New summary 1\n- New summary 2")
-           (result (my-gptel--memory-write-summary dir new-content)))
+           (result (iar--memory-write-summary dir new-content)))
       (should (string-match-p "Success" result))
       (let ((written (with-temp-buffer
                        (insert-file-contents (expand-file-name "SUMMARY.md" dir))
@@ -157,11 +157,11 @@ Temporarily rebinds `my-gptel--memory-get-agent-dir' to return the temp dir."
         (should (string-match-p "New summary 2" written))))))
 
 (ert-deftest test-memory-write-overwrites-existing ()
-  "my-gptel--memory-write-summary should overwrite existing SUMMARY.md."
+  "iar--memory-write-summary should overwrite existing SUMMARY.md."
   (with-memory-fixture
     (let* ((dir (expand-file-name "testagent" test-memory--tmpdir))
            (new-content "- Replaced content\n")
-           (result (my-gptel--memory-write-summary dir new-content)))
+           (result (iar--memory-write-summary dir new-content)))
       (should (string-match-p "Success" result))
       (let ((written (with-temp-buffer
                        (insert-file-contents (expand-file-name "SUMMARY.md" dir))
@@ -170,18 +170,18 @@ Temporarily rebinds `my-gptel--memory-get-agent-dir' to return the temp dir."
         (should-not (string-match-p "First summary entry" written))))))
 
 (ert-deftest test-memory-write-appends-newline ()
-  "my-gptel--memory-write-summary should ensure file ends with newline."
+  "iar--memory-write-summary should ensure file ends with newline."
   (with-memory-fixture
     (let* ((dir (expand-file-name "testagent" test-memory--tmpdir))
            (new-content "- no trailing newline")
-           (_ (my-gptel--memory-write-summary dir new-content))
+           (_ (iar--memory-write-summary dir new-content))
            (written (with-temp-buffer
                       (insert-file-contents (expand-file-name "SUMMARY.md" dir))
                       (buffer-string))))
       (should (string-suffix-p "\n" written)))))
 
 (ert-deftest test-memory-write-cleans-up-temp-on-rename-failure ()
-  "my-gptel--memory-write-summary should clean up temp file when rename fails.
+  "iar--memory-write-summary should clean up temp file when rename fails.
 Renames to a nonexistent target directory to trigger a rename-file error.
 Verifies: (1) error string is returned, (2) no gptel-summary- temp files
 are left behind in the temp directory."
@@ -189,7 +189,7 @@ are left behind in the temp directory."
          (nonexistent-agent-dir (expand-file-name "nonexistent/deeply/nested" temp-dir)))
     (unwind-protect
         (let* ((temp-files-before (directory-files temporary-file-directory nil "^gptel-summary-"))
-               (result (my-gptel--memory-write-summary nonexistent-agent-dir "- test summary"))
+               (result (iar--memory-write-summary nonexistent-agent-dir "- test summary"))
                (temp-files-after (directory-files temporary-file-directory nil "^gptel-summary-")))
           ;; Should return an error string, not a success string
           (should (stringp result))
@@ -202,20 +202,20 @@ are left behind in the temp directory."
 ;;; --- Conversation extraction tests ---
 
 (ert-deftest test-memory-extract-conversation-from-buffer ()
-  "my-gptel--memory-extract-conversation should extract buffer text."
+  "iar--memory-extract-conversation should extract buffer text."
   (with-temp-buffer
     (insert "User: hello\nAssistant: hi there\n")
-    (let ((result (my-gptel--memory-extract-conversation)))
+    (let ((result (iar--memory-extract-conversation)))
       (should (stringp result))
       (should (string-match-p "hello" result))
       (should (string-match-p "hi there" result)))))
 
 (ert-deftest test-memory-extract-conversation-truncates-long-text ()
-  "my-gptel--memory-extract-conversation should truncate text exceeding max."
-  (let ((my-gptel-memory-max-conversation-chars 100))
+  "iar--memory-extract-conversation should truncate text exceeding max."
+  (let ((iar-memory-max-conversation-chars 100))
     (with-temp-buffer
       (insert (make-string 200 ?A))
-      (let ((result (my-gptel--memory-extract-conversation)))
+      (let ((result (iar--memory-extract-conversation)))
         (should (stringp result))
         (should (string-match-p "truncated" result))
         ;; Should be approximately 100 chars of content + the truncation prefix
@@ -224,145 +224,145 @@ are left behind in the temp directory."
 ;;; --- Agent dir resolution tests ---
 
 (ert-deftest test-memory-get-agent-dir-with-name ()
-  "my-gptel--memory-get-agent-dir should use my-gptel--current-agent-name.
+  "iar--memory-get-agent-dir should use iar--current-agent-name.
 Memory files now live in audit/<agent>/ (not tasks/<agent>/)."
-  (let ((old-value (and (boundp 'my-gptel--current-agent-name)
-                        my-gptel--current-agent-name))
+  (let ((old-value (and (boundp 'iar--current-agent-name)
+                        iar--current-agent-name))
         (old-user-emacs-directory (bound-and-true-p user-emacs-directory)))
     (unwind-protect
         (progn
-          (setq my-gptel--current-agent-name "testagent")
+          (setq iar--current-agent-name "testagent")
           (let* ((user-emacs-directory (make-temp-file "test-mem-agent-" :dir-flag))
                  (audit-dir (expand-file-name "audit" user-emacs-directory))
                  (agent-dir (expand-file-name "testagent" audit-dir)))
             (make-directory agent-dir t)
-            (let ((dir (my-gptel--memory-get-agent-dir)))
+            (let ((dir (iar--memory-get-agent-dir)))
               (should (stringp dir))
               (should (string-match-p "testagent" dir))
               (should (string-match-p "audit" dir))))
           (when (and old-user-emacs-directory
                      (file-exists-p (make-temp-file "test-mem-agent-" :dir-flag)))
             (delete-directory (make-temp-file "test-mem-agent-" :dir-flag) t)))
-      (setq my-gptel--current-agent-name old-value)
+      (setq iar--current-agent-name old-value)
       (when (boundp 'user-emacs-directory)
         (setq user-emacs-directory old-user-emacs-directory)))))
 
 (ert-deftest test-memory-get-agent-dir-fallback-to-file ()
-  "my-gptel--memory-get-agent-dir should fall back to agent file path."
-  (let ((old-name (and (boundp 'my-gptel--current-agent-name)
-                       my-gptel--current-agent-name))
-        (old-file (and (boundp 'my-gptel--current-agent-file)
-                       my-gptel--current-agent-file)))
+  "iar--memory-get-agent-dir should fall back to agent file path."
+  (let ((old-name (and (boundp 'iar--current-agent-name)
+                       iar--current-agent-name))
+        (old-file (and (boundp 'iar--current-agent-file)
+                       iar--current-agent-file)))
     (unwind-protect
         (progn
-          (setq my-gptel--current-agent-name nil)
-          (setq my-gptel--current-agent-file "/some/path/myagent/prompt.org")
-          (let ((dir (my-gptel--memory-get-agent-dir)))
+          (setq iar--current-agent-name nil)
+          (setq iar--current-agent-file "/some/path/myagent/prompt.org")
+          (let ((dir (iar--memory-get-agent-dir)))
             (should (stringp dir))
             (should (string-match-p "myagent" dir))))
-      (setq my-gptel--current-agent-name old-name)
-      (setq my-gptel--current-agent-file old-file))))
+      (setq iar--current-agent-name old-name)
+      (setq iar--current-agent-file old-file))))
 
 (ert-deftest test-memory-get-agent-dir-error-when-no-agent ()
-  "my-gptel--memory-get-agent-dir should error when no agent is loaded."
-  (let ((old-name (and (boundp 'my-gptel--current-agent-name)
-                       my-gptel--current-agent-name))
-        (old-file (and (boundp 'my-gptel--current-agent-file)
-                       my-gptel--current-agent-file)))
+  "iar--memory-get-agent-dir should error when no agent is loaded."
+  (let ((old-name (and (boundp 'iar--current-agent-name)
+                       iar--current-agent-name))
+        (old-file (and (boundp 'iar--current-agent-file)
+                       iar--current-agent-file)))
     (unwind-protect
         (progn
-          (setq my-gptel--current-agent-name nil)
-          (setq my-gptel--current-agent-file nil)
+          (setq iar--current-agent-name nil)
+          (setq iar--current-agent-file nil)
           (condition-case err
-              (my-gptel--memory-get-agent-dir)
+              (iar--memory-get-agent-dir)
             (error
              (should (string-match-p "No agent" (error-message-string err))))
             (:success
              (ert-fail "Expected error when no agent loaded"))))
-      (setq my-gptel--current-agent-name old-name)
-      (setq my-gptel--current-agent-file old-file))))
+      (setq iar--current-agent-name old-name)
+      (setq iar--current-agent-file old-file))))
 
 ;;; --- Ollama response parsing tests ---
 
 (ert-deftest test-memory-parse-valid-response ()
-  "my-gptel--memory-parse-ollama-response should extract content from valid JSON."
+  "iar--memory-parse-ollama-response should extract content from valid JSON."
   (let* ((content "Updated summary entries here")
          (raw (json-encode `(("message" . (("content" . ,content)))
                              ("done" . t))))
-         (result (my-gptel--memory-parse-ollama-response raw)))
+         (result (iar--memory-parse-ollama-response raw)))
     (should (stringp result))
     (should (string= result content))))
 
 (ert-deftest test-memory-parse-empty-content ()
-  "my-gptel--memory-parse-ollama-response should error on empty message content."
+  "iar--memory-parse-ollama-response should error on empty message content."
   (let* ((raw (json-encode `(("message" . (("content" . "")))
                              ("done" . t))))
-         (result (my-gptel--memory-parse-ollama-response raw)))
+         (result (iar--memory-parse-ollama-response raw)))
     (should (stringp result))
     (should (string-prefix-p "Error:" result))
     (should (string-match-p "non-string" result))))
 
 (ert-deftest test-memory-parse-no-message-key ()
-  "my-gptel--memory-parse-ollama-response should error when :message key is missing."
+  "iar--memory-parse-ollama-response should error when :message key is missing."
   (let* ((raw (json-encode `(("done" . t))))
-         (result (my-gptel--memory-parse-ollama-response raw)))
+         (result (iar--memory-parse-ollama-response raw)))
     (should (stringp result))
     (should (string-prefix-p "Error:" result))
     (should (string-match-p "No message in response" result))))
 
 (ert-deftest test-memory-parse-invalid-json ()
-  "my-gptel--memory-parse-ollama-response should handle invalid JSON gracefully."
-  (let ((result (my-gptel--memory-parse-ollama-response "not valid json at all")))
+  "iar--memory-parse-ollama-response should handle invalid JSON gracefully."
+  (let ((result (iar--memory-parse-ollama-response "not valid json at all")))
     (should (stringp result))
     (should (string-prefix-p "Error:" result))
     (should (string-match-p "parsing JSON" result))))
 
 (ert-deftest test-memory-parse-empty-string ()
-  "my-gptel--memory-parse-ollama-response should handle empty input."
-  (let ((result (my-gptel--memory-parse-ollama-response "")))
+  "iar--memory-parse-ollama-response should handle empty input."
+  (let ((result (iar--memory-parse-ollama-response "")))
     (should (stringp result))
     (should (string-prefix-p "Error:" result))))
 
 (ert-deftest test-memory-parse-nil-content ()
-  "my-gptel--memory-parse-ollama-response should handle nil content in message."
+  "iar--memory-parse-ollama-response should handle nil content in message."
   (let* ((raw (json-encode `(("message" . (("role" . "assistant")))
                              ("done" . t))))
-         (result (my-gptel--memory-parse-ollama-response raw)))
+         (result (iar--memory-parse-ollama-response raw)))
     (should (stringp result))
     (should (string-prefix-p "Error:" result))
     (should (string-match-p "non-string" result))))
 
 (ert-deftest test-memory-parse-multiline-content ()
-  "my-gptel--memory-parse-ollama-response should preserve multiline content."
+  "iar--memory-parse-ollama-response should preserve multiline content."
   (let* ((content "- Summary 1\n- Summary 2\n- Summary 3")
          (raw (json-encode `(("message" . (("content" . ,content)))
                              ("done" . t))))
-         (result (my-gptel--memory-parse-ollama-response raw)))
+         (result (iar--memory-parse-ollama-response raw)))
     (should (stringp result))
     (should (string= result content))
     (should (string-match-p "Summary 1" result))
     (should (string-match-p "Summary 3" result))))
 
 (ert-deftest test-memory-parse-false-content ()
-  "my-gptel--memory-parse-ollama-response should handle JSON false as content."
+  "iar--memory-parse-ollama-response should handle JSON false as content."
   (let* ((raw "{\"message\":{\"content\":false},\"done\":true}")
-         (result (my-gptel--memory-parse-ollama-response raw)))
+         (result (iar--memory-parse-ollama-response raw)))
     (should (stringp result))
     (should (string-prefix-p "Error:" result))
     (should (string-match-p "non-string" result))))
 
 (ert-deftest test-memory-parse-numeric-content ()
-  "my-gptel--memory-parse-ollama-response should handle numeric content."
+  "iar--memory-parse-ollama-response should handle numeric content."
   (let* ((raw "{\"message\":{\"content\":42},\"done\":true}")
-         (result (my-gptel--memory-parse-ollama-response raw)))
+         (result (iar--memory-parse-ollama-response raw)))
     (should (stringp result))
     (should (string-prefix-p "Error:" result))
     (should (string-match-p "non-string" result))))
 
 (ert-deftest test-memory-parse-null-content ()
-  "my-gptel--memory-parse-ollama-response should handle JSON null as content."
+  "iar--memory-parse-ollama-response should handle JSON null as content."
   (let* ((raw "{\"message\":{\"content\":null},\"done\":true}")
-         (result (my-gptel--memory-parse-ollama-response raw)))
+         (result (iar--memory-parse-ollama-response raw)))
     (should (stringp result))
     (should (string-prefix-p "Error:" result))
     (should (string-match-p "non-string" result))))
@@ -370,18 +370,18 @@ Memory files now live in audit/<agent>/ (not tasks/<agent>/)."
 ;;; --- Resource cleanup tests ---
 
 (ert-deftest test-memory-call-ollama-cleans-up-on-curl-error ()
-  "my-gptel--memory-call-ollama should clean up temp file when curl exits with error.
+  "iar--memory-call-ollama should clean up temp file when curl exits with error.
 Uses localhost:11434 (no server running) so curl gets connection refused
 and exits with non-zero code. Verifies temp file is cleaned up."
   :tags '(integration)
   (let* ((gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
          (gptel-model "test-model")
-         (payload (my-gptel--memory-build-payload "- old" "conversation"))
+         (payload (iar--memory-build-payload "- old" "conversation"))
          (tracking-file (make-temp-file "gptel-payload-"))
          (temp-dir (file-name-directory tracking-file)))
     (unwind-protect
         (let ((before-files (directory-files temp-dir nil "^gptel-payload-")))
-          (let ((result (my-gptel--memory-call-ollama payload 3)))
+          (let ((result (iar--memory-call-ollama payload 3)))
             (should (stringp result))
             ;; No new gptel-payload- temp files should remain
             (let ((after-files (directory-files temp-dir nil "^gptel-payload-")))
@@ -390,13 +390,13 @@ and exits with non-zero code. Verifies temp file is cleaned up."
         (delete-file tracking-file)))))
 
 (ert-deftest test-memory-call-ollama-cleans-up-on-timeout ()
-  "my-gptel--memory-call-ollama should clean up temp file on timeout.
+  "iar--memory-call-ollama should clean up temp file on timeout.
 Uses 10.255.255.1 (routable but non-responsive) to trigger actual
 timeout, not DNS failure. Temp file should be cleaned up."
   :tags '(integration)
   (let* ((gptel-backend (gptel-make-ollama "test" :host "10.255.255.1:9999"))
          (gptel-model "test-model")
-         (payload (my-gptel--memory-build-payload "- old" "conversation"))
+         (payload (iar--memory-build-payload "- old" "conversation"))
          (tracking-file (make-temp-file "gptel-payload-"))
          (temp-dir (file-name-directory tracking-file)))
     (unwind-protect
@@ -404,7 +404,7 @@ timeout, not DNS failure. Temp file should be cleaned up."
           ;; Delete tracking file so before-count is clean
           (delete-file tracking-file)
           (setq before-files (directory-files temp-dir nil "^gptel-payload-"))
-          (let ((result (my-gptel--memory-call-ollama payload 2)))
+          (let ((result (iar--memory-call-ollama payload 2)))
             (should (stringp result))
             (should (string-match-p "Timeout" result))
             ;; Temp file should be cleaned up even on timeout
@@ -414,14 +414,14 @@ timeout, not DNS failure. Temp file should be cleaned up."
         (delete-file tracking-file)))))
 
 (ert-deftest test-memory-call-ollama-cleans-up-buffer-on-completion ()
-  "my-gptel--memory-call-ollama should kill the process buffer after completion.
+  "iar--memory-call-ollama should kill the process buffer after completion.
 The buffer ' *gptel-memory-summary*' (or similar) should not linger
 after the call returns."
   :tags '(integration)
   (let* ((gptel-backend (gptel-make-ollama "test" :host "nonexistent.invalid:9999"))
          (gptel-model "test-model")
-         (payload (my-gptel--memory-build-payload "- old" "conversation")))
-    (let ((result (my-gptel--memory-call-ollama payload 1)))
+         (payload (iar--memory-build-payload "- old" "conversation")))
+    (let ((result (iar--memory-call-ollama payload 1)))
       (should (stringp result))
       ;; No new *gptel-memory-summary* buffer should remain
       (let ((memory-buffers (cl-remove-if-not
@@ -431,13 +431,13 @@ after the call returns."
         (should (null memory-buffers))))))
 
 (ert-deftest test-memory-call-ollama-cleans-up-on-process-creation-failure ()
-  "my-gptel--memory-call-ollama should clean up when make-process fails.
+  "iar--memory-call-ollama should clean up when make-process fails.
 Simulates curl not found by setting exec-path to a nonexistent directory.
 The unwind-protect should still kill the buffer and delete the temp file."
   :tags '(integration)
   (let* ((gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
          (gptel-model "test-model")
-         (payload (my-gptel--memory-build-payload "- old" "conversation"))
+         (payload (iar--memory-build-payload "- old" "conversation"))
          (tracking-file (make-temp-file "gptel-payload-"))
          (temp-dir (file-name-directory tracking-file)))
     (unwind-protect
@@ -448,7 +448,7 @@ The unwind-protect should still kill the buffer and delete the temp file."
           (let ((exec-path '("/nonexistent"))
                 (process-environment (cons "PATH=/nonexistent" process-environment)))
             (condition-case _err
-                (my-gptel--memory-call-ollama payload 3)
+                (iar--memory-call-ollama payload 3)
               (error nil)))
           ;; Buffer should be cleaned up
           (let ((memory-buffers (cl-remove-if-not
@@ -465,7 +465,7 @@ The unwind-protect should still kill the buffer and delete the temp file."
 ;;; --- Conversation extraction narrowing tests ---
 
 (ert-deftest test-memory-extract-conversation-widens-narrowed-buffer ()
-  "my-gptel--memory-extract-conversation should extract full text even when narrowed.
+  "iar--memory-extract-conversation should extract full text even when narrowed.
 If the buffer is narrowed, point-min/point-max return the narrowed
 boundaries, not the actual buffer boundaries.  The function should widen
 first to get the complete conversation.  Also verifies that narrowing
@@ -482,7 +482,7 @@ is restored after the call (save-restriction invariant)."
     ;; Verify narrowing is in effect before the call
     (should (< (- (point-max) (point-min)) (buffer-size)))
     ;; Even though narrowed, extract-conversation should get ALL text
-    (let ((result (my-gptel--memory-extract-conversation)))
+    (let ((result (iar--memory-extract-conversation)))
       (should (string-match-p "Before narrowing" result))
       (should (string-match-p "visible part" result))
       (should (string-match-p "After narrowing" result)))
@@ -492,10 +492,10 @@ is restored after the call (save-restriction invariant)."
 (ert-deftest test-memory-extract-conversation-truncates-when-narrowed ()
   "Truncation should operate on the full (widened) buffer, not the narrowed region.
 When the buffer is narrowed AND the full content exceeds
-`my-gptel-memory-max-conversation-chars', the truncation prefix
+`iar-memory-max-conversation-chars', the truncation prefix
 should appear and the result should contain text from outside the
 narrowed region."
-  (let ((my-gptel-memory-max-conversation-chars 50))
+  (let ((iar-memory-max-conversation-chars 50))
     (with-temp-buffer
       (insert (make-string 100 ?A))
       (insert "\n")
@@ -505,7 +505,7 @@ narrowed region."
         (goto-char (point-min))
         (forward-line 1)
         (narrow-to-region (point) (point-max)))
-      (let ((result (my-gptel--memory-extract-conversation)))
+      (let ((result (iar--memory-extract-conversation)))
         ;; Should contain truncated text from the full buffer
         (should (string-match-p "truncated" result))
         ;; The last 50 chars of the full buffer are all B's, so the
@@ -516,30 +516,30 @@ narrowed region."
 ;;; --- Summarize session user-error passthrough tests ---
 
 (ert-deftest test-memory-summarize-user-error-not-double-wrapped ()
-  "my-gptel-summarize-session should re-signal user-error without wrapping.
+  "iar-summarize-session should re-signal user-error without wrapping.
 When the body signals a user-error (e.g., from the curl-error or
 write-error paths), the outer condition-case should NOT catch it
 via the (error ...) handler and wrap the message with 'Session
 summarization failed:'.  Instead, the user-error handler should
 re-signal it unchanged."
-  (let ((my-gptel--current-agent-name "testagent")
+  (let ((iar--current-agent-name "testagent")
         (gptel-model "test-model")
         (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
         (captured-error nil))
-    ;; Mock my-gptel--memory-get-agent-dir to avoid needing a real agent dir
-    (cl-letf (((symbol-function 'my-gptel--memory-get-agent-dir)
+    ;; Mock iar--memory-get-agent-dir to avoid needing a real agent dir
+    (cl-letf (((symbol-function 'iar--memory-get-agent-dir)
                (lambda () "/tmp/test-agent-dir")))
-      ;; Mock my-gptel--memory-extract-summary to return some content
-      (cl-letf (((symbol-function 'my-gptel--memory-extract-summary)
+      ;; Mock iar--memory-extract-summary to return some content
+      (cl-letf (((symbol-function 'iar--memory-extract-summary)
                  (lambda (_dir) "- old summary\n")))
         ;; We need a buffer with enough text for the conversation-length check
         (with-temp-buffer
           (insert (make-string 100 ?A))
-          ;; Mock my-gptel--memory-call-ollama to return an Error: string
-          (cl-letf (((symbol-function 'my-gptel--memory-call-ollama)
+          ;; Mock iar--memory-call-ollama to return an Error: string
+          (cl-letf (((symbol-function 'iar--memory-call-ollama)
                      (lambda (_payload _timeout) "Error: curl exited with code 7")))
             (condition-case err
-                (call-interactively #'my-gptel-summarize-session)
+                (call-interactively #'iar-summarize-session)
               (user-error
                (setq captured-error (error-message-string err)))
               (error
@@ -550,27 +550,27 @@ re-signal it unchanged."
         (should-not (string-match-p "Session summarization failed" captured-error))))))
 
 (ert-deftest test-memory-summarize-write-error-not-double-wrapped ()
-  "my-gptel-summarize-session should re-signal write user-error without wrapping.
+  "iar-summarize-session should re-signal write user-error without wrapping.
 When the write step returns an Error: string and the body signals
 user-error, the outer condition-case should NOT wrap it."
-  (let ((my-gptel--current-agent-name "testagent")
+  (let ((iar--current-agent-name "testagent")
         (gptel-model "test-model")
         (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
         (captured-error nil))
-    (cl-letf (((symbol-function 'my-gptel--memory-get-agent-dir)
+    (cl-letf (((symbol-function 'iar--memory-get-agent-dir)
                (lambda () "/tmp/test-agent-dir"))
-              ((symbol-function 'my-gptel--memory-extract-summary)
+              ((symbol-function 'iar--memory-extract-summary)
                (lambda (_dir) "- old summary\n"))
-              ((symbol-function 'my-gptel--memory-call-ollama)
+              ((symbol-function 'iar--memory-call-ollama)
                (lambda (_payload _timeout) "- new summary 1\n- new summary 2"))
-              ((symbol-function 'my-gptel--memory-write-summary)
+              ((symbol-function 'iar--memory-write-summary)
                (lambda (_dir _content) "Error: Failed to write SUMMARY.md: permission denied"))
-              ((symbol-function 'my-gptel-tool-reload-agent)
+              ((symbol-function 'iar--mygptel--tool-reload-agent)
                (lambda (&optional _name) nil)))
       (with-temp-buffer
         (insert (make-string 100 ?A))
         (condition-case err
-            (call-interactively #'my-gptel-summarize-session)
+            (call-interactively #'iar-summarize-session)
           (user-error
            (setq captured-error (error-message-string err)))
           (error
@@ -580,24 +580,24 @@ user-error, the outer condition-case should NOT wrap it."
       (should-not (string-match-p "Session summarization failed" captured-error)))))
 
 (ert-deftest test-memory-summarize-generic-error-wrapped ()
-  "my-gptel-summarize-session should wrap non-user-error errors.
+  "iar-summarize-session should wrap non-user-error errors.
 When the body signals a generic error (not user-error), the outer
 (error ...) handler should catch it and wrap with 'Session
 summarization failed:'.  This verifies the user-error handler
 does NOT swallow genuine unexpected errors."
-  (let ((my-gptel--current-agent-name "testagent")
+  (let ((iar--current-agent-name "testagent")
         (gptel-model "test-model")
         (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
         (captured-error nil))
-    (cl-letf (((symbol-function 'my-gptel--memory-get-agent-dir)
+    (cl-letf (((symbol-function 'iar--memory-get-agent-dir)
                (lambda () "/tmp/test-agent-dir"))
-              ((symbol-function 'my-gptel--memory-extract-summary)
+              ((symbol-function 'iar--memory-extract-summary)
                (lambda (_dir) "- old summary\n"))
               ;; Make extract-conversation signal a generic error
-              ((symbol-function 'my-gptel--memory-extract-conversation)
+              ((symbol-function 'iar--memory-extract-conversation)
                (lambda () (error "Unexpected internal error"))))
       (condition-case err
-          (call-interactively #'my-gptel-summarize-session)
+          (call-interactively #'iar-summarize-session)
         (user-error
          (setq captured-error (error-message-string err)))
         (error
@@ -610,118 +610,118 @@ does NOT swallow genuine unexpected errors."
 ;;; --- System prompt dynamic generation tests ---
 
 (ert-deftest test-memory-build-system-prompt-reflects-max-entries ()
-  "my-gptel--memory-build-system-prompt should interpolate the current
+  "iar--memory-build-system-prompt should interpolate the current
 max-entries value at call time, not at load time.  When
-`my-gptel-memory-max-entries' is let-bound to a different value,
+`iar-memory-max-entries' is let-bound to a different value,
 the prompt should contain that value, not the default."
-  (let ((my-gptel-memory-max-entries 42))
-    (let ((prompt (my-gptel--memory-build-system-prompt)))
+  (let ((iar-memory-max-entries 42))
+    (let ((prompt (iar--memory-build-system-prompt)))
       (should (stringp prompt))
       (should (string-match-p "42 bullet points" prompt))
       (should-not (string-match-p "20 bullet points" prompt))))
   ;; Also verify with the default value
-  (let ((prompt (my-gptel--memory-build-system-prompt)))
+  (let ((prompt (iar--memory-build-system-prompt)))
     (should (stringp prompt))
     (should (string-match-p "session summarization engine" prompt))
     (should (string-match-p "20 bullet points" prompt))))
 
 (ert-deftest test-memory-build-system-prompt-is-a-function ()
-  "my-gptel--memory-build-system-prompt should be a function, not a defconst.
+  "iar--memory-build-system-prompt should be a function, not a defconst.
 This is a regression test: the old defconst `my-gptel-memory-system-prompt'
 captured the max-entries value at load time.  The function version
 interpolates at call time so Customize changes take effect immediately."
-  (should (fboundp 'my-gptel--memory-build-system-prompt))
+  (should (fboundp 'iar--memory-build-system-prompt))
   (should-not (boundp 'my-gptel-memory-system-prompt)))
 
 ;;; --- Defensive guard tests for defcustom values ---
 
 (ert-deftest test-memory-build-system-prompt-guards-non-positive-max-entries ()
-  "my-gptel--memory-build-system-prompt should fall back to 20 when
+  "iar--memory-build-system-prompt should fall back to 20 when
 max-entries is non-positive or non-integer.  The :safe predicate rejects
 bad values at the file-local-variable level, but a direct setq bypasses
 it.  Without the guard, (format \"%d\" nil) or (format \"%d\" -1) would
 crash or produce a nonsensical prompt."
   ;; nil
-  (let ((my-gptel-memory-max-entries nil))
-    (let ((prompt (my-gptel--memory-build-system-prompt)))
+  (let ((iar-memory-max-entries nil))
+    (let ((prompt (iar--memory-build-system-prompt)))
       (should (stringp prompt))
       (should (string-match-p "20 bullet points" prompt))))
   ;; zero
-  (let ((my-gptel-memory-max-entries 0))
-    (let ((prompt (my-gptel--memory-build-system-prompt)))
+  (let ((iar-memory-max-entries 0))
+    (let ((prompt (iar--memory-build-system-prompt)))
       (should (stringp prompt))
       (should (string-match-p "20 bullet points" prompt))))
   ;; negative
-  (let ((my-gptel-memory-max-entries -5))
-    (let ((prompt (my-gptel--memory-build-system-prompt)))
+  (let ((iar-memory-max-entries -5))
+    (let ((prompt (iar--memory-build-system-prompt)))
       (should (stringp prompt))
       (should (string-match-p "20 bullet points" prompt))))
   ;; non-integer (string)
-  (let ((my-gptel-memory-max-entries "foo"))
-    (let ((prompt (my-gptel--memory-build-system-prompt)))
+  (let ((iar-memory-max-entries "foo"))
+    (let ((prompt (iar--memory-build-system-prompt)))
       (should (stringp prompt))
       (should (string-match-p "20 bullet points" prompt)))))
 
 (ert-deftest test-memory-summarize-guards-non-positive-timeout ()
-  "my-gptel-summarize-session should fall back to 300 when timeout is
+  "iar-summarize-session should fall back to 300 when timeout is
 non-positive or non-integer.  The :safe predicate rejects bad values at
 the file-local-variable level, but a direct setq bypasses it.  Without
 the guard, a nil timeout would crash time-add with wrong-type-argument.
-This test verifies the guard by mocking my-gptel--memory-call-ollama
+This test verifies the guard by mocking iar--memory-call-ollama
 to capture the timeout value passed to it."
-  (let ((my-gptel--current-agent-name "testagent")
+  (let ((iar--current-agent-name "testagent")
         (gptel-model "test-model")
         (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
         (captured-timeout nil))
-    (cl-letf (((symbol-function 'my-gptel--memory-get-agent-dir)
+    (cl-letf (((symbol-function 'iar--memory-get-agent-dir)
                (lambda () "/tmp/test-agent-dir"))
-              ((symbol-function 'my-gptel--memory-extract-summary)
+              ((symbol-function 'iar--memory-extract-summary)
                (lambda (_dir) "- old summary\n"))
-              ((symbol-function 'my-gptel--memory-call-ollama)
+              ((symbol-function 'iar--memory-call-ollama)
                (lambda (_payload timeout)
                  (setq captured-timeout timeout)
                  "Error: test done")))
       (with-temp-buffer
         (insert (make-string 100 ?A))
         ;; nil timeout should fall back to 300
-        (let ((my-gptel-memory-timeout nil))
+        (let ((iar-memory-timeout nil))
           (condition-case _err
-              (call-interactively #'my-gptel-summarize-session)
+              (call-interactively #'iar-summarize-session)
             (user-error nil)))
         (should (eq captured-timeout 300))
         ;; zero timeout should fall back to 300
         (setq captured-timeout nil)
-        (let ((my-gptel-memory-timeout 0))
+        (let ((iar-memory-timeout 0))
           (condition-case _err
-              (call-interactively #'my-gptel-summarize-session)
+              (call-interactively #'iar-summarize-session)
             (user-error nil)))
         (should (eq captured-timeout 300))
         ;; negative timeout should fall back to 300
         (setq captured-timeout nil)
-        (let ((my-gptel-memory-timeout -10))
+        (let ((iar-memory-timeout -10))
           (condition-case _err
-              (call-interactively #'my-gptel-summarize-session)
+              (call-interactively #'iar-summarize-session)
             (user-error nil)))
         (should (eq captured-timeout 300))
         ;; non-integer timeout should fall back to 300
         (setq captured-timeout nil)
-        (let ((my-gptel-memory-timeout "foo"))
+        (let ((iar-memory-timeout "foo"))
           (condition-case _err
-              (call-interactively #'my-gptel-summarize-session)
+              (call-interactively #'iar-summarize-session)
             (user-error nil)))
         (should (eq captured-timeout 300))
         ;; valid timeout should pass through
         (setq captured-timeout nil)
-        (let ((my-gptel-memory-timeout 120))
+        (let ((iar-memory-timeout 120))
           (condition-case _err
-              (call-interactively #'my-gptel-summarize-session)
+              (call-interactively #'iar-summarize-session)
             (user-error nil)))
         (should (eq captured-timeout 120))))))
 
 ;;; --- Defensive guard test for max-conversation-chars ---
 
 (ert-deftest test-memory-extract-conversation-guards-non-positive-max-chars ()
-  "my-gptel--memory-extract-conversation should skip truncation when
+  "iar--memory-extract-conversation should skip truncation when
 max-conversation-chars is non-positive or non-integer.  The :safe
 predicate rejects bad values at the file-local-variable level, but a
 direct setq bypasses it.  Without the guard, a nil value would crash
@@ -729,34 +729,34 @@ direct setq bypasses it.  Without the guard, a nil value would crash
 args-out-of-range in `substring'.  When the guard fails, the full
 text is returned without truncation."
   ;; nil -- should return full text, no truncation
-  (let ((my-gptel-memory-max-conversation-chars nil))
+  (let ((iar-memory-max-conversation-chars nil))
     (with-temp-buffer
       (insert (make-string 200 ?A))
-      (let ((result (my-gptel--memory-extract-conversation)))
+      (let ((result (iar--memory-extract-conversation)))
         (should (stringp result))
         (should-not (string-match-p "truncated" result))
         (should (= (length result) 200)))))
   ;; zero -- should return full text, no truncation
-  (let ((my-gptel-memory-max-conversation-chars 0))
+  (let ((iar-memory-max-conversation-chars 0))
     (with-temp-buffer
       (insert (make-string 200 ?A))
-      (let ((result (my-gptel--memory-extract-conversation)))
+      (let ((result (iar--memory-extract-conversation)))
         (should (stringp result))
         (should-not (string-match-p "truncated" result))
         (should (= (length result) 200)))))
   ;; negative -- should return full text, no truncation
-  (let ((my-gptel-memory-max-conversation-chars -10))
+  (let ((iar-memory-max-conversation-chars -10))
     (with-temp-buffer
       (insert (make-string 200 ?A))
-      (let ((result (my-gptel--memory-extract-conversation)))
+      (let ((result (iar--memory-extract-conversation)))
         (should (stringp result))
         (should-not (string-match-p "truncated" result))
         (should (= (length result) 200)))))
   ;; non-integer (string) -- should return full text, no truncation
-  (let ((my-gptel-memory-max-conversation-chars "foo"))
+  (let ((iar-memory-max-conversation-chars "foo"))
     (with-temp-buffer
       (insert (make-string 200 ?A))
-      (let ((result (my-gptel--memory-extract-conversation)))
+      (let ((result (iar--memory-extract-conversation)))
         (should (stringp result))
         (should-not (string-match-p "truncated" result))
         (should (= (length result) 200))))))
@@ -764,10 +764,10 @@ text is returned without truncation."
 ;;; --- Keybinding registration test ---
 
 (ert-deftest test-memory-keybinding-registered ()
-  "C-c m should be bound to my-gptel-summarize-session in gptel-mode-map.
+  "C-c m should be bound to iar-summarize-session in gptel-mode-map.
 Without this keybinding, the summarize command is only accessible via M-x,
-which is a discoverability regression.  Only C-c a (agent_loader) had a
+which is a discoverability regression.  Only C-c a (iar-agent-loader) had a
 keybinding test (test-agent.el); session and memory keybindings lacked tests."
-  (should (eq (keymap-lookup gptel-mode-map "C-c m") 'my-gptel-summarize-session)))
+  (should (eq (keymap-lookup gptel-mode-map "C-c m") 'iar-summarize-session)))
 
 (provide 'test-memory)

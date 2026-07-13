@@ -367,7 +367,7 @@ run_cycle() {
         "${DYNAMIC_MOUNT_OPTS[@]}" \
         --entrypoint /bin/bash \
         "${IMAGE_NAME}" \
-        -c "preflight.sh && emacs --batch -l /root/.emacs.d/init.el --eval '(agent-run-cycle :agent \"${AGENT_NAME}\" :timeout ${TIMEOUT} :self-modification ${SELF_MODIFICATION:-0} ${KNOWLEDGE_EVAL})'" 2>&1 | tee -a "${LOG_FILE}"
+        -c "preflight.sh && emacs --batch -l /root/.emacs.d/init.el --eval '(iar-run-cycle :agent \"${AGENT_NAME}\" :timeout ${TIMEOUT} :self-modification ${SELF_MODIFICATION:-0} ${KNOWLEDGE_EVAL})'" 2>&1 | tee -a "${LOG_FILE}"
 
     return ${PIPESTATUS[0]}
 }
