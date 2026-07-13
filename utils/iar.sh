@@ -454,6 +454,16 @@ else
 fi
 
 # =============================================================================
+# Personalization repo mount (for git operations)
+# =============================================================================
+# The personalization subdirectories (knowledge/, tasks/, audit/) are mounted
+# individually above. But git operations need the repo root with .git/.
+# Mount the entire personalization dir at a separate path so agents can
+# commit changes to knowledge files.
+PERSONALIZATION_MOUNT_OPTS=("-v" "${PERSONALIZATION_DIR}:/root/personalization:z")
+info "Personalization repo: ${PERSONALIZATION_DIR} -> /root/personalization (writable)"
+
+# =============================================================================
 # Self-modification i.ar mount
 # =============================================================================
 # In self-modification mode, mount the repo at /root/i.ar/ so agents can
@@ -503,6 +513,7 @@ build_podman_args() {
         "${IAR_MOUNT_OPTS[@]}" \
         "${SSH_MOUNT_OPTS[@]}" \
         "${DYNAMIC_MOUNT_OPTS[@]}" \
+        "${PERSONALIZATION_MOUNT_OPTS[@]}" \
         -e "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}" \
         -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}" \
         -e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" \
@@ -561,6 +572,7 @@ run_interactive() {
         "${IAR_MOUNT_OPTS[@]}" \
         "${SSH_MOUNT_OPTS[@]}" \
         "${DYNAMIC_MOUNT_OPTS[@]}" \
+        "${PERSONALIZATION_MOUNT_OPTS[@]}" \
         -e "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}" \
         -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}" \
         -e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" \

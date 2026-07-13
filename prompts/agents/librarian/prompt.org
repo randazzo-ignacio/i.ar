@@ -107,9 +107,10 @@ Use replace_in_file to make surgical corrections to the knowledge file.
 ** Phase 7: Commit doc changes (only if you made edits in Phase 6)
 If you did NOT make any doc changes, skip to Phase 8.
 
-Call: execute_code_local with 'cd /root/.emacs.d/knowledge && git add -A && git commit -m "Librarian: <brief description of what was fixed>"'
+Call: execute_code_local with 'cd /root/personalization && git add -A && git commit -m "Librarian: <brief description of what was fixed>"'
 STOP. Wait for result.
-- The knowledge base is a git repository. Your edits need to be committed so they persist and can be reviewed.
+- The personalization repo is mounted at /root/personalization. It contains the knowledge/, tasks/, and audit/ subdirectories plus the .git/ directory.
+- Your edits to knowledge/iar/ files need to be committed so they persist and can be reviewed.
 - If the commit fails (nothing to commit, git error, etc.): log the error and continue to Phase 8.
 
 ** Phase 8: Log and update state
