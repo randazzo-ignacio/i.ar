@@ -14,6 +14,8 @@
 (defconst init-tools-fs-dir (expand-file-name "tools/filesystem" init-dir))
 (defconst init-tools-code-dir (expand-file-name "tools/code" init-dir))
 (defconst init-tools-tasks-dir (expand-file-name "tools/tasks" init-dir))
+(defconst init-tools-notify-dir (expand-file-name "tools/notify" init-dir))
+(defconst init-tools-git-dir (expand-file-name "tools/git" init-dir))
 (defconst init-security-dir (expand-file-name "security" init-dir))
 (defconst init-session-dir (expand-file-name "session" init-dir))
 (defconst init-dynamic-dir (expand-file-name "dynamic" init-dir))
@@ -25,6 +27,7 @@
 ;; resolve files in sibling subdirectories.
 (dolist (subdir (list init-shared-dir init-core-dir init-agent-dir init-tools-dir
                        init-tools-fs-dir init-tools-code-dir init-tools-tasks-dir
+                       init-tools-notify-dir init-tools-git-dir
                        init-security-dir init-session-dir init-dynamic-dir
                        init-debug-dir))
   (add-to-list 'load-path subdir))
@@ -108,6 +111,12 @@
 (load (expand-file-name "write_task.el" init-tools-tasks-dir))
 (load (expand-file-name "remove_task.el" init-tools-tasks-dir))
 (load (expand-file-name "read_history.el" init-tools-tasks-dir))
+
+;; Notification tools
+(load (expand-file-name "telegram.el" init-tools-notify-dir))
+
+;; Git tools
+(load (expand-file-name "git_commit.el" init-tools-git-dir))
 
 ;; ──────────────────────────────────────────────────────────
 ;; Agent modules

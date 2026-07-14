@@ -158,6 +158,24 @@ Coupled with agents.d/common/delegated_task.org prompt template."
   :group 'iar)
 
 ;; =============================================================================
+;; Git Commit Tool Parameters
+;; =============================================================================
+
+(defcustom iar-git-author-name "Ignacio Randazzo"
+  "Default git author name for agent commits.
+Used by the git_commit tool when the repository does not have
+user.name configured.  Falls back to \"i.ar Agent\" if nil."
+  :type 'string
+  :group 'iar)
+
+(defcustom iar-git-author-email "ignacio@randazzo.ar"
+  "Default git author email for agent commits.
+Used by the git_commit tool when the repository does not have
+user.email configured.  Falls back to \"<agent>@i.ar.local\" if nil."
+  :type 'string
+  :group 'iar)
+
+;; =============================================================================
 ;; Gptel Fork Path
 ;; =============================================================================
 
