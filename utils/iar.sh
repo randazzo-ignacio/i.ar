@@ -621,6 +621,7 @@ run_cycle() {
         "${IAR_MOUNT_OPTS[@]}" \
         "${SSH_MOUNT_OPTS[@]}" \
         "${DYNAMIC_MOUNT_OPTS[@]}" \
+        "${PERSONALIZATION_MOUNT_OPTS[@]}" \
         -e "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}" \
         -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}" \
         -e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" \
