@@ -216,19 +216,19 @@ breakdown of personality vs injected knowledge."
 
 (defun iar-buffer-info ()
   "Display the current conversation buffer size in chars and approx tokens.
-This is the total size of everything sent to the LLM on the next request:
-system prompt + all conversation turns + tool results.  Use this to
-decide when to start a new session before context gets too large."
+The system prompt is NOT in the conversation buffer -- it is sent
+separately by gptel.  So Total = Buffer + Prompt (sum, not difference).
+Use this to decide when to start a new session before context gets too large."
   (interactive)
-  (let* ((chars (save-restriction
-                  (widen)
-                  (point-max)))
+  (let* ((buf-chars (save-restriction
+                     (widen)
+                     (buffer-size)))
          (prompt-chars (length (or gptel-system-prompt "")))
-         (conv-chars (- chars prompt-chars)))
+         (total-chars (+ buf-chars prompt-chars)))
     (message "=== Buffer Info ===\nTotal: %s\n  Prompt: %s\n  Conversation: %s"
-             (iar--format-size chars)
+             (iar--format-size total-chars)
              (iar--format-size prompt-chars)
-             (iar--format-size conv-chars))))
+             (iar--format-size buf-chars))))
 
 (defun iar-view-prompt ()
   "Display the full system prompt in a read-only buffer.

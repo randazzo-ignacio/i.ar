@@ -72,6 +72,11 @@
 ;; (which injects mount info into the system prompt).
 (load (expand-file-name "iar-mount-awareness.el" init-core-dir))
 
+;; Tool result truncation -- intercepts tool results before they enter
+;; the conversation buffer. Prevents unbounded output from consuming
+;; context tokens. Must load after gptel (for gptel--process-tool-call).
+(load (expand-file-name "iar-tool-result-truncation.el" init-core-dir))
+
 ;; ──────────────────────────────────────────────────────────
 ;; Security modules
 ;; ──────────────────────────────────────────────────────────

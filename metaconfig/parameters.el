@@ -336,6 +336,26 @@ Set to nil to disable truncation (read full file regardless of size)."
   :group 'iar)
 
 ;; =============================================================================
+;; Tool Result Truncation Parameters
+;; =============================================================================
+
+(defcustom iar-tool-result-max-chars 10000
+  "Maximum characters of tool result output before truncation.
+When a tool result exceeds this size, the middle is replaced with a
+truncation notice, preserving the first and last portions equally.
+This prevents unbounded tool output (e.g., large file reads, verbose
+command output) from consuming excessive context tokens.
+
+The first half and last half of the result are preserved, with a
+notice in between indicating the total size and how much was kept.
+
+Set to nil to disable truncation (pass full result regardless of size)."
+  :type '(choice (integer :tag "Max characters")
+                 (const :tag "No truncation" nil))
+  :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
+  :group 'iar)
+
+;; =============================================================================
 ;; Audit Log Parameters
 ;; =============================================================================
 
