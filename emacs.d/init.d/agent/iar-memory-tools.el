@@ -50,15 +50,6 @@ effect without reloading the module."
 
 ;;; --- Internal functions ---
 
-;; Alias to the canonical implementation in shared/agent_utils.el.
-;; Both modules need to resolve the current agent's directory from
-;; buffer-local state (iar--current-agent-name or
-;; iar--current-agent-file). The logic is identical, so we
-;; delegate to the single source of truth.
-(defalias 'iar--memory-get-agent-dir 'iar--resolve-agent-audit-dir
-  "Return the audit directory path for the currently loaded agent.
-Memory files (LOGS.md, SUMMARY.md, MEMORIES.md) live in audit/<agent>/.
-This is an alias for `iar--resolve-agent-audit-dir' defined in shared/agent_utils.el.")
 
 (defun iar--memory-extract-summary (agent-dir)
   "Read SUMMARY.md from AGENT-DIR. Returns the content string."
@@ -273,7 +264,7 @@ Returns t on success, nil on failure.  Does not signal user-error when
 called non-interactively (for use by iar-quit)."
   (interactive)
   (condition-case err
-      (let* ((agent-dir (iar--memory-get-agent-dir))
+      (let* ((agent-dir (iar--resolve-agent-audit-dir))
              (current-summary (iar--memory-extract-summary agent-dir))
              (conversation (iar--memory-extract-conversation))
              (payload (iar--memory-build-payload current-summary conversation))
@@ -324,10 +315,6 @@ called non-interactively (for use by iar-quit)."
      (if (called-interactively-p 'any)
          (user-error "Session summarization failed: %s" (error-message-string err))
        nil))))
-
-;;; --- Backward compatibility alias ---
-(defalias 'iar-summarize-memories #'iar-summarize-session
-  "Backward compatibility alias for `iar-summarize-session'.")
 
 ;;; --- Keybinding ---
 

@@ -107,7 +107,7 @@ We only observe and log."
         (let* ((info (iar-gptel-fsm-info fsm))
                (tool-name (or (and tool-spec (gptel-tool-name tool-spec))
                               (plist-get tool-call :name)
-                              "unknown"))
+                              "nil"))
                (tool-use-list (plist-get info :tool-use))
                (total-tools (length tool-use-list))
                (tools-with-result-before

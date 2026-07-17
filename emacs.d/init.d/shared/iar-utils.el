@@ -23,13 +23,13 @@
 ;;; --- Agent name resolution ---
 
 (defun iar--get-agent-name ()
-  "Return the current agent name.
+  "Return the current agent name, or nil if none is set.
 Checks `iar--current-agent-name' (buffer-local, set by
 iar-agent-loader or iar-agent-cycle).  Falls back to the global
 default value (set by agent-cycle for process-buffer contexts).
 Then falls back to deriving the name from `iar--current-agent-file'
 (the prompt.org path), checking buffer-local then global default.
-Returns \"unknown\" if none are set.
+Returns nil if none are set.
 
 This function is called from debug module advice (request-logger,
 fsm-tracer, buffer-monitor) which run in gptel's process buffers,
@@ -41,18 +41,40 @@ so it is visible in process buffer contexts."
                            iar--current-agent-name)
                       (default-value 'iar--current-agent-name))
                 nil)))
-    (if name
-        name
-      (let ((file (if (boundp 'iar--current-agent-file)
-                      (or (and (local-variable-p 'iar--current-agent-file)
-                               iar--current-agent-file)
-                          (default-value 'iar--current-agent-file))
-                    nil)))
-        (if file
+    (or name
+        (let ((file (if (boundp 'iar--current-agent-file)
+                        (or (and (local-variable-p 'iar--current-agent-file)
+                                 iar--current-agent-file)
+                            (default-value 'iar--current-agent-file))
+                      nil)))
+          (when file
             (file-name-nondirectory
              (directory-file-name
-              (file-name-directory file)))
-          "unknown")))))
+              (file-name-directory file))))))))
+
+;;; --- Non-blank string check ---
+
+(defun iar--non-blank-p (string)
+  "Return non-nil if STRING is a non-blank string (contains at least one non-whitespace char).
+Returns nil for nil, empty strings, and whitespace-only strings."
+  (and (stringp string)
+       (string-match-p "\\S-" string)))
+
+;;; --- Path traversal defense ---
+
+(defun iar--path-traversal-check (path base-dir)
+  "Check that PATH (expanded) does not escape BASE-DIR (expanded).
+Uses `file-truename' to resolve symlinks before checking.
+Returns PATH if safe, signals an error if traversal is detected.
+If `file-truename' fails on PATH (file doesn't exist yet), falls back
+to the expanded path and checks against the truename of BASE-DIR."
+  (let* ((base-real (file-truename base-dir))
+         (path-real (condition-case nil
+                        (file-truename path)
+                      (error path))))
+    (if (string-prefix-p base-real path-real)
+        path
+      (error "Path traversal attempt blocked: '%s' escapes '%s'" path base-dir))))
 
 ;;; --- Approximate token counting ---
 

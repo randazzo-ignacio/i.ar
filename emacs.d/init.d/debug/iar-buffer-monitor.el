@@ -54,7 +54,7 @@ BUF is the gptel conversation buffer about to be sent."
          (agent (iar--get-agent-name))
          (model (if (boundp 'gptel-model)
                     (or (with-current-buffer buf gptel-model) gptel-model)
-                  "unknown"))
+                  "nil"))
          (timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
          (entry (format "[%s] %s | buffer-monitor | size=%d chars=%d approx_tokens=%d model=%s"
                         timestamp agent buf-size chars approx-tokens model)))

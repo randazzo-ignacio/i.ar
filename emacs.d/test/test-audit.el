@@ -70,12 +70,12 @@ Temporarily rebinds `iar--audit-log-path' to a temp file."
 (ert-deftest test-audit-get-agent-name-when-unset ()
   "iar--get-agent-name should return 'unknown' when no agent is set."
   (let (iar--current-agent-name)
-    (should (string= (iar--get-agent-name) "unknown"))))
+    (should (string= (iar--get-agent-name) nil))))
 
 (ert-deftest test-audit-get-agent-name-when-nil ()
   "iar--get-agent-name should return 'unknown' when agent name is nil."
   (let ((iar--current-agent-name nil))
-    (should (string= (iar--get-agent-name) "unknown"))))
+    (should (string= (iar--get-agent-name) nil))))
 
 ;;; --- Core audit log tests ---
 

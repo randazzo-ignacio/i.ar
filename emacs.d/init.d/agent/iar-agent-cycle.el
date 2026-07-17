@@ -542,7 +542,4 @@ until it either completes all steps or reaches the turn limit."
                                 (iar--cycle-token-summary)))
                   (run-with-timer 1 nil (lambda () (kill-emacs exit-code)))))))))))))
 
-;; Backward compatibility alias
-(defalias 'iar-darwin-run-cycle #'iar-run-cycle)
-
 (provide 'iar-agent-cycle)

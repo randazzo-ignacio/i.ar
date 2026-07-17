@@ -22,7 +22,7 @@
 (ert-deftest test-request-logger-agent-name ()
   "Agent name should fall back to unknown when not set."
   (let ((iar--current-agent-name nil))
-    (should (equal (iar--get-agent-name) "unknown")))
+    (should (equal (iar--get-agent-name) nil)))
   (let ((iar--current-agent-name "darwin"))
     (should (equal (iar--get-agent-name) "darwin"))))
 
@@ -94,7 +94,7 @@
 (ert-deftest test-fsm-tracer-agent-name ()
   "Agent name should fall back to unknown when not set."
   (let ((iar--current-agent-name nil))
-    (should (equal (iar--get-agent-name) "unknown")))
+    (should (equal (iar--get-agent-name) nil)))
   (let ((iar--current-agent-name "gardener"))
     (should (equal (iar--get-agent-name) "gardener"))))
 

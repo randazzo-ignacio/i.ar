@@ -65,7 +65,7 @@ instead of the currently loaded one."
                  ;; Note: iar--load-agent-profile also validates,
                  ;; so this is defense-in-depth, not the primary check.
                 (let ((current (iar--get-agent-name)))
-                  (if (not (equal "unknown" current))
+                  (if current
                       current
                     (error "No agent currently loaded in this buffer. Pass agent_name to reload a specific agent.")))))
              (target-file (expand-file-name (format "%s/prompt.org" target-name) agent-dir))

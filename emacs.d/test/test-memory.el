@@ -34,12 +34,12 @@
 
 (defmacro with-memory-fixture (&rest body)
   "Execute BODY with a temporary agent directory.
-Temporarily rebinds `iar--memory-get-agent-dir' to return the temp dir."
+Temporarily rebinds `iar--resolve-agent-audit-dir' to return the temp dir."
   (declare (indent 0))
   `(unwind-protect
        (progn
          (test-memory--setup)
-         (cl-letf (((symbol-function 'iar--memory-get-agent-dir)
+         (cl-letf (((symbol-function 'iar--resolve-agent-audit-dir)
                     (lambda () (expand-file-name "testagent" test-memory--tmpdir))))
            ,@body))
      (test-memory--teardown)))
@@ -224,7 +224,7 @@ are left behind in the temp directory."
 ;;; --- Agent dir resolution tests ---
 
 (ert-deftest test-memory-get-agent-dir-with-name ()
-  "iar--memory-get-agent-dir should use iar--current-agent-name.
+  "iar--resolve-agent-audit-dir should use iar--current-agent-name.
 Memory files now live in audit/<agent>/ (not tasks/<agent>/)."
   (let ((old-value (and (boundp 'iar--current-agent-name)
                         iar--current-agent-name))
@@ -236,7 +236,7 @@ Memory files now live in audit/<agent>/ (not tasks/<agent>/)."
                  (audit-dir (expand-file-name "audit" user-emacs-directory))
                  (agent-dir (expand-file-name "testagent" audit-dir)))
             (make-directory agent-dir t)
-            (let ((dir (iar--memory-get-agent-dir)))
+            (let ((dir (iar--resolve-agent-audit-dir)))
               (should (stringp dir))
               (should (string-match-p "testagent" dir))
               (should (string-match-p "audit" dir))))
@@ -248,7 +248,7 @@ Memory files now live in audit/<agent>/ (not tasks/<agent>/)."
         (setq user-emacs-directory old-user-emacs-directory)))))
 
 (ert-deftest test-memory-get-agent-dir-fallback-to-file ()
-  "iar--memory-get-agent-dir should fall back to agent file path."
+  "iar--resolve-agent-audit-dir should fall back to agent file path."
   (let ((old-name (and (boundp 'iar--current-agent-name)
                        iar--current-agent-name))
         (old-file (and (boundp 'iar--current-agent-file)
@@ -257,14 +257,14 @@ Memory files now live in audit/<agent>/ (not tasks/<agent>/)."
         (progn
           (setq iar--current-agent-name nil)
           (setq iar--current-agent-file "/some/path/myagent/prompt.org")
-          (let ((dir (iar--memory-get-agent-dir)))
+          (let ((dir (iar--resolve-agent-audit-dir)))
             (should (stringp dir))
             (should (string-match-p "myagent" dir))))
       (setq iar--current-agent-name old-name)
       (setq iar--current-agent-file old-file))))
 
 (ert-deftest test-memory-get-agent-dir-error-when-no-agent ()
-  "iar--memory-get-agent-dir should error when no agent is loaded."
+  "iar--resolve-agent-audit-dir should error when no agent is loaded."
   (let ((old-name (and (boundp 'iar--current-agent-name)
                        iar--current-agent-name))
         (old-file (and (boundp 'iar--current-agent-file)
@@ -274,7 +274,7 @@ Memory files now live in audit/<agent>/ (not tasks/<agent>/)."
           (setq iar--current-agent-name nil)
           (setq iar--current-agent-file nil)
           (condition-case err
-              (iar--memory-get-agent-dir)
+              (iar--resolve-agent-audit-dir)
             (error
              (should (string-match-p "No agent" (error-message-string err))))
             (:success
@@ -526,8 +526,8 @@ re-signal it unchanged."
         (gptel-model "test-model")
         (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
         (captured-error nil))
-    ;; Mock iar--memory-get-agent-dir to avoid needing a real agent dir
-    (cl-letf (((symbol-function 'iar--memory-get-agent-dir)
+    ;; Mock iar--resolve-agent-audit-dir to avoid needing a real agent dir
+    (cl-letf (((symbol-function 'iar--resolve-agent-audit-dir)
                (lambda () "/tmp/test-agent-dir")))
       ;; Mock iar--memory-extract-summary to return some content
       (cl-letf (((symbol-function 'iar--memory-extract-summary)
@@ -557,7 +557,7 @@ user-error, the outer condition-case should NOT wrap it."
         (gptel-model "test-model")
         (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
         (captured-error nil))
-    (cl-letf (((symbol-function 'iar--memory-get-agent-dir)
+    (cl-letf (((symbol-function 'iar--resolve-agent-audit-dir)
                (lambda () "/tmp/test-agent-dir"))
               ((symbol-function 'iar--memory-extract-summary)
                (lambda (_dir) "- old summary\n"))
@@ -589,7 +589,7 @@ does NOT swallow genuine unexpected errors."
         (gptel-model "test-model")
         (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
         (captured-error nil))
-    (cl-letf (((symbol-function 'iar--memory-get-agent-dir)
+    (cl-letf (((symbol-function 'iar--resolve-agent-audit-dir)
                (lambda () "/tmp/test-agent-dir"))
               ((symbol-function 'iar--memory-extract-summary)
                (lambda (_dir) "- old summary\n"))
@@ -673,7 +673,7 @@ to capture the timeout value passed to it."
         (gptel-model "test-model")
         (gptel-backend (gptel-make-ollama "test" :host "localhost:11434"))
         (captured-timeout nil))
-    (cl-letf (((symbol-function 'iar--memory-get-agent-dir)
+    (cl-letf (((symbol-function 'iar--resolve-agent-audit-dir)
                (lambda () "/tmp/test-agent-dir"))
               ((symbol-function 'iar--memory-extract-summary)
                (lambda (_dir) "- old summary\n"))

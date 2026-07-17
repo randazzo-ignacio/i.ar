@@ -29,10 +29,6 @@ boundary, so a string like \"valid\\n../../etc\" would pass
   (and (stringp name)
        (string-match-p "\\`[a-zA-Z0-9_-]+\\'" name)))
 
-;; Backward-compatible aliases for the old separate functions.
-(defalias 'iar--valid-agent-name-p 'iar--valid-name-p)
-(defalias 'iar--valid-task-name-p 'iar--valid-name-p)
-
 (defun iar--validate-agent-name (name)
   "Validate that NAME is a safe agent name, or signal an error.
 Returns NAME if valid."
@@ -54,23 +50,20 @@ Returns NAME if valid."
 BASE is \"tasks\" or \"audit\" (a subdirectory of user-emacs-directory).
 Validates the agent name and checks for path traversal.
 Returns the resolved directory path, or signals an error if no agent
-is loaded."
+is loaded or if the agent name is nil."
   (let* ((base-path (expand-file-name
                      (if (equal base "tasks") iar-tasks-path
                        (if (equal base "audit") iar-audit-path
                          base))
                      user-emacs-directory))
          (agent-name (iar--get-agent-name)))
-    (if (not (equal agent-name "unknown"))
-        (progn
-          (iar--validate-agent-name agent-name)
-          (let* ((base-real (file-truename base-path))
-                 (resolved (expand-file-name agent-name base-path))
-                 (resolved-real (file-truename resolved)))
-            (unless (string-prefix-p base-real resolved-real)
-              (error "Path traversal attempt blocked for agent: '%s'" agent-name))
-            resolved))
-      (error "No agent loaded. Load one with C-c a first."))))
+    (unless agent-name
+      (error "No agent loaded. Load one with C-c a first."))
+    (unless (member base '("tasks" "audit"))
+      (error "Unrecognized base directory: '%s'. Only \"tasks\" and \"audit\" are supported." base))
+    (iar--validate-agent-name agent-name)
+    (let ((resolved (expand-file-name agent-name base-path)))
+      (iar--path-traversal-check resolved base-path))))
 
 (defun iar--resolve-agent-tasks-dir ()
   "Return the tasks directory path for the currently loaded agent.
@@ -83,11 +76,6 @@ Memory files (LOGS.md, SUMMARY.md, MEMORIES.md) live in the audit mount
 at /root/.emacs.d/audit/<agent-name>/.  Used by iar-memory-tools.el via alias."
   (iar--resolve-agent-dir "audit"))
 
-;; Backward-compatible alias.
-(defalias 'iar--get-agent-dir 'iar--resolve-agent-tasks-dir
-  "Backward-compatible alias for `iar--resolve-agent-tasks-dir'.
-Older code and tests may reference this name.")
-
 (defun iar--resolve-task-path (task-name)
   "Resolve TASK-NAME to a full path within the current agent's tasks dir.
 Adds the .md extension.  Validates the task name and checks for
@@ -95,11 +83,7 @@ path traversal."
   (iar--validate-task-name task-name)
   (let* ((agent-dir (iar--resolve-agent-tasks-dir))
          (filename (concat task-name ".md"))
-         (full-path (expand-file-name filename agent-dir))
-         (agent-dir-real (file-truename agent-dir))
-         (full-path-real (file-truename full-path)))
-    (unless (string-prefix-p agent-dir-real full-path-real)
-      (error "Path traversal attempt blocked for task: '%s'" task-name))
-    full-path))
+         (full-path (expand-file-name filename agent-dir)))
+    (iar--path-traversal-check full-path agent-dir)))
 
 (provide 'iar-agent-utils)

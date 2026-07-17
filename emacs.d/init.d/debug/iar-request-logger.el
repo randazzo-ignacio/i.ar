@@ -82,7 +82,7 @@ Called at the start of each cycle in loop mode."
           :output-tokens iar--usage-output-tokens
           :total-tokens (+ iar--usage-input-tokens iar--usage-output-tokens)
           :duration-secs (round duration)
-          :model (or iar--usage-model "unknown"))))
+          :model (or iar--usage-model "nil"))))
 
 (defun iar--usage-parse-tokens (body)
   "Parse token counts from response BODY.
