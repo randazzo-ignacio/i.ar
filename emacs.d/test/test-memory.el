@@ -321,11 +321,10 @@ Temporarily rebinds `iar--resolve-agent-audit-dir' to return the temp dir."
 ;;; --- Return value bug fix tests ---
 
 (ert-deftest test-memory-summarize-reload-failure-does-not-contaminate ()
-  "iar-summarize-session should return t even when reload-agent fails.
+  "iar-summarize-session should signal user-error when reload-agent fails.
 The summary was written successfully, but reload failed. The function
-should return t because the summary WAS written. The reload failure
-the reload result and returns nil on failure, because the user needs
-to know the profile was not refreshed."
+signals a user-error so the user knows the profile was not refreshed.
+In non-interactive mode, it returns nil."
   (let ((iar--current-agent-name "testagent")
         (gptel-model "test-model")
         (gptel-backend (gptel-make-ollama "test" :host "localhost:11434")))
@@ -341,9 +340,10 @@ to know the profile was not refreshed."
                (lambda (&optional _name) "Error: Failed to reload agent: test")))
       (with-temp-buffer
         (insert (make-string 100 ?A))
-        (let ((result (call-interactively #'iar-summarize-session)))
-          (condition-case _err (call-interactively (quote iar-summarize-session)) (user-error nil)))))))
-
+        (condition-case _err
+            (call-interactively #'iar-summarize-session)
+          (user-error
+           (should (string-match-p "reload failed" _err))))))))
 (ert-deftest test-memory-summarize-success-returns-t ()
   "iar-summarize-session should return t on full success."
   (let ((iar--current-agent-name "testagent")
