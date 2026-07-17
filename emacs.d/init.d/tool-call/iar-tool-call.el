@@ -11,7 +11,7 @@
 ;; - Pre/post-tool-call hooks (i.ar's own, not gptel's)
 ;; - Result truncation (intercepts before buffer insertion)
 ;; - Audit logging (every tool call logged with status)
-;; - Token usage tracking (parses from Ollama responses)
+;; - Token usage tracking (parses from Ollama responses via curl advice)
 ;;
 ;; What this layer does NOT own:
 ;; - Tool function implementation (tools define their own functions)
@@ -25,6 +25,8 @@
 ;;   Truncation happens via :around advice on gptel--process-tool-call,
 ;;   installed here.
 ;;   Audit logging happens in the post-tool-call hook, installed here.
+;;   Token parsing happens via :before advice on gptel-curl--stream-cleanup
+;;   and gptel-curl--sentinel, installed here.
 ;;
 ;; If gptel's internals change, only this file needs updating.
 
@@ -121,29 +123,24 @@ Also logs every tool call to the audit log centrally."
 ;;; ---------------------------------------------------------
 ;;; Result Truncation
 ;;; ---------------------------------------------------------
-;; Intercepts tool results BEFORE they enter the conversation buffer.
-;; Uses :around advice on gptel--process-tool-call (the single choke point).
 
 (defun iar--truncate-tool-result (result)
-  "Truncate RESULT string if it exceeds `iar-tool-result-max-chars'.
-Uses middle-truncation: preserves first and last halves equally,
-replaces the middle with a truncation notice.  Returns RESULT
-unchanged if it's under the limit or if truncation is disabled."
+  "Truncate RESULT if it exceeds `iar-tool-result-max-chars'.
+Uses middle-truncation: preserves first N/2 and last N/2 chars,
+replaces middle with a notice showing total size and how much was kept.
+Returns RESULT unchanged if under limit or if truncation is disabled."
   (let ((max-chars iar-tool-result-max-chars))
-    (if (or (null max-chars)
-            (not (integerp max-chars))
-            (<= max-chars 0)
-            (null result)
-            (not (stringp result))
-            (<= (length result) max-chars))
-        result
-      (let* ((total (length result))
-             (keep (/ max-chars 2))
-             (head (substring result 0 keep))
-             (tail (substring result (- total keep)))
-             (notice (format "\n[... truncated: %d total chars, kept first %d and last %d ...]\n"
-                             total keep keep)))
-        (concat head notice tail)))))
+    (cond
+     ((null max-chars) result)
+     ((not (stringp result)) result)
+     ((<= (length result) max-chars) result)
+     (t (let* ((total (length result))
+               (keep (/ max-chars 2))
+               (head (substring result 0 keep))
+               (tail (substring result (- total keep)))
+               (notice (format "\n[... truncated: %d total chars, kept first %d and last %d ...]\n"
+                               total keep keep)))
+          (concat head notice tail))))))
 
 (defun iar--truncate-tool-result-advice (orig-fun fsm tool-spec tool-call result)
   "Around advice on `gptel--process-tool-call'.
@@ -159,13 +156,13 @@ Also runs post-tool-call audit logging after the original function."
 ;;; ---------------------------------------------------------
 ;;; Token Usage Tracking
 ;;; ---------------------------------------------------------
-;; Accumulators for token usage. The parse function lives in
-;; iar-request-logger.el (which hooks into gptel's curl internals to
-;; capture raw responses). When the request-logger is replaced by
-;; the status mode in Phase 3, the parse function moves here.
+;; Accumulators for token usage. The parse function lives here
+;; (moved from iar-request-logger.el when the debug modules were
+;; replaced by iar-status-mode.el in Phase 3).
 ;;
-;; For now, these accumulators are the single source of truth.
-;; The request-logger's iar--usage-parse-tokens writes to them.
+;; Curl advice on gptel-curl--stream-cleanup and gptel-curl--sentinel
+;; calls the parse function to extract token counts from Ollama
+;; streaming responses before gptel parses them.
 
 (defvar iar--usage-requests 0
   "Total number of LLM requests in the current session.")
@@ -229,6 +226,61 @@ Best-effort: errors are demoted to messages."
      (message "Warning: usage log write failed: %s"
               (error-message-string err)))))
 
+(defun iar--usage-parse-tokens (body)
+  "Parse token counts from response BODY.
+Ollama's final streaming chunk contains:
+  \"done\":true,\"prompt_eval_count\":N,\"eval_count\":N
+Extract these and accumulate into the global counters.
+Also extracts the model name from the response."
+  ;; Extract model name (appears in every chunk)
+  (when (string-match "\"model\":\"\\([^\"]+\\)\"" body)
+    (setq iar--usage-model (match-string 1 body)))
+  ;; Extract token counts. Use [^0-9]* to skip spaces after colon.
+  ;; Anchor eval_count with a preceding quote to avoid matching inside prompt_eval_count.
+  (when (string-match "prompt_eval_count[^0-9]*\\([0-9]+\\)" body)
+    (let ((input-tokens (string-to-number (match-string 1 body))))
+      (setq iar--usage-last-input input-tokens)
+      (setq iar--usage-input-tokens (+ iar--usage-input-tokens input-tokens))))
+  (when (string-match "\"eval_count\"[^0-9]*\\([0-9]+\\)" body)
+    (let ((output-tokens (string-to-number (match-string 1 body))))
+      (setq iar--usage-last-output output-tokens)
+      (setq iar--usage-output-tokens (+ iar--usage-output-tokens output-tokens)))))
+
+;;; ---------------------------------------------------------
+;;; Curl Advice: Token Parsing
+;;; ---------------------------------------------------------
+;; :before advice on gptel's curl cleanup functions to parse token
+;; counts from the raw response before gptel processes it.
+
+(defun iar--usage-parse-from-curl (process)
+  "Parse token counts from PROCESS buffer before gptel cleans up.
+Reads the raw response body, extracts token counts, and increments
+the request counter. Best-effort: errors are demoted to messages."
+  (condition-case err
+      (let ((proc-buf (process-buffer process)))
+        (when (buffer-live-p proc-buf)
+          (with-current-buffer proc-buf
+            (let* ((raw-content (buffer-substring-no-properties
+                                 (point-min) (point-max)))
+                   ;; Strip HTTP headers -- find the blank line separator
+                   (header-end (string-match "\n\n" raw-content))
+                   (body (if header-end
+                             (substring raw-content (+ header-end 2))
+                           raw-content)))
+              (iar--usage-parse-tokens body)
+              (cl-incf iar--usage-requests)))))
+    (error
+     (message "Warning: token parse from curl failed: %s"
+              (error-message-string err)))))
+
+(defun iar--usage-curl-stream-cleanup-advice (process _status)
+  "Before advice on `gptel-curl--stream-cleanup' to parse tokens."
+  (iar--usage-parse-from-curl process))
+
+(defun iar--usage-curl-sentinel-advice (process _status)
+  "Before advice on `gptel-curl--sentinel' to parse tokens."
+  (iar--usage-parse-from-curl process))
+
 ;;; ---------------------------------------------------------
 ;;; Setup: Install bridges and advice
 ;;; ---------------------------------------------------------
@@ -242,6 +294,11 @@ Idempotent: removes existing advice before adding."
   ;; Install truncation + audit logging advice
   (advice-remove 'gptel--process-tool-call #'iar--truncate-tool-result-advice)
   (advice-add 'gptel--process-tool-call :around #'iar--truncate-tool-result-advice)
+  ;; Install token parsing advice on curl functions
+  (advice-remove 'gptel-curl--stream-cleanup #'iar--usage-curl-stream-cleanup-advice)
+  (advice-add 'gptel-curl--stream-cleanup :before #'iar--usage-curl-stream-cleanup-advice)
+  (advice-remove 'gptel-curl--sentinel #'iar--usage-curl-sentinel-advice)
+  (advice-add 'gptel-curl--sentinel :before #'iar--usage-curl-sentinel-advice)
   ;; Write usage log on exit
   (add-hook 'kill-emacs-hook #'iar--usage-write-log)
   (message "[tool-call] Layer installed"))

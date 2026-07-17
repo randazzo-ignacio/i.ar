@@ -84,12 +84,15 @@
 
 ;; Gptel compatibility layer -- TEMPORARY: will be deleted after all
 ;; modules are migrated to the tool call layer.
+;; Still needed by agent-cycle (FSM monitoring) and delegate (unused require).
+;; Deferred to Phase 4 Step 4.2.
 (let ((gptel-specific-dir (expand-file-name "init.d/gptel-specific" user-emacs-directory)))
   (add-to-list 'load-path gptel-specific-dir)
   (load (expand-file-name "iar-gptel-compat.el" gptel-specific-dir)))
 
 ;; Tool call layer -- the single integration point with gptel.
 ;; All i.ar modules hook into this, not gptel internals directly.
+;; Owns: tool registration, hooks, truncation, audit logging, token parsing.
 (load (expand-file-name "iar-tool-call.el" init-tool-call-dir))
 
 ;; Mount awareness -- parse IAR_EXTRA_MOUNTS env var so agents know
@@ -171,24 +174,10 @@
 ;; ──────────────────────────────────────────────────────────
 ;; Debug modules
 ;; ──────────────────────────────────────────────────────────
-;; Status mode -- custom mode-line display replacing buffer-monitor,
-;; request-logger, and fsm-tracer. Shows agent name, prompt size,
-;; last and cumulative token counts. No gptel internals.
+;; Status mode -- custom mode-line display. Shows agent name, prompt
+;; size, last and cumulative token counts. Replaces the old
+;; buffer-monitor, request-logger, and fsm-tracer modules.
 (load (expand-file-name "iar-status-mode.el" init-debug-dir))
-
-;; Buffer size monitor -- logs buffer size before each gptel-send,
-;; warns at threshold, optional hard cap to prevent host crash.
-(load (expand-file-name "iar-buffer-monitor.el" init-debug-dir))
-
-;; Request logger -- captures full JSON payloads sent to and received
-;; from the LLM. Settles whether the model returns 2 tool calls or gptel
-;; splits one into two.
-(load (expand-file-name "iar-request-logger.el" init-debug-dir))
-
-;; FSM state tracer -- logs every FSM state transition and tool call
-;; inspection. Shows exactly when the FSM enters TOOL and whether it
-;; tries to leave.
-(load (expand-file-name "iar-fsm-tracer.el" init-debug-dir))
 
 ;; ──────────────────────────────────────────────────────────
 ;; Session modules
