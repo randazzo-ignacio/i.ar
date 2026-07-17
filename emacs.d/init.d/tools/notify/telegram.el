@@ -16,7 +16,6 @@
 
 (require 'iar-tool-call)
 (require 'iar-utils)
-(require 'iar-audit-log)
 
 (defun iar--tool-telegram (callback message)
   "Send MESSAGE via Telegram Bot API.
@@ -75,7 +74,6 @@ The message is prefixed with [AgentName] for identification."
                            (setq ok (eq (plist-get parsed :ok) t)))
                        (error
                         (setq parse-error (error-message-string err))))
-                     (iar--audit-log "telegram"
                                           (format "msg=%s ok=%s" (substring full-message 0 (min 100 (length full-message))) (if ok "yes" "no")))
                      (funcall callback
                               (cond
@@ -84,7 +82,7 @@ The message is prefixed with [AgentName] for identification."
                                (parse-error
                                 (format "Error: Telegram API returned unparseable response: %s" output))
                                (t
-                                (format "Error: Telegram API returned: %s" output)))))))))
+                                (format "Error: Telegram API returned: %s" output))))))))
         ;; Timeout: kill process after 15 seconds
         (run-with-timer 15 nil
                         (lambda ()

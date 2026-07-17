@@ -6,7 +6,6 @@
 
 (require 'iar-tool-call)
 (require 'iar-file-guard)
-(require 'iar-audit-log)
 (require 'iar-utils)  ; iar--with-suppressed-save-hooks
 
 (defun iar--fs-append-file (filepath content)
@@ -45,7 +44,6 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
                         (insert content))
                       (iar--with-suppressed-save-hooks
                         (save-buffer))
-                      (iar--audit-log-append expanded-path)
                       (format "Success: Content appended to '%s'" expanded-path))))
                 (let* ((attrs (file-attributes expanded-path))
                        (size (and attrs (file-attribute-size attrs)))
@@ -60,7 +58,6 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
                               (error ""))
                           "")))
                   (write-region (concat prefix content) nil expanded-path t 'silent)
-                  (iar--audit-log-append expanded-path)
                   (format "Success: Content appended to '%s'" expanded-path))))
           (error (format "Error: Failed to append to '%s'. Emacs says: %s"
                          expanded-path (error-message-string err))))))))

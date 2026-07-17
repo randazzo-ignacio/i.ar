@@ -103,7 +103,15 @@ Returns (:block . message) if any hook function blocks, nil otherwise."
   (run-hook-with-args-until-success 'iar-pre-tool-call-functions info))
 
 (defun iar--bridge-post-tool-call (tool-name tool-result)
-  "Bridge function: run `iar-post-tool-call-functions' for TOOL-NAME and TOOL-RESULT."
+  "Bridge function: run `iar-post-tool-call-functions' for TOOL-NAME and TOOL-RESULT.
+Also logs every tool call to the audit log centrally."
+  (let ((status (if (and (stringp tool-result)
+                         (string-prefix-p "Error:" tool-result))
+                    "error" "success")))
+    (iar--audit-log "tool_call"
+                    (format "name=%s status=%s result_len=%d"
+                            (or tool-name "nil") status
+                            (length (or tool-result "")))))
   (run-hook-with-args 'iar-post-tool-call-functions tool-name tool-result))
 
 (defun iar--bridge-post-response (status info)

@@ -6,7 +6,6 @@
 
 (require 'iar-tool-call)
 (require 'iar-file-guard)
-(require 'iar-audit-log)
 (require 'iar-utils)  ; iar--with-suppressed-save-hooks
 
 (defun iar--fs-write-file (filepath content)
@@ -35,13 +34,11 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
                       (insert content)
                       (iar--with-suppressed-save-hooks
                         (save-buffer))
-                      (iar--audit-log-write expanded-path)
                       (format "Success: File written to '%s'" expanded-path))))
                 (let ((tmp-file (make-temp-file "iar-write-")))
                   (with-temp-file tmp-file
                     (insert content))
                   (rename-file tmp-file expanded-path t)
-                  (iar--audit-log-write expanded-path)
                   (format "Success: File written to '%s'" expanded-path))))
           (error (format "Error: Failed to write file to '%s'. Emacs says: %s"
                          expanded-path (error-message-string err))))))))

@@ -15,7 +15,6 @@
 
 (require 'iar-tool-call)
 (require 'iar-utils)
-(require 'iar-audit-log)
 
 ;; Declared in configs/ (split parameter files) (loaded before init.d modules).
 (defvar iar-git-author-name nil
@@ -74,13 +73,11 @@ Returns a string starting with Success: or Error:."
           (let ((status-result (iar--git-run repo-dir "diff" "--cached" "--quiet")))
             (if (= 0 (car status-result))
                 (progn
-                  (iar--audit-log "git_commit"
                                        (format "repo=%s result=nothing_to_commit" repo-dir))
                   "Success: No changes to commit. Working tree is clean.")
               (let* ((commit-result (iar--git-run repo-dir "commit" "-m" message))
                      (exit-code (car commit-result))
                      (output (cdr commit-result)))
-                (iar--audit-log "git_commit"
                                      (format "repo=%s msg=%s exit=%d"
                                              repo-dir
                                              (substring message 0 (min 100 (length message)))
@@ -89,7 +86,7 @@ Returns a string starting with Success: or Error:."
                     (format "Success: Committed in %s\n%s"
                             repo-dir (string-trim output))
                   (format "Error: git commit failed (exit %d): %s"
-                          exit-code output)))))))))))
+                          exit-code output)))))))))
 
 (iar-tool-register
  (gptel-make-tool

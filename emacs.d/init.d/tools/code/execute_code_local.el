@@ -18,7 +18,6 @@
 
 (require 'iar-tool-call)
 (require 'iar-output-sanitizer)
-(require 'iar-audit-log)
 
 (defun iar--async-shell-command (callback command &optional timeout)
   "Run COMMAND asynchronously, returning result via CALLBACK.
@@ -61,9 +60,6 @@ needed."
                              ((and exit-code (/= exit-code 0))
                               (format "Command exited with code %d.\nOutput:\n%s" exit-code output))
                              (t output))))
-                       (iar--audit-log-exec cmd
-                         (if timed-out -1
-                           (if (and exit-code (/= exit-code 0)) exit-code 0)))
                        (funcall cb
                                 (if sanitize-output
                                     (iar--sanitize-external-output result)
