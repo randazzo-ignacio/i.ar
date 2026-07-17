@@ -82,14 +82,6 @@
 ;; GPTEL backend configuration
 (load (expand-file-name "iar-gptel-setup.el" init-core-dir))
 
-;; Gptel compatibility layer -- TEMPORARY: will be deleted after all
-;; modules are migrated to the tool call layer.
-;; Still needed by agent-cycle (FSM monitoring) and delegate (unused require).
-;; Deferred to Phase 4 Step 4.2.
-(let ((gptel-specific-dir (expand-file-name "init.d/gptel-specific" user-emacs-directory)))
-  (add-to-list 'load-path gptel-specific-dir)
-  (load (expand-file-name "iar-gptel-compat.el" gptel-specific-dir)))
-
 ;; Tool call layer -- the single integration point with gptel.
 ;; All i.ar modules hook into this, not gptel internals directly.
 ;; Owns: tool registration, hooks, truncation, audit logging, token parsing.

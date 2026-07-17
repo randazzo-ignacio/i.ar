@@ -18,7 +18,6 @@
 (require 'iar-agent-loader)  ; iar--load-agent-profile
 (require 'iar-tool-guard)    ; iar--block-unknown-tools
 (require 'iar-prompt-loader)  ; iar--load-prompt
-(require 'iar-gptel-compat)  ; gptel internal wrappers
 (require 'iar-mount-awareness)  ; iar--extra-mounts-prompt-string
 
 ;; Declared in configs/ (split parameter files) (loaded before init.d modules).
@@ -273,8 +272,8 @@ so the user can watch progress in real time."
                   (if (fboundp 'iar--extra-mounts-prompt-string)
                       (concat profile (iar--extra-mounts-prompt-string))
                     profile))
-      ;; Set agent name for debug modules (request logger, FSM tracer, etc.)
-      ;; Both buffer-local and global default so advice running in gptel's
+      ;; Set agent name for audit logging and status mode.
+      ;; Both buffer-local and global so audit logging resolves agent name.
       ;; process buffers can resolve the agent name.
       (setq-local iar--current-agent-name agent)
       (setq iar--current-agent-name agent)

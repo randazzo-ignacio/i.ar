@@ -53,7 +53,7 @@
 
 (defconst test-init-dir (expand-file-name "init.d" user-emacs-directory))
 (defconst test-init-subdirs
-  '("shared" "core" "gptel-specific" "tool-call" "security" "tools" "tools/filesystem" "tools/code" "tools/tasks"
+  '("shared" "core" "tool-call" "security" "tools" "tools/filesystem" "tools/code" "tools/tasks"
     "tools/notify" "tools/git" "tools/agent"
     "agent" "debug" "session" "dynamic"))
 
@@ -113,12 +113,6 @@
 (load (expand-file-name "iar-agent-utils.el"
                         (expand-file-name "shared" test-init-dir))
       nil t)
-
-;; --- Load gptel compatibility layer (must be before init.d modules) ---
-
-(let ((gptel-specific-dir (expand-file-name "init.d/gptel-specific" user-emacs-directory)))
-  (add-to-list 'load-path gptel-specific-dir)
-  (load (expand-file-name "iar-gptel-compat.el" gptel-specific-dir) nil t))
 
 ;; --- Load prompt loader (must be before modules that use prompts) ---
 ;; iar-prompt-loader.el lives in init.d/agent/ and must load before
