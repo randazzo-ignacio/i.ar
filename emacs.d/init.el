@@ -154,11 +154,13 @@
 ;; Dynamic knowledge loader
 (load (expand-file-name "iar-knowledge-loader.el" init-agent-dir))
 
-;; Multi-agent delegation tool
-(load (expand-file-name "iar-delegate-tool.el" init-agent-dir))
-
-;; Reload tools (reload_os, reload_agent)
-(load (expand-file-name "iar-reload-tools.el" init-agent-dir))
+;; Agent tools (delegate, reload_os, reload_agent)
+;; These are tools that register via gptel-make-tool but live in the
+;; agent system. Loaded from tools/agent/ per GUIDELINES.org rule 6.
+(let ((tools-agent-dir (expand-file-name "tools/agent" init-dir)))
+  (add-to-list 'load-path tools-agent-dir)
+  (load (expand-file-name "delegate.el" tools-agent-dir))
+  (load (expand-file-name "reload-tools.el" tools-agent-dir)))
 
 ;; Memory summarization tool (C-c m in gptel-mode)
 (load (expand-file-name "iar-memory-tools.el" init-agent-dir))

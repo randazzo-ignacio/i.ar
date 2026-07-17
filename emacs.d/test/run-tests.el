@@ -54,7 +54,7 @@
 (defconst test-init-dir (expand-file-name "init.d" user-emacs-directory))
 (defconst test-init-subdirs
   '("shared" "core" "gptel-specific" "security" "tools" "tools/filesystem" "tools/code" "tools/tasks"
-    "tools/notify" "tools/git"
+    "tools/notify" "tools/git" "tools/agent"
     "agent" "session" "dynamic"))
 
 ;; --- Add all subdirectories to load-path (for cross-module requires) ---
