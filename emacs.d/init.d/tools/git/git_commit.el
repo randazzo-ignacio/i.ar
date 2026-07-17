@@ -72,21 +72,15 @@ Returns a string starting with Success: or Error:."
             (format "Error: git add -A failed: %s" (cdr add-result))
           (let ((status-result (iar--git-run repo-dir "diff" "--cached" "--quiet")))
             (if (= 0 (car status-result))
-                (progn
-                                       (format "repo=%s result=nothing_to_commit" repo-dir))
-                  "Success: No changes to commit. Working tree is clean.")
+                "Success: No changes to commit. Working tree is clean."
               (let* ((commit-result (iar--git-run repo-dir "commit" "-m" message))
                      (exit-code (car commit-result))
                      (output (cdr commit-result)))
-                                     (format "repo=%s msg=%s exit=%d"
-                                             repo-dir
-                                             (substring message 0 (min 100 (length message)))
-                                             exit-code))
                 (if (= 0 exit-code)
                     (format "Success: Committed in %s\n%s"
                             repo-dir (string-trim output))
                   (format "Error: git commit failed (exit %d): %s"
-                          exit-code output)))))))))
+                          exit-code output)))))))))))
 
 (iar-tool-register
  (gptel-make-tool

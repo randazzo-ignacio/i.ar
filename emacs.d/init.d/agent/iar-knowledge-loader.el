@@ -121,7 +121,7 @@ Uses `iar--knowledge-base-prompt' as the personality and
 
 (defun iar-load-knowledge-dir (label)
   "Non-interactively load a knowledge directory into the current buffer.
-LABEL is a string like "iar/" matching a subdirectory of the knowledge dir.
+LABEL is a string like \"iar/\" matching a subdirectory of the knowledge dir.
 Returns t if loaded, nil if not found or already loaded.
 Safe for batch/non-interactive use -- no completing-read, no user-error."
   (let* ((candidates (iar--knowledge-candidates))
