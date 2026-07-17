@@ -29,7 +29,7 @@ to localhost:11434. We verify the host is a non-empty string with a port."
   (let ((host (gptel-backend-host gptel-backend)))
     (should (stringp host))
     (should (> (length host) 0))
-    ;; Host should contain a port number (e.g., "localhost:11434" or "10.66.0.5:11434")
+    ;; Host should contain a port number (e.g., "localhost:11434")
     (should (string-match-p ":[0-9]+\\'" host))))
 
 (provide 'test-gptel)
