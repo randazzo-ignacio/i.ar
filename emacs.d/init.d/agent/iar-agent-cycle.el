@@ -325,7 +325,6 @@ until it either completes all steps or reaches the turn limit."
                   (if (fboundp 'iar--extra-mounts-prompt-string)
                       (concat profile (iar--extra-mounts-prompt-string))
                     profile))
-      (setq-local gptel-confirm-tool-calls nil)
       (setq-local gptel-stream t)
       ;; Set both buffer-local (for cycle buffer context) and global default
       ;; (for debug modules whose advice runs in gptel's process buffers).

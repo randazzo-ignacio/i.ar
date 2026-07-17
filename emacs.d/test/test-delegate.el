@@ -585,19 +585,6 @@ The error from iar--load-agent-profile propagates through the callback."
              (should (symbol-value completed-sym))))
       (when (buffer-live-p buf) (kill-buffer buf)))))
 
-(ert-deftest test-delegate-spawn-sets-gptel-confirm-tool-calls-nil ()
-  "spawn-async-delegate should set gptel-confirm-tool-calls to nil."
-  (cl-letf (((symbol-function 'gptel-send) (lambda () nil)))
-    (let ((buf nil))
-      (unwind-protect
-           (progn
-             (setq buf (iar--spawn-async-delegate
-                        (lambda (_r)) "testagent" "task" "ctx" 30
-                        "You are a test agent."))
-             (with-current-buffer buf
-               (should (null gptel-confirm-tool-calls))))
-        (when (buffer-live-p buf) (kill-buffer buf))))))
-
 (ert-deftest test-delegate-spawn-clamps-negative-parent-depth ()
   "spawn-async-delegate should clamp negative parent-depth to 0.
 A tampered session file could set iar--delegate-depth to a

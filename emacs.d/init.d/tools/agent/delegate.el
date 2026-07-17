@@ -284,7 +284,6 @@ so the user can watch progress in real time."
         (setq iar--current-agent-file
               (expand-file-name (format "%s/prompt.org" agent) agent-dir)))
       (setq-local iar--delegate-depth (1+ parent-depth))
-      (setq-local gptel-confirm-tool-calls nil)
       (when (>= iar--delegate-depth iar-delegate-max-depth)
         (setq-local gptel-tools
                     (cl-remove-if (lambda (tool)
