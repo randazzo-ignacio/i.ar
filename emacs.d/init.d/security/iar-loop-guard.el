@@ -22,7 +22,7 @@
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'iar-gptel-compat)
+(require 'iar-tool-call)
 (require 'iar-prompt-loader)  ; iar--load-prompt
 
 ;;; --- Configuration ---
@@ -160,7 +160,7 @@ Returns:
 
 (defun iar--loop-guard-setup ()
   "Register the loop guard hook globally."
-  (add-hook 'iar-gptel-pre-tool-call-functions #'iar--loop-guard))
+  (add-hook 'iar-pre-tool-call-functions #'iar--loop-guard))
 
 (iar--loop-guard-setup)
 

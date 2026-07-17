@@ -506,9 +506,7 @@ the loop guard would silently stop working -- no other test would
 catch this because all other tests call `iar--loop-guard'
 directly rather than through the hook mechanism."
   (should (memq #'iar--loop-guard
-                (default-value (if (boundp 'iar-gptel-pre-tool-call-functions)
-                                    'iar-gptel-pre-tool-call-functions
-                                  'gptel-pre-tool-call-functions)))))
+                (default-value 'iar-pre-tool-call-functions))))
 
 (provide 'test-loop)
 ;;; test-loop.el ends here

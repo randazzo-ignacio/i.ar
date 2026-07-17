@@ -348,7 +348,7 @@ until it either completes all steps or reaches the turn limit."
         (iar-load-knowledge-dir label))
 
       ;; Tool call tracker: log every tool call for debugging
-      (add-hook 'iar-gptel-post-tool-call-functions
+      (add-hook 'iar-post-tool-call-functions
                 (lambda (info)
                   (cl-incf tool-call-count)
                   (let ((name (plist-get info :name))
@@ -363,7 +363,7 @@ until it either completes all steps or reaches the turn limit."
       ;; Unknown tool guard: provide early interception of hallucinated tool
       ;; names at TPRE stage with a cleaner error message than gptel's
       ;; built-in handling in gptel--handle-tool-use (TOOL state).
-      (add-hook 'iar-gptel-pre-tool-call-functions
+      (add-hook 'iar-pre-tool-call-functions
                 #'iar--block-unknown-tools
                 nil t)
 
@@ -437,7 +437,7 @@ until it either completes all steps or reaches the turn limit."
                                 (setq continuation-pending nil)
                                 (gptel-send)))
                           (setq continuation-pending nil)))))))))))
-        (add-hook 'iar-gptel-post-response-functions cont-hook nil t)
+        (add-hook 'iar-post-response-functions cont-hook nil t)
 
         ;; Timeout handler
         (run-with-timer

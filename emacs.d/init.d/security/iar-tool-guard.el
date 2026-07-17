@@ -11,7 +11,7 @@
 ;; built-in handling.
 
 (require 'cl-lib)
-(require 'iar-gptel-compat)
+(require 'iar-tool-call)
 (require 'iar-prompt-loader)  ; iar--load-prompt
 
 (defun iar--block-unknown-tools (info)
