@@ -1,31 +1,29 @@
 ;; -*- lexical-binding: t; -*-
 
 ;;; Output Sanitizer for External/Untrusted Content
-;; Strips or neutralizes prompt injection patterns, control sequences,
-;; and instruction-like text from data before it enters the AI context.
+;; Strips control sequences and invisible characters from data before
+;; it enters the AI context.
 ;;
 ;; This is a defense-in-depth measure. The primary defense is the
 ;; PROMPT INJECTION RESISTANCE directives in base_context.org, which
 ;; teach the AI to treat external content as data. This sanitizer
-;; reduces the surface area by removing obvious injection vectors
-;; from the raw text.
+;; reduces the surface area by removing control character vectors
+;; (ANSI escapes, zero-width Unicode, bidi controls including Trojan
+;; Source attack chars) from raw text.
 ;;
 ;; Usage: (iar--sanitize-external-output "raw string from curl/nmap/etc.")
 ;; Returns a sanitized string with a [SANITIZED EXTERNAL DATA] prefix.
 
 (require 'subr-x)
 
-;; Declared in configs/ (split parameter files) (loaded before init.d modules).
+;; Forward-declared: owned by configs/delimiters.el.
+;; Declared here so this module can reference them before configs load.
 (defvar iar-sanitized-open nil
   "Prefix wrapper for sanitized external data.")
 (defvar iar-sanitized-close nil
   "Suffix wrapper for sanitized external data.")
-(defvar iar-injection-suspect-prefix nil
-  "Prefix added to lines that resemble prompt injection attempts.")
-(defvar iar-removed-tag nil
-  "Replacement text for neutralized fake system message wrapper tags.")
 
-;;; --- Configuration ---
+;;; --- Control character patterns ---
 
 (defconst iar--sanitizer-control-patterns
   '(
@@ -34,10 +32,6 @@
     ;; Other control characters (except newline, tab)
     "[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]"
     ;; Unicode zero-width and invisible characters (can hide instructions)
-    ;; Character class matches ANY ONE of these, not all in sequence.
-    ;; Without the bracket class, the pattern matched the literal
-    ;; multi-character sequence, which never appears in real text --
-    ;; so zero-width chars were never actually stripped.
     ;; Includes: ZWSP, ZWNJ, ZWJ, LRM, RLM, WJ, invisible math operators, BOM
     "[\u200b\u200c\u200d\u200e\u200f\u2060\u2061\u2062\u2063\u2064\ufeff]"
     ;; Unicode bidi control characters (can reverse/reorder text display)
@@ -47,61 +41,6 @@
     )
   "Regex patterns for control sequences and invisible characters to strip.")
 
-(defconst iar--sanitizer-injection-markers
-  '(
-    ;; Lines that look like system prompt directives
-    "^\\* SYSTEM PROMPT"
-    "^\\* OPERATIONAL DIRECTIVE"
-    "^\\* CRITICAL"
-    "^\\* EXECUTION PROTOCOL"
-    "^\\* TOOL CALLING PROTOCOL"
-    "^\\* PROMPT INJECTION RESISTANCE"
-    ;; Fake tool call blocks
-    "^```tool\\'"
-    "^```json\\'"
-    ;; Role-play injection patterns
-    "^You are "
-    "^Ignore \\(all \\)?\\(previous \\|prior \\)?instructions"
-    "^Ignore \\(the \\)?above"
-    "^Disregard \\(all \\)?\\(previous \\|prior \\)?instructions"
-    "^Forget \\(everything \\|all \\)?\\(previous \\|prior \\)?"
-    "^As an? \\(AI\\|assistant\\|language model\\)"
-    "^I am \\(now\\|actually\\) "
-    ;; Command injection patterns
-    "^Execute the following"
-    "^Run this command"
-    "^Please run:"
-    "^System: "
-    "^Admin: "
-    "^Operator: "
-    "^Override: "
-    ;; Persistence injection
-    "^Remember \\(this\\|the following\\)"
-    "^Save \\(this\\|the following\\) \\(to\\|in\\|for\\)"
-    "^Write \\(this\\|the following\\) to"
-    "^Store \\(this\\|the following\\)"
-    )
-  "Regex patterns for lines that resemble prompt injection attempts.
-These lines are NOT removed (that would destroy evidence) but are
-prefixed with [INJECTION SUSPECT] to warn the AI.")
-
-(defconst iar--sanitizer-wrapper-patterns
-  '(
-    ;; Fake system message wrappers — match <system>, </system>, <?system?>, etc.
-    "</?\\??system\\??>"
-    "</?\\??instructions\\??>"
-    "</?\\??prompt\\??>"
-    "</?\\??directive\\??>"
-    ;; Bracketed fake headers
-    "\\[SYSTEM\\]"
-    "\\[ADMIN\\]"
-    "\\[OVERRIDE\\]"
-    "\\[INSTRUCTIONS\\]"
-    )
-  "Regex patterns for XML-like or bracketed wrapper tags used to
-fake system messages. These are neutralized by replacing with
-[REMOVED-TAG].")
-
 ;;; --- Sanitization Functions ---
 
 (defun iar--strip-control-chars (text)
@@ -110,58 +49,27 @@ fake system messages. These are neutralized by replacing with
     (dolist (pattern iar--sanitizer-control-patterns result)
       (setq result (replace-regexp-in-string pattern "" result)))))
 
-(defun iar--neutralize-wrapper-tags (text)
-  "Replace fake system message wrapper tags in TEXT with [REMOVED-TAG]."
-  (let ((result text))
-    (dolist (pattern iar--sanitizer-wrapper-patterns result)
-      (setq result (replace-regexp-in-string pattern iar-removed-tag result)))))
-
-(defun iar--flag-injection-lines (text)
-  "Prefix lines that resemble prompt injection with [INJECTION SUSPECT].
-Does not remove the lines — they may contain useful data. But the
-prefix warns the AI to treat them as data, not instructions."
-  (let ((lines (split-string text "\n"))
-        (result nil))
-    (dolist (line lines)
-      (let ((flagged line)
-            (matched nil))
-        (dolist (pattern iar--sanitizer-injection-markers)
-          (unless matched
-            (when (string-match-p pattern line)
-              (setq flagged (concat iar-injection-suspect-prefix " " line))
-              (setq matched t))))
-        (push flagged result)))
-    (mapconcat #'identity (nreverse result) "\n")))
-
 (defun iar--sanitize-external-output (text)
   "Sanitize TEXT from external/untrusted sources.
 1. Strips ANSI escape sequences and control characters.
-2. Neutralizes fake system message wrapper tags.
-3. Flags lines that resemble prompt injection attempts.
-4. Wraps the result in a [SANITIZED EXTERNAL DATA] envelope.
+2. Wraps the result in a [SANITIZED EXTERNAL DATA] envelope.
 
 Returns the sanitized string."
   (if (or (null text) (string-empty-p text))
       ""
-    (let* ((cleaned (iar--strip-control-chars text))
-           (neutralized (iar--neutralize-wrapper-tags cleaned))
-           (flagged (iar--flag-injection-lines neutralized)))
+    (let ((cleaned (iar--strip-control-chars text)))
       (format "%s\n%s\n%s"
               iar-sanitized-open
-              flagged
+              cleaned
               iar-sanitized-close))))
 
-;;; --- Tool wrapper for execute_code_local ---
-;; When operating in CTF/external mode, the sanitizer can be applied
-;; to the output of execute_code_local before it reaches the AI.
-;; This is controlled by a buffer-local flag.
+;;; --- Buffer-local flag for execute_code_local ---
 
 (defvar-local iar--sanitize-exec-output nil
   "When non-nil, output from execute_code_local is sanitized
 before being returned to the AI. Enable for CTF/external operations.
-The flag is captured at call time in code_tools.el (not read in the
-sentinel) because process sentinels run in an unpredictable buffer
-context. code_tools.el calls `iar--sanitize-external-output'
-directly using the captured value.")
+The flag is captured at call time in execute_code_local.el (not read
+in the sentinel) because process sentinels run in an unpredictable
+buffer context.")
 
 (provide 'iar-output-sanitizer)
