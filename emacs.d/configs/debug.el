@@ -1,5 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
+(require 'iar-config-predicates)
+
 ;; =============================================================================
 ;; Filesystem Tool Parameters
 ;; =============================================================================
@@ -16,7 +18,7 @@ consumption correlates more with character count than byte count.
 Set to nil to disable truncation (read full file regardless of size)."
   :type '(choice (integer :tag "Max characters")
                  (const :tag "No limit" nil))
-  :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
+  :safe #'iar--positive-integer-or-nil-p
   :group 'iar)
 
 ;; =============================================================================
@@ -36,7 +38,7 @@ notice in between indicating the total size and how much was kept.
 Set to nil to disable truncation (pass full result regardless of size)."
   :type '(choice (integer :tag "Max characters")
                  (const :tag "No truncation" nil))
-  :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
+  :safe #'iar--positive-integer-or-nil-p
   :group 'iar)
 
 ;; =============================================================================
@@ -54,7 +56,7 @@ Each rotation overwrites the previous .1 file.  For compliance-grade
 retention, configure external log rotation (e.g., logrotate) instead."
   :type '(choice (integer :tag "Max size in bytes")
                  (const :tag "No rotation" nil))
-  :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
+  :safe #'iar--positive-integer-or-nil-p
   :group 'iar)
 
 ;; =============================================================================
@@ -74,7 +76,7 @@ sessions.  Lower it if you want earlier warnings.
 Set to nil or 0 to disable the warning."
   :type '(choice (integer :tag "Warning threshold (chars)")
                  (const :tag "No warning" nil))
-  :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
+  :safe #'iar--positive-integer-or-nil-p
   :group 'iar)
 
 (defcustom iar-buffer-hard-cap nil
@@ -95,7 +97,7 @@ The hard cap should be significantly larger than the warning
 threshold to avoid aborting legitimate long sessions."
   :type '(choice (integer :tag "Hard cap (chars)")
                  (const :tag "No hard cap" nil))
-  :safe (lambda (v) (or (and (integerp v) (> v 0)) (null v)))
+  :safe #'iar--positive-integer-or-nil-p
   :group 'iar)
 
 (provide 'iar-config-debug)

@@ -90,6 +90,7 @@
 (let ((configs-dir (expand-file-name "configs" user-emacs-directory)))
   (add-to-list 'load-path configs-dir)
   (load (expand-file-name "paths.el" configs-dir))
+  (load (expand-file-name "predicates.el" configs-dir))
   (load (expand-file-name "keybindings.el" configs-dir))
   (load (expand-file-name "delimiters.el" configs-dir))
   (load (expand-file-name "git.el" configs-dir))

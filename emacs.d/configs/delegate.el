@@ -1,5 +1,7 @@
 ;; -*- lexical-binding: t; -*-
 
+(require 'iar-config-predicates)
+
 ;; =============================================================================
 ;; Delegate Tool Parameters
 ;; =============================================================================
@@ -9,7 +11,7 @@
 Prevents infinite recursion while permitting multi-hop chains.
 Depth 0 = top-level agent, 1 = first delegate, etc."
   :type 'integer
-  :safe (lambda (v) (and (integerp v) (> v 0)))
+  :safe #'iar--positive-integer-p
   :group 'iar)
 
 (defcustom iar-delegate-max-turns 15
@@ -19,7 +21,7 @@ in the current turn), it is re-prompted to continue.
 This prevents models that describe tool calls in text instead of
 actually calling them from terminating prematurely."
   :type 'integer
-  :safe (lambda (v) (and (integerp v) (> v 0)))
+  :safe #'iar--positive-integer-p
   :group 'iar)
 
 (provide 'iar-config-delegate)
