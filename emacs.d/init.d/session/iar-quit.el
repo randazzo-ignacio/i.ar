@@ -17,9 +17,10 @@
 ;; If no gptel buffer is active, skips summarization and quits directly.
 
 (require 'subr-x)
-(require 'iar-memory-tools)  ; iar-summarize-session
+(require 'iar-memory-tools)
 
-;; Declared in configs/ (split parameter files) (loaded before init.d modules).
+;; Forward-declared: owned by configs/keybindings.el.
+;; Declared here so this module can reference it before configs load.
 (defvar iar-key-quit nil
   "Keybinding for session-aware quit.")
 
@@ -30,25 +31,22 @@ If no gptel buffer is found, skips summarization.
 If summarization fails, warns the user but quits anyway."
   (interactive "P")
   (if arg
-      ;; Prefix arg: skip summarization, quit directly
       (progn
         (message "[iar-quit] Skipping summarization (prefix arg).")
         (save-buffers-kill-emacs))
-    ;; Normal quit: try summarization first
-    (let ((summarized nil))
-      (condition-case err
-          (when (and (boundp 'gptel-mode)
-                     (derived-mode-p 'gptel-mode))
-            (message "[iar-quit] Running session summarizer before quit...")
-            (setq summarized (iar-summarize-session)))
-        (error
-         (message "[iar-quit] Summarization error: %s" (error-message-string err))))
-      (unless summarized
-        (message "[iar-quit] Summary not saved. Session state will be lost."))
-      ;; Small delay so the user sees the message before Emacs dies
-      (run-with-timer 0.5 nil (lambda () (save-buffers-kill-emacs))))))
+    (condition-case err
+        (if (and (boundp 'gptel-mode)
+                 (derived-mode-p 'gptel-mode))
+            (progn
+              (message "[iar-quit] Running session summarizer before quit...")
+              (let ((result (iar-summarize-session)))
+                (unless result
+                  (message "[iar-quit] Summary not saved. Session state will be lost."))))
+          (message "[iar-quit] No gptel buffer active, skipping summarization."))
+      (error
+       (message "[iar-quit] Summarization error: %s" (error-message-string err))))
+    (run-with-timer 0.5 nil (lambda () (save-buffers-kill-emacs)))))
 
-;; Override C-x C-c in all keymaps
 (global-set-key (kbd iar-key-quit) #'iar-quit)
 
 (provide 'iar-quit)
