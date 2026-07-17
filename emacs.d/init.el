@@ -154,6 +154,9 @@
 ;; Dynamic knowledge loader
 (load (expand-file-name "iar-knowledge-loader.el" init-agent-dir))
 
+;; Buffer info (C-c b, C-c v) -- split from knowledge-loader
+(load (expand-file-name "iar-buffer-info.el" init-agent-dir))
+
 ;; Agent tools (delegate, reload_os, reload_agent)
 ;; These are tools that register via gptel-make-tool but live in the
 ;; agent system. Loaded from tools/agent/ per GUIDELINES.org rule 6.
