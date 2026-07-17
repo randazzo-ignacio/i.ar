@@ -9,7 +9,7 @@
 ;; 2. Run `byte-compile-file' with a temp .elc destination.
 ;; 3. Clean up temp .elc. Source file is never touched.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'bytecomp)
 (require 'cl-lib)
 (require 'subr-x)
@@ -84,7 +84,7 @@ The source file is never modified."
     (error
      (format "Error checking file: %s" (error-message-string err)))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "check_elisp"
   :description "Check an Emacs Lisp (.el) file for syntax errors, unbalanced parentheses, and byte-compilation warnings. Returns a diagnostic report. Does NOT modify the file."

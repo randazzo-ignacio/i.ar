@@ -4,7 +4,7 @@
 ;; Appends text content to the end of an existing file.
 ;; Security: checks iar-file-guard before writing. Logs to audit log.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'iar-file-guard)
 (require 'iar-audit-log)
 (require 'iar-utils)  ; iar--with-suppressed-save-hooks
@@ -65,7 +65,7 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
           (error (format "Error: Failed to append to '%s'. Emacs says: %s"
                          expanded-path (error-message-string err))))))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "append_file"
   :description "Append text content to the end of an existing file. Use this to add new notes, logs, or subheadings to a file without erasing its current contents. Automatically prepends a newline if the file does not already end with one, ensuring appended content always starts on a fresh line."

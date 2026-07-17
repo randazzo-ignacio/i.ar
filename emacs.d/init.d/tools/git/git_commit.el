@@ -13,7 +13,7 @@
 ;;
 ;; Audit: every commit is logged to the central audit log.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'iar-utils)
 (require 'iar-audit-log)
 
@@ -91,7 +91,7 @@ Returns a string starting with Success: or Error:."
                   (format "Error: git commit failed (exit %d): %s"
                           exit-code output)))))))))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "git_commit"
   :description "Stage all changes (git add -A) and commit them in a git repository. Use this to persist your work. The repository must have a .git directory. Git identity is configured automatically if not already set."

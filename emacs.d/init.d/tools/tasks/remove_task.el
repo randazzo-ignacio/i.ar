@@ -3,7 +3,7 @@
 ;;; remove_task tool for gptel
 ;; Deletes a task file from the current agent's tasks directory.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'subr-x)
 (require 'iar-agent-utils)  ; path resolution + validation
 
@@ -21,7 +21,7 @@ The .md extension is added automatically.  This marks the task as done
     (error
      (format "Error removing task: %s" (error-message-string err)))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "remove_task"
   :description "Delete a task file from the current agent's tasks directory. This marks the task as done (file gone = work done). Task name: only letters, digits, hyphens, underscores. The .md extension is added automatically."

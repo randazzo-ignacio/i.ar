@@ -3,7 +3,7 @@
 ;;; read_file tool for gptel
 ;; Reads the text contents of a local file into a string.
 
-(require 'gptel)
+(require 'iar-tool-call)
 
 (defun iar--fs-read-file (filepath)
   "Read the text contents of FILEPATH into a string.
@@ -33,7 +33,7 @@ correlates with characters."
       (error (format "Error: Failed to read file '%s'. Emacs says: %s"
                       expanded-path (error-message-string err))))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "read_file"
   :description "Read the text contents of a local file into context."

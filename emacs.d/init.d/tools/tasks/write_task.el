@@ -3,7 +3,7 @@
 ;;; write_task tool for gptel
 ;; Creates a new task file in the current agent's tasks directory.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'subr-x)
 (require 'iar-agent-utils)  ; path resolution + validation
 
@@ -26,7 +26,7 @@ existing files -- use remove_task first."
     (error
      (format "Error creating task: %s" (error-message-string err)))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "write_task"
   :description "Create a new task file in the current agent's tasks directory. Refuses to overwrite existing files (use remove_task first). Task name: only letters, digits, hyphens, underscores. The .md extension is added automatically."

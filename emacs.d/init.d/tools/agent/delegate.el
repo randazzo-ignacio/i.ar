@@ -11,7 +11,7 @@
 ;; The sub-agent's output is streamed live into the parent buffer so the user
 ;; can watch progress as it happens.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'cl-lib)
 (require 'subr-x)
 (require 'iar-agent-utils)  ; validation
@@ -329,7 +329,7 @@ so the user can watch progress in real time."
     buf))
 
 ;; Register the delegate tool (async)
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "delegate"
   :description "Spawn a sub-agent with a specific profile to handle a sub-task. Returns the sub-agent's final response. Use for complex tasks requiring specialized expertise or parallel processing."

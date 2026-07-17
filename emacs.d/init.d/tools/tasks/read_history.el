@@ -3,7 +3,7 @@
 ;;; read_history tool for gptel
 ;; Reads per-agent or unified HISTORY.log files from the audit mount.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'cl-lib)
 (require 'subr-x)
 (require 'iar-agent-utils)  ; validation
@@ -59,7 +59,7 @@ HISTORY.log files live in the audit mount at
     (error
      (format "Error reading history: %s" (error-message-string err)))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "read_history"
   :description "Read agent HISTORY.log files. With no arguments, merges all per-agent HISTORY.log files into a unified timeline sorted by timestamp. Pass agent_name to read a single agent's log."

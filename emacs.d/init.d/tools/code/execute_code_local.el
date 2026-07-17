@@ -16,7 +16,7 @@
 ;; is captured at call time (not read in the sentinel) because process
 ;; sentinels run in an unpredictable buffer context.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'iar-output-sanitizer)
 (require 'iar-audit-log)
 
@@ -78,7 +78,7 @@ needed."
                               (setq timed-out t)
                               (delete-process proc)))))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "execute_code_local"
   :description "Execute bash/shell commands in the same container as the Emacs tools (has access to source code). Uses async process execution so Emacs stays responsive. The container is Fedora-based with: bash, dig, nmap, openssl, python3, jq, whois, traceroute, tcpdump, ripgrep (rg), git, curl, find, gawk, sed, grep, gcc, make, tar, gzip, unzip."

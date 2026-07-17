@@ -3,7 +3,7 @@
 ;;; read_tasks tool for gptel
 ;; Reads all task .md files from the current agent's tasks directory.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'cl-lib)
 (require 'subr-x)
 (require 'iar-agent-utils)  ; path resolution
@@ -33,7 +33,7 @@ no tasks exist."
     (error
      (format "Error reading tasks: %s" (error-message-string err)))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "read_tasks"
   :description "Read all task files from the current agent's tasks directory. Each task is a separate .md file. Use to check pending work and project direction."

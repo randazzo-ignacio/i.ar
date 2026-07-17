@@ -3,7 +3,7 @@
 ;;; list_directory tool for gptel
 ;; Lists the contents of a local directory.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'cl-lib)
 
 (defun iar--fs-list-directory (path)
@@ -26,7 +26,7 @@ On error, returns a string starting with \\='Error:\\='."
       (error (format "Error: Failed to list directory '%s'. Emacs says: %s"
                      expanded-path (error-message-string err))))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "list_directory"
   :description "List the contents of a local directory. Use this to find files on the machine running Emacs."

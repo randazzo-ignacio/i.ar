@@ -14,7 +14,7 @@
 ;;
 ;; Audit: every message sent is logged to the central audit log.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'iar-utils)
 (require 'iar-audit-log)
 
@@ -94,7 +94,7 @@ The message is prefixed with [AgentName] for identification."
                             (funcall callback
                                      "Error: Telegram request timed out after 15 seconds.")))))))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "send_telegram"
   :description "Send a Telegram notification message. The message is automatically prefixed with the agent name. Use this to notify the human about important findings, completed work, or issues that need attention."

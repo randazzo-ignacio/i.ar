@@ -4,7 +4,7 @@
 ;; Creates or overwrites a file with new content.
 ;; Security: checks iar-file-guard before writing. Logs to audit log.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'iar-file-guard)
 (require 'iar-audit-log)
 (require 'iar-utils)  ; iar--with-suppressed-save-hooks
@@ -46,7 +46,7 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
           (error (format "Error: Failed to write file to '%s'. Emacs says: %s"
                          expanded-path (error-message-string err))))))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "write_file"
   :description "Create a new file or completely overwrite an existing file with new text content. Use this to save new agent profiles or rewrite configurations."

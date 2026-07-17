@@ -8,7 +8,7 @@
 ;; reload_agent: Re-reads the current agent's prompt.org and updates
 ;;               the gptel system message in the current chat buffer.
 
-(require 'gptel)
+(require 'iar-tool-call)
 (require 'iar-agent-utils)  ; validation (moved from task_tools)
 (require 'iar-utils)
 (require 'iar-agent-loader)  ; iar--load-agent-profile (now defined here)
@@ -41,7 +41,7 @@ in the current buffer so it inherits the fresh defaults."
     (error
      (format "Error: Failed to reload init.el: %s" (error-message-string err)))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "reload_os"
   :description "Reload Emacs init.el to pick up modifications to .el files. Use after modifying Emacs Lisp files to test changes without restarting Emacs. Resets and rebuilds gptel-tools automatically."
@@ -93,7 +93,7 @@ instead of the currently loaded one."
     (error
      (format "Error: Failed to reload agent: %s" (error-message-string err)))))
 
-(add-to-list 'gptel-tools
+(iar-tool-register
  (gptel-make-tool
   :name "reload_agent"
   :description "Reload the current agent's gptel prompt from its .org file, updating the system message in the current chat buffer. Use after modifying an agent's .org profile to test changes without killing the chat. Optionally pass agent_name to reload a specific agent."
