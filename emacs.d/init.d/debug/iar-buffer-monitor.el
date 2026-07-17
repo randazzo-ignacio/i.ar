@@ -79,7 +79,7 @@ BUF is the gptel conversation buffer about to be sent."
     ;; Return the size info for the pre-send hook
     (list :bytes buf-size :chars chars :tokens approx-tokens :model model)))
 
-(defun iar--mygptel--buffer-monitor-pre-send ()
+(defun iar--buffer-monitor-pre-send ()
   "Check buffer size before each gptel send.
 Logs the size, warns if it exceeds `iar-buffer-warn-size',
 and aborts if it exceeds `iar-buffer-hard-cap' (when set).
@@ -110,7 +110,7 @@ or called via advice-add on `gptel-send'."
 Call this once during initialization to enable buffer size monitoring."
   (advice-add 'gptel-send :before
               (lambda (&rest _args)
-                (iar--mygptel--buffer-monitor-pre-send)))
+                (iar--buffer-monitor-pre-send)))
   (message "[buffer-monitor] Installed on gptel-send"))
 
 (iar-buffer-monitor-setup)

@@ -15,7 +15,7 @@
 
 (declare-function iar--load-prompt "iar-prompt-loader" (name))
 
-(defun iar--mygptel--block-unknown-tools (info)
+(defun iar--block-unknown-tools (info)
   "Pre-tool-call hook to block unknown tool names.
 INFO is the plist from `gptel-pre-tool-call-functions' containing
 :name, :args, :buffer, :backend, and :model.  Returns nil if the

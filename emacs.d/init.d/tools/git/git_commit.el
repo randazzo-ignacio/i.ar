@@ -50,7 +50,7 @@ be set (missing config)."
       (and (= 0 (car name-check))
            (= 0 (car email-check))))))
 
-(defun iar--mygptel--tool-git-commit (repo_path message)
+(defun iar--tool-git-commit (repo_path message)
   "Stage all changes and commit in REPO_PATH with MESSAGE.
 Returns a string starting with Success: or Error:."
   (let* ((repo-dir (expand-file-name repo_path))
@@ -74,13 +74,13 @@ Returns a string starting with Success: or Error:."
           (let ((status-result (iar--git-run repo-dir "diff" "--cached" "--quiet")))
             (if (= 0 (car status-result))
                 (progn
-                  (my-gptel--audit-log "git_commit"
+                  (iar--audit-log "git_commit"
                                        (format "repo=%s result=nothing_to_commit" repo-dir))
                   "Success: No changes to commit. Working tree is clean.")
               (let* ((commit-result (iar--git-run repo-dir "commit" "-m" message))
                      (exit-code (car commit-result))
                      (output (cdr commit-result)))
-                (my-gptel--audit-log "git_commit"
+                (iar--audit-log "git_commit"
                                      (format "repo=%s msg=%s exit=%d"
                                              repo-dir
                                              (substring message 0 (min 100 (length message)))
@@ -97,6 +97,6 @@ Returns a string starting with Success: or Error:."
   :description "Stage all changes (git add -A) and commit them in a git repository. Use this to persist your work. The repository must have a .git directory. Git identity is configured automatically if not already set."
   :args (list '(:name "repo_path" :type "string" :description "Absolute path to the git repository root directory (must contain a .git directory).")
               '(:name "message" :type "string" :description "Commit message describing what was changed. Keep it concise but descriptive."))
-  :function #'iar--mygptel--tool-git-commit))
+  :function #'iar--tool-git-commit))
 
 (provide 'iar-tool--git-commit)

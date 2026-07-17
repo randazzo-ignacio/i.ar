@@ -16,7 +16,7 @@
 (require 'subr-x)
 (require 'iar-agent-utils)  ; validation (moved from task_tools)
 (require 'iar-agent-loader)  ; iar--load-agent-profile (moved from here)
-(require 'iar-tool-guard)    ; iar--mygptel--block-unknown-tools (moved from here)
+(require 'iar-tool-guard)    ; iar--block-unknown-tools (moved from here)
 (require 'iar-gptel-compat)  ; gptel internal wrappers
 
 ;; Declared in configs/ (split parameter files) (loaded before init.d modules).
@@ -27,7 +27,7 @@
 
 ;;; Buffer-local state for tracking delegation depth
 
-(defvar-local my-gptel--delegate-depth 0
+(defvar-local iar--delegate-depth 0
   "Buffer-local: current delegation depth for this agent session.
 0 = top-level agent (not spawned via delegate).
 1+ = spawned via delegate. Used to limit recursion depth.")
@@ -94,7 +94,7 @@ and avoids a double-callback race."
 
 ;;; Async tool function
 
-(defun iar--mygptel--tool-delegate (callback agent task &optional context timeout)
+(defun iar--tool-delegate (callback agent task &optional context timeout)
   "Delegate a task to a sub-agent with a specific profile.  ASYNC tool.
 CALLBACK is gptel's async tool callback.  AGENT is the profile name.
 TASK is the task description.  CONTEXT is optional context.
@@ -132,7 +132,7 @@ to either call its tools (instead of narrating intentions) or produce
 its final response if the task is already complete.
 Loaded from knowledge/prompts/common/delegate_continue.org")
 
-(defun iar--mygptel--delegate-completion-fn (buf callback agent completed-sym
+(defun iar--delegate-completion-fn (buf callback agent completed-sym
                                              timer-sym timeout-secs
                                              tools-called-sym turn-count-sym
                                              max-turns)
@@ -248,8 +248,8 @@ full response if the marker is not found."
   "Spawn an async delegate buffer and send the task.
 The sub-agent's streaming output is mirrored into the parent buffer
 so the user can watch progress in real time."
-  (let* ((parent-depth (max 0 (if (boundp 'my-gptel--delegate-depth)
-                                   my-gptel--delegate-depth 0)))
+  (let* ((parent-depth (max 0 (if (boundp 'iar--delegate-depth)
+                                   iar--delegate-depth 0)))
          (task-id (format "delegate-%s-%d-%d" agent (emacs-pid) (float-time)))
          (buf (get-buffer-create (format "*gptel-delegate-%s*" task-id)))
          (full-prompt (format (iar--load-prompt "delegated_task")
@@ -282,9 +282,9 @@ so the user can watch progress in real time."
                     (expand-file-name (format "%s/prompt.org" agent) agent-dir))
         (setq iar--current-agent-file
               (expand-file-name (format "%s/prompt.org" agent) agent-dir)))
-      (setq-local my-gptel--delegate-depth (1+ parent-depth))
+      (setq-local iar--delegate-depth (1+ parent-depth))
       (setq-local gptel-confirm-tool-calls nil)
-      (when (>= my-gptel--delegate-depth iar-delegate-max-depth)
+      (when (>= iar--delegate-depth iar-delegate-max-depth)
         (setq-local gptel-tools
                     (cl-remove-if (lambda (tool)
                                     (equal (gptel-tool-name tool) "delegate"))
@@ -303,12 +303,12 @@ so the user can watch progress in real time."
       ;; names at TPRE stage with a cleaner error message than gptel's
       ;; built-in handling in gptel--handle-tool-use (TOOL state).
       (add-hook 'iar-gptel-pre-tool-call-functions
-                #'iar--mygptel--block-unknown-tools
+                #'iar--block-unknown-tools
                 nil t)
 
       ;; Completion hook: called by gptel at DONE, ERRS, or ABRT state.
       (let ((completion-fn
-             (iar--mygptel--delegate-completion-fn
+             (iar--delegate-completion-fn
               buf callback agent completed-sym timer-sym timeout-secs
               tools-called-sym turn-count-sym iar-delegate-max-turns)))
         (add-hook 'iar-gptel-post-response-functions completion-fn nil t)
@@ -338,6 +338,6 @@ so the user can watch progress in real time."
               '(:name "context" :type "string" :description "Relevant context from the current conversation to pass along. Optional but recommended.")
               '(:name "timeout" :type "integer" :description "Maximum seconds to wait for delegate response. Default 600." :optional t))
   :async t
-  :function #'iar--mygptel--tool-delegate))
+  :function #'iar--tool-delegate))
 
 (provide 'iar-delegate-tool)

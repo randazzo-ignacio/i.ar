@@ -565,7 +565,7 @@ user-error, the outer condition-case should NOT wrap it."
                (lambda (_payload _timeout) "- new summary 1\n- new summary 2"))
               ((symbol-function 'iar--memory-write-summary)
                (lambda (_dir _content) "Error: Failed to write SUMMARY.md: permission denied"))
-              ((symbol-function 'iar--mygptel--tool-reload-agent)
+              ((symbol-function 'iar--tool-reload-agent)
                (lambda (&optional _name) nil)))
       (with-temp-buffer
         (insert (make-string 100 ?A))

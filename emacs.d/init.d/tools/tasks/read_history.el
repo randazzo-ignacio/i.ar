@@ -12,7 +12,7 @@
 (defvar iar-audit-path nil
   "Relative path to audit log directory.")
 
-(defun iar--mygptel--tool-read-history (&optional agent-name)
+(defun iar--tool-read-history (&optional agent-name)
   "Read HISTORY.log from a specific agent or all agents merged by timestamp.
 If AGENT-NAME is provided, reads that agent's HISTORY.log only.
 If omitted, merges all per-agent HISTORY.log files sorted by timestamp.
@@ -64,6 +64,6 @@ HISTORY.log files live in the audit mount at
   :name "read_history"
   :description "Read agent HISTORY.log files. With no arguments, merges all per-agent HISTORY.log files into a unified timeline sorted by timestamp. Pass agent_name to read a single agent's log."
   :args (list '(:name "agent_name" :type "string" :description "Optional: name of agent whose HISTORY.log to read (e.g., 'mccarthy'). If omitted, reads unified merged history from all agents." :optional t))
-  :function #'iar--mygptel--tool-read-history))
+  :function #'iar--tool-read-history))
 
 (provide 'iar-tool--read-history)

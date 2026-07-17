@@ -24,11 +24,11 @@
 
 (defvar iar--current-agent-name nil
   "Name of the currently loaded agent (e.g., \"mccarthy\").
-Set buffer-local by `iar-load-agent' and `iar--mygptel--tool-reload-agent'.")
+Set buffer-local by `iar-load-agent' and `iar--tool-reload-agent'.")
 
 (defvar iar--current-agent-file nil
   "Full path to the currently loaded agent's prompt.org file.
-Set buffer-local by `iar-load-agent' and `iar--mygptel--tool-reload-agent'.")
+Set buffer-local by `iar-load-agent' and `iar--tool-reload-agent'.")
 
 ;; Declared here so iar-agent-loader can reset them when switching agents.
 ;; Defined in iar-knowledge-loader.el.

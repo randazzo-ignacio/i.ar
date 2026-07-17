@@ -10,7 +10,7 @@
 ;; reduces the surface area by removing obvious injection vectors
 ;; from the raw text.
 ;;
-;; Usage: (my-gptel--sanitize-external-output "raw string from curl/nmap/etc.")
+;; Usage: (iar--sanitize-external-output "raw string from curl/nmap/etc.")
 ;; Returns a sanitized string with a [SANITIZED EXTERNAL DATA] prefix.
 
 (require 'subr-x)
@@ -27,7 +27,7 @@
 
 ;;; --- Configuration ---
 
-(defconst my-gptel--sanitizer-control-patterns
+(defconst iar--sanitizer-control-patterns
   '(
     ;; ANSI escape sequences (can manipulate terminal output)
     "\x1b\\[[0-9;]*[a-zA-Z]"
@@ -47,7 +47,7 @@
     )
   "Regex patterns for control sequences and invisible characters to strip.")
 
-(defconst my-gptel--sanitizer-injection-markers
+(defconst iar--sanitizer-injection-markers
   '(
     ;; Lines that look like system prompt directives
     "^\\* SYSTEM PROMPT"
@@ -85,7 +85,7 @@
 These lines are NOT removed (that would destroy evidence) but are
 prefixed with [INJECTION SUSPECT] to warn the AI.")
 
-(defconst my-gptel--sanitizer-wrapper-patterns
+(defconst iar--sanitizer-wrapper-patterns
   '(
     ;; Fake system message wrappers — match <system>, </system>, <?system?>, etc.
     "</?\\??system\\??>"
@@ -104,19 +104,19 @@ fake system messages. These are neutralized by replacing with
 
 ;;; --- Sanitization Functions ---
 
-(defun my-gptel--strip-control-chars (text)
+(defun iar--strip-control-chars (text)
   "Remove ANSI escape sequences and control characters from TEXT."
   (let ((result text))
-    (dolist (pattern my-gptel--sanitizer-control-patterns result)
+    (dolist (pattern iar--sanitizer-control-patterns result)
       (setq result (replace-regexp-in-string pattern "" result)))))
 
-(defun my-gptel--neutralize-wrapper-tags (text)
+(defun iar--neutralize-wrapper-tags (text)
   "Replace fake system message wrapper tags in TEXT with [REMOVED-TAG]."
   (let ((result text))
-    (dolist (pattern my-gptel--sanitizer-wrapper-patterns result)
+    (dolist (pattern iar--sanitizer-wrapper-patterns result)
       (setq result (replace-regexp-in-string pattern iar-removed-tag result)))))
 
-(defun my-gptel--flag-injection-lines (text)
+(defun iar--flag-injection-lines (text)
   "Prefix lines that resemble prompt injection with [INJECTION SUSPECT].
 Does not remove the lines — they may contain useful data. But the
 prefix warns the AI to treat them as data, not instructions."
@@ -125,7 +125,7 @@ prefix warns the AI to treat them as data, not instructions."
     (dolist (line lines)
       (let ((flagged line)
             (matched nil))
-        (dolist (pattern my-gptel--sanitizer-injection-markers)
+        (dolist (pattern iar--sanitizer-injection-markers)
           (unless matched
             (when (string-match-p pattern line)
               (setq flagged (concat iar-injection-suspect-prefix " " line))
@@ -133,7 +133,7 @@ prefix warns the AI to treat them as data, not instructions."
         (push flagged result)))
     (mapconcat #'identity (nreverse result) "\n")))
 
-(defun my-gptel--sanitize-external-output (text)
+(defun iar--sanitize-external-output (text)
   "Sanitize TEXT from external/untrusted sources.
 1. Strips ANSI escape sequences and control characters.
 2. Neutralizes fake system message wrapper tags.
@@ -143,9 +143,9 @@ prefix warns the AI to treat them as data, not instructions."
 Returns the sanitized string."
   (if (or (null text) (string-empty-p text))
       ""
-    (let* ((cleaned (my-gptel--strip-control-chars text))
-           (neutralized (my-gptel--neutralize-wrapper-tags cleaned))
-           (flagged (my-gptel--flag-injection-lines neutralized)))
+    (let* ((cleaned (iar--strip-control-chars text))
+           (neutralized (iar--neutralize-wrapper-tags cleaned))
+           (flagged (iar--flag-injection-lines neutralized)))
       (format "%s\n%s\n%s"
               iar-sanitized-open
               flagged
@@ -156,12 +156,12 @@ Returns the sanitized string."
 ;; to the output of execute_code_local before it reaches the AI.
 ;; This is controlled by a buffer-local flag.
 
-(defvar-local my-gptel--sanitize-exec-output nil
+(defvar-local iar--sanitize-exec-output nil
   "When non-nil, output from execute_code_local is sanitized
 before being returned to the AI. Enable for CTF/external operations.
 The flag is captured at call time in code_tools.el (not read in the
 sentinel) because process sentinels run in an unpredictable buffer
-context. code_tools.el calls `my-gptel--sanitize-external-output'
+context. code_tools.el calls `iar--sanitize-external-output'
 directly using the captured value.")
 
 (provide 'iar-output-sanitizer)

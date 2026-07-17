@@ -15,7 +15,7 @@
 (ert-deftest test-reload-agent-reloads-current ()
   "reload_agent should reload the currently loaded agent profile."
   :tags '(integration)
-  (let ((result (iar--mygptel--tool-reload-agent)))
+  (let ((result (iar--tool-reload-agent)))
     (should (stringp result))
     ;; Either success or error depending on whether an agent is loaded
     ;; in the test buffer. Just verify it doesn't crash and returns
@@ -25,20 +25,20 @@
 (ert-deftest test-reload-agent-with-specific-name ()
   "reload_agent should reload a specific agent by name."
   :tags '(integration)
-  (let ((result (iar--mygptel--tool-reload-agent "reviewer")))
+  (let ((result (iar--tool-reload-agent "reviewer")))
     (should (stringp result))
     (should (string-match-p "Success" result))
     (should (equal iar--current-agent-name "reviewer"))))
 
 (ert-deftest test-reload-agent-rejects-invalid-name ()
   "reload_agent should reject agent names with special characters."
-  (let ((result (iar--mygptel--tool-reload-agent "../../etc/passwd")))
+  (let ((result (iar--tool-reload-agent "../../etc/passwd")))
     (should (stringp result))
     (should (string-match-p "Error" result))))
 
 (ert-deftest test-reload-agent-missing-agent-error ()
   "reload_agent should return error for nonexistent agent."
-  (let ((result (iar--mygptel--tool-reload-agent "nonexistent_xyzzy_agent")))
+  (let ((result (iar--tool-reload-agent "nonexistent_xyzzy_agent")))
     (should (stringp result))
     (should (string-match-p "Error" result))))
 
@@ -46,7 +46,7 @@
   "reload_agent should set iar--current-agent-name in current buffer."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--mygptel--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "reviewer")))
       (should (string-match-p "Success" result))
       (should (equal iar--current-agent-name "reviewer")))))
 
@@ -55,7 +55,7 @@
 (ert-deftest test-reload-os-returns-success ()
   "reload_os should return a success message with tool count."
   :tags '(integration)
-  (let ((result (iar--mygptel--tool-reload-os)))
+  (let ((result (iar--tool-reload-os)))
     (should (stringp result))
     (should (string-match-p "Success" result))
     (should (string-match-p "tools" result))))
@@ -63,7 +63,7 @@
 (ert-deftest test-reload-os-rebuilds-tools ()
   "reload_os should rebuild gptel-tools with expected count."
   :tags '(integration)
-  (iar--mygptel--tool-reload-os)
+  (iar--tool-reload-os)
   (should (>= (length (default-value 'gptel-tools)) 12)))
 
 ;;; --- reload_agent expanded tests ---
@@ -73,7 +73,7 @@
 Empty string fails the \\S- check and falls through to current-agent
 fallback. Uses with-temp-buffer to ensure no agent is loaded."
   (with-temp-buffer
-    (let ((result (iar--mygptel--tool-reload-agent "")))
+    (let ((result (iar--tool-reload-agent "")))
       (should (stringp result))
       (should (string-match-p "Error" result)))))
 
@@ -83,7 +83,7 @@ Whitespace-only string fails the \\S- check and falls through to
 current-agent fallback. Uses with-temp-buffer to ensure no agent
 is loaded."
   (with-temp-buffer
-    (let ((result (iar--mygptel--tool-reload-agent "   ")))
+    (let ((result (iar--tool-reload-agent "   ")))
       (should (stringp result))
       (should (string-match-p "Error" result)))))
 
@@ -92,7 +92,7 @@ is loaded."
 In a temp buffer with no agent loaded, nil falls through to the
 current-agent check which errors with 'No agent'."
   (with-temp-buffer
-    (let ((result (iar--mygptel--tool-reload-agent nil)))
+    (let ((result (iar--tool-reload-agent nil)))
       (should (stringp result))
       (should (string-match-p "Error" result))
       (should (string-match-p "No agent" result)))))
@@ -103,7 +103,7 @@ A non-string (e.g., integer) fails the stringp check and falls through
 to the current-agent fallback. Uses with-temp-buffer to ensure no agent
 is loaded."
   (with-temp-buffer
-    (let ((result (iar--mygptel--tool-reload-agent 123)))
+    (let ((result (iar--tool-reload-agent 123)))
       (should (stringp result))
       (should (string-match-p "Error" result)))))
 
@@ -111,7 +111,7 @@ is loaded."
   "reload_agent should set iar--current-agent-file on success."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--mygptel--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "reviewer")))
       (should (string-match-p "Success" result))
       (should (stringp iar--current-agent-file))
       (should (string-match-p "reviewer" iar--current-agent-file))
@@ -121,7 +121,7 @@ is loaded."
   "reload_agent should update gptel-system-prompt on success."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--mygptel--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "reviewer")))
       (should (string-match-p "Success" result))
       (should (stringp gptel-system-prompt))
       (should (> (length gptel-system-prompt) 0))
@@ -134,7 +134,7 @@ Each name passes the \\S- check (has non-whitespace) but fails the
 should also echo the offending name for debugging."
   (dolist (bad-name '("foo/bar" "foo;bar" "foo&bar" "foo|bar" "foo bar"
                       "foo.bar" "../foo" "foo\\bar"))
-    (let ((result (iar--mygptel--tool-reload-agent bad-name)))
+    (let ((result (iar--tool-reload-agent bad-name)))
       (should (stringp result))
       (should (string-match-p "Error" result))
       (should (string-match-p (regexp-quote bad-name) result)))))
@@ -143,7 +143,7 @@ should also echo the offending name for debugging."
   "reload_agent success message should contain the agent name."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--mygptel--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "reviewer")))
       (should (string-match-p "Success" result))
       (should (string-match-p "reviewer" result)))))
 
@@ -152,7 +152,7 @@ should also echo the offending name for debugging."
 The count should be at least 1 (non-empty profile)."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--mygptel--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "reviewer")))
       (should (string-match-p "Success" result))
       (should (string-match-p "[1-9][0-9]* chars" result)))))
 
@@ -160,7 +160,7 @@ The count should be at least 1 (non-empty profile)."
   "reload_agent should successfully load the darwin agent profile."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--mygptel--tool-reload-agent "darwin")))
+    (let ((result (iar--tool-reload-agent "darwin")))
       (should (string-match-p "Success" result))
       (should (equal iar--current-agent-name "darwin"))
       (should (stringp gptel-system-prompt))
@@ -170,7 +170,7 @@ The count should be at least 1 (non-empty profile)."
   "reload_agent should successfully load the reviewer agent profile."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--mygptel--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "reviewer")))
       (should (string-match-p "Success" result))
       (should (equal iar--current-agent-name "reviewer"))
       (should (stringp gptel-system-prompt))
@@ -189,7 +189,7 @@ calls set-default 'gptel-tools nil before attempting the load."
         (let ((tmp-dir (make-temp-file "test-reload-os-" :dir-flag)))
           (unwind-protect
               (let ((user-emacs-directory tmp-dir))
-                (let ((result (iar--mygptel--tool-reload-os)))
+                (let ((result (iar--tool-reload-os)))
                   (should (stringp result))
                   (should (string-match-p "Error" result))))
             (delete-directory tmp-dir t)))

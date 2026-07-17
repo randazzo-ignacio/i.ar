@@ -164,7 +164,7 @@ LABEL is the symbol request or response. CONTENT is a string."
 
 ;;; --- Outgoing request capture ---
 
-(defun iar--mygptel--request-log-outgoing (config-str)
+(defun iar--request-log-outgoing (config-str)
   "Extract and log the JSON payload from CONFIG-STR.
 CONFIG-STR is the return value of gptel-curl--get-config, which
 contains curl config lines followed by the JSON payload as the
@@ -182,7 +182,7 @@ data-binary section."
 
 ;;; --- Incoming response capture ---
 
-(defun iar--mygptel--request-log-incoming (process)
+(defun iar--request-log-incoming (process)
   "Snapshot the raw response from PROCESS buffer before gptel parses it.
 PROCESS is the curl process. Its buffer contains HTTP headers + body.
 Also parses token counts from the response before truncation."
@@ -221,16 +221,16 @@ Call this once during initialization to enable request logging."
   (iar-gptel-advise-curl-get-config :around
               (lambda (orig-fn info uuid)
                 (let ((result (funcall orig-fn info uuid)))
-                  (iar--mygptel--request-log-outgoing result)
+                  (iar--request-log-outgoing result)
                   result)))
   ;; Incoming (streaming): snapshot before stream-cleanup parses
   (iar-gptel-advise-curl-stream-cleanup :before
               (lambda (process _status)
-                (iar--mygptel--request-log-incoming process)))
+                (iar--request-log-incoming process)))
   ;; Incoming (non-streaming): snapshot before sentinel parses
   (iar-gptel-advise-curl-sentinel :before
               (lambda (process _status)
-                (iar--mygptel--request-log-incoming process)))
+                (iar--request-log-incoming process)))
   (message "[request-logger] Installed on gptel-curl functions"))
 
 (iar-request-log-setup)

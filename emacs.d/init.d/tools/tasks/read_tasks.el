@@ -8,7 +8,7 @@
 (require 'subr-x)
 (require 'iar-agent-utils)  ; path resolution
 
-(defun iar--mygptel--tool-read-tasks ()
+(defun iar--tool-read-tasks ()
   "Read all task files (.md) from the current agent's tasks directory.
 Returns their contents concatenated with headers, or a message if
 no tasks exist."
@@ -38,6 +38,6 @@ no tasks exist."
   :name "read_tasks"
   :description "Read all task files from the current agent's tasks directory. Each task is a separate .md file. Use to check pending work and project direction."
   :args (list)
-  :function #'iar--mygptel--tool-read-tasks))
+  :function #'iar--tool-read-tasks))
 
 (provide 'iar-tool--read-tasks)

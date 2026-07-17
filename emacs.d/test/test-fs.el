@@ -63,7 +63,7 @@ Binds `test-fs--tmpdir' to the temp dir path."
 (ert-deftest test-fs-list-directory-returns-contents ()
   "list_directory should return newline-separated file names."
   (with-fs-fixture
-    (let ((result (iar--mygptel--fs-list-directory test-fs--tmpdir)))
+    (let ((result (iar--fs-list-directory test-fs--tmpdir)))
       (should (stringp result))
       (should (string-match-p "hello\\.txt" result))
       (should (string-match-p "empty\\.txt" result))
@@ -75,7 +75,7 @@ Binds `test-fs--tmpdir' to the temp dir path."
     ;; Create a hidden file
     (with-temp-file (expand-file-name ".hidden" test-fs--tmpdir)
       (insert "hidden\n"))
-    (let ((result (iar--mygptel--fs-list-directory test-fs--tmpdir)))
+    (let ((result (iar--fs-list-directory test-fs--tmpdir)))
       (should (stringp result))
       ;; Should include the hidden file
       (should (string-match-p "\\.hidden" result))
@@ -90,7 +90,7 @@ Binds `test-fs--tmpdir' to the temp dir path."
     ;; Create files with names that would not be alphabetical in filesystem order
     (with-temp-file (expand-file-name "zzz.txt" test-fs--tmpdir) nil)
     (with-temp-file (expand-file-name "aaa.txt" test-fs--tmpdir) nil)
-    (let ((result (iar--mygptel--fs-list-directory test-fs--tmpdir)))
+    (let ((result (iar--fs-list-directory test-fs--tmpdir)))
       (should (stringp result))
       (let ((lines (split-string result "\n")))
         ;; Lines should be in alphabetical order
@@ -101,7 +101,7 @@ Binds `test-fs--tmpdir' to the temp dir path."
 This helps the AI distinguish directories from files when deciding
 whether to list_directory into a path or read_file from it."
   (with-fs-fixture
-    (let ((result (iar--mygptel--fs-list-directory test-fs--tmpdir)))
+    (let ((result (iar--fs-list-directory test-fs--tmpdir)))
       (should (stringp result))
       ;; Use exact line matching for robustness (reviewer m1)
       (let ((lines (split-string result "\n")))
@@ -115,7 +115,7 @@ whether to list_directory into a path or read_file from it."
 
 (ert-deftest test-fs-list-directory-missing-returns-error ()
   "list_directory on nonexistent path should return error string."
-  (let ((result (iar--mygptel--fs-list-directory "/nonexistent/path/xyzzy")))
+  (let ((result (iar--fs-list-directory "/nonexistent/path/xyzzy")))
     (should (stringp result))
     (should (string-match-p "Error" result))
     ;; Error message should contain the path
@@ -128,7 +128,7 @@ The error handler should capture the condition-case err and include
 (e.g., 'Not a directory', 'Permission denied')."
   ;; Use a path that exists but is a file, not a directory
   (with-fs-fixture
-    (let ((result (iar--mygptel--fs-list-directory
+    (let ((result (iar--fs-list-directory
                    (expand-file-name "hello.txt" test-fs--tmpdir))))
       (should (stringp result))
       (should (string-match-p "Error" result))
@@ -145,27 +145,27 @@ The error handler should capture the condition-case err and include
 (ert-deftest test-fs-read-file-returns-content ()
   "read_file should return the exact contents of a file."
   (with-fs-fixture
-    (let ((result (iar--mygptel--fs-read-file
+    (let ((result (iar--fs-read-file
                    (expand-file-name "hello.txt" test-fs--tmpdir))))
       (should (string= result "Hello, World!\n")))))
 
 (ert-deftest test-fs-read-file-nested-path ()
   "read_file should work with nested paths."
   (with-fs-fixture
-    (let ((result (iar--mygptel--fs-read-file
+    (let ((result (iar--fs-read-file
                    (expand-file-name "subdir/nested.txt" test-fs--tmpdir))))
       (should (string= result "Nested content\n")))))
 
 (ert-deftest test-fs-read-file-empty-file ()
   "read_file on an empty file should return empty string."
   (with-fs-fixture
-    (let ((result (iar--mygptel--fs-read-file
+    (let ((result (iar--fs-read-file
                    (expand-file-name "empty.txt" test-fs--tmpdir))))
       (should (string= result "")))))
 
 (ert-deftest test-fs-read-file-missing-returns-error ()
   "read_file on nonexistent file should return error string."
-  (let ((result (iar--mygptel--fs-read-file "/nonexistent/file/xyzzy.txt")))
+  (let ((result (iar--fs-read-file "/nonexistent/file/xyzzy.txt")))
     (should (stringp result))
     (should (string-match-p "Error" result))
     ;; Error message should contain the path
@@ -173,7 +173,7 @@ The error handler should capture the condition-case err and include
 
 (ert-deftest test-fs-read-file-relative-path-expanded ()
   "read_file should expand relative paths in both operation and error messages."
-  (let ((result (iar--mygptel--fs-read-file "nonexistent-relative-file.txt")))
+  (let ((result (iar--fs-read-file "nonexistent-relative-file.txt")))
     (should (stringp result))
     (should (string-match-p "Error" result))
     ;; Error should NOT contain the raw relative path
@@ -187,7 +187,7 @@ The error handler should capture the condition-case err and include
   "write_file should create a new file with exact content."
   (with-fs-fixture
     (let* ((target (expand-file-name "new.txt" test-fs--tmpdir))
-           (result (iar--mygptel--fs-write-file target "New content\n")))
+           (result (iar--fs-write-file target "New content\n")))
       (should (string-match-p "Success" result))
       (should (file-exists-p target))
       (should (string= (with-temp-buffer
@@ -199,7 +199,7 @@ The error handler should capture the condition-case err and include
   "write_file should completely overwrite an existing file."
   (with-fs-fixture
     (let* ((target (expand-file-name "hello.txt" test-fs--tmpdir))
-           (result (iar--mygptel--fs-write-file target "Replaced!\n")))
+           (result (iar--fs-write-file target "Replaced!\n")))
       (should (string-match-p "Success" result))
       (should (string= (with-temp-buffer
                          (insert-file-contents target)
@@ -210,7 +210,7 @@ The error handler should capture the condition-case err and include
   "write_file should create parent directories if they don't exist."
   (with-fs-fixture
     (let* ((target (expand-file-name "deep/nested/path/file.txt" test-fs--tmpdir))
-           (result (iar--mygptel--fs-write-file target "Deep content\n")))
+           (result (iar--fs-write-file target "Deep content\n")))
       (should (string-match-p "Success" result))
       (should (file-exists-p target))
       (should (string= (with-temp-buffer
@@ -222,14 +222,14 @@ The error handler should capture the condition-case err and include
   "write_file should handle empty content correctly."
   (with-fs-fixture
     (let* ((target (expand-file-name "blank.txt" test-fs--tmpdir))
-           (result (iar--mygptel--fs-write-file target "")))
+           (result (iar--fs-write-file target "")))
       (should (string-match-p "Success" result))
       (should (file-exists-p target))
       (should (= (file-attribute-size (file-attributes target)) 0)))))
 
 (ert-deftest test-fs-write-file-error-on-bad-path ()
   "write_file should return error string for unwritable path."
-  (let ((result (iar--mygptel--fs-write-file "/proc/cannot-write-here.txt" "content")))
+  (let ((result (iar--fs-write-file "/proc/cannot-write-here.txt" "content")))
     (should (stringp result))
     ;; Either error from write or success (proc may behave oddly).
     ;; Just verify it doesn't crash.
@@ -241,7 +241,7 @@ The error handler should capture the condition-case err and include
   "append_file should add content to end of existing file."
   (with-fs-fixture
     (let* ((target (expand-file-name "hello.txt" test-fs--tmpdir))
-           (result (iar--mygptel--fs-append-file target "Appended line\n")))
+           (result (iar--fs-append-file target "Appended line\n")))
       (should (string-match-p "Success" result))
       (should (string= (with-temp-buffer
                          (insert-file-contents target)
@@ -255,7 +255,7 @@ The error handler should capture the condition-case err and include
     (with-temp-file (expand-file-name "nonewline.txt" test-fs--tmpdir)
       (insert "no newline at end"))
     (let* ((target (expand-file-name "nonewline.txt" test-fs--tmpdir))
-           (result (iar--mygptel--fs-append-file target "appended")))
+           (result (iar--fs-append-file target "appended")))
       (should (string-match-p "Success" result))
       (should (string= (with-temp-buffer
                          (insert-file-contents target)
@@ -266,7 +266,7 @@ The error handler should capture the condition-case err and include
   "append_file should NOT add a newline if file already ends with one."
   (with-fs-fixture
     (let* ((target (expand-file-name "hello.txt" test-fs--tmpdir))
-           (result (iar--mygptel--fs-append-file target "line2\n")))
+           (result (iar--fs-append-file target "line2\n")))
       (should (string-match-p "Success" result))
       (let ((content (with-temp-buffer
                        (insert-file-contents target)
@@ -279,7 +279,7 @@ The error handler should capture the condition-case err and include
   "append_file to an empty file should write content without leading newline."
   (with-fs-fixture
     (let* ((target (expand-file-name "empty.txt" test-fs--tmpdir))
-           (result (iar--mygptel--fs-append-file target "first line\n")))
+           (result (iar--fs-append-file target "first line\n")))
       (should (string-match-p "Success" result))
       (should (string= (with-temp-buffer
                          (insert-file-contents target)
@@ -290,7 +290,7 @@ The error handler should capture the condition-case err and include
   "append_file should create the file if it doesn't exist."
   (with-fs-fixture
     (let* ((target (expand-file-name "new-append.txt" test-fs--tmpdir))
-           (result (iar--mygptel--fs-append-file target "created by append\n")))
+           (result (iar--fs-append-file target "created by append\n")))
       (should (string-match-p "Success" result))
       (should (file-exists-p target))
       (should (string= (with-temp-buffer
@@ -307,7 +307,7 @@ succeed.  Now both tools create parent dirs via make-directory."
   (let* ((tmpdir (make-temp-file "test-append-mkdir-" :dir-flag))
          (target (expand-file-name "new/sub/dir/file.txt" tmpdir)))
     (unwind-protect
-        (let ((result (iar--mygptel--fs-append-file target "content\n")))
+        (let ((result (iar--fs-append-file target "content\n")))
           (should (string-match-p "Success" result))
           (should (file-exists-p target))
           (should (string= (with-temp-buffer
@@ -324,7 +324,7 @@ succeed.  Now both tools create parent dirs via make-directory."
 Triggers a filesystem error by appending to a path under /proc/ (which
 rejects writes).  Verifies the error message contains the expanded
 absolute path, not the raw relative input."
-  (let ((result (iar--mygptel--fs-append-file "proc-fake-append-test.txt" "content")))
+  (let ((result (iar--fs-append-file "proc-fake-append-test.txt" "content")))
     (should (stringp result))
     ;; The result may be Success (file created in cwd) or Error (if cwd
     ;; is not writable).  Either way, verify the expanded path is used
@@ -342,11 +342,11 @@ absolute path, not the raw relative input."
   (with-fs-fixture
     (let* ((target (expand-file-name "buffered-append.txt" test-fs--tmpdir)))
       ;; Create initial file
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       ;; Open it in a buffer
       (let ((buf (find-file target)))
         (unwind-protect
-            (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+            (let ((result (iar--fs-append-file target "appended\n")))
               (should (string-match-p "Success" result))
               ;; Buffer content should include appended text
               (with-current-buffer buf
@@ -366,11 +366,11 @@ have a trailing newline even though the appended content did not include one."
   (with-fs-fixture
     (let* ((target (expand-file-name "no-newline-buf.txt" test-fs--tmpdir)))
       ;; Create file without trailing newline
-      (iar--mygptel--fs-write-file target "no newline")
+      (iar--fs-write-file target "no newline")
       ;; Open it in a buffer
       (let ((buf (find-file target)))
         (unwind-protect
-            (let ((result (iar--mygptel--fs-append-file target "appended")))
+            (let ((result (iar--fs-append-file target "appended")))
               (should (string-match-p "Success" result))
               ;; Buffer should have newline inserted before appended content.
               ;; save-buffer may add a trailing newline (require-final-newline).
@@ -390,11 +390,11 @@ have a trailing newline even though the appended content did not include one."
   (with-fs-fixture
     (let* ((target (expand-file-name "has-newline-buf.txt" test-fs--tmpdir)))
       ;; Create file with trailing newline
-      (iar--mygptel--fs-write-file target "has newline\n")
+      (iar--fs-write-file target "has newline\n")
       ;; Open it in a buffer
       (let ((buf (find-file target)))
         (unwind-protect
-            (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+            (let ((result (iar--fs-append-file target "appended\n")))
               (should (string-match-p "Success" result))
               ;; Buffer should NOT have double newline
               (with-current-buffer buf
@@ -408,7 +408,7 @@ have a trailing newline even though the appended content did not include one."
   (with-fs-fixture
     (let* ((target (expand-file-name "dirty-append.txt" test-fs--tmpdir)))
       ;; Create initial file
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       ;; Open it in a buffer and make unsaved changes
       (let ((buf (find-file target)))
         (unwind-protect
@@ -418,7 +418,7 @@ have a trailing newline even though the appended content did not include one."
                 (insert "unsaved change\n")
                 (should (buffer-modified-p)))
               ;; Attempt to append_file -- should be rejected
-              (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+              (let ((result (iar--fs-append-file target "appended\n")))
                 (should (string-match-p "Error" result))
                 (should (string-match-p "unsaved" result))
                 ;; File on disk should still be original
@@ -434,7 +434,7 @@ have a trailing newline even though the appended content did not include one."
   (with-fs-fixture
     (let* ((target (expand-file-name "readonly-append.txt" test-fs--tmpdir)))
       ;; Create initial file
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       ;; Open it in a buffer and make it read-only
       (let ((buf (find-file target)))
         (unwind-protect
@@ -442,7 +442,7 @@ have a trailing newline even though the appended content did not include one."
               (with-current-buffer buf
                 (setq buffer-read-only t))
               ;; Attempt to append_file -- should be rejected
-              (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+              (let ((result (iar--fs-append-file target "appended\n")))
                 (should (string-match-p "Error" result))
                 (should (string-match-p "read-only" result))
                 ;; File on disk should still be original
@@ -458,7 +458,7 @@ have a trailing newline even though the appended content did not include one."
   (with-fs-fixture
     (let* ((target (expand-file-name "narrowed-append.txt" test-fs--tmpdir)))
       ;; Create file with multiple lines
-      (iar--mygptel--fs-write-file target "line1\nline2\nline3\n")
+      (iar--fs-write-file target "line1\nline2\nline3\n")
       ;; Open it in a buffer and narrow to line2
       (let ((buf (find-file target)))
         (unwind-protect
@@ -468,7 +468,7 @@ have a trailing newline even though the appended content did not include one."
                 (forward-line 1)
                 (narrow-to-region (point) (progn (forward-line 1) (point))))
               ;; Append should widen and add at the true end
-              (let ((result (iar--mygptel--fs-append-file target "line4\n")))
+              (let ((result (iar--fs-append-file target "line4\n")))
                 (should (string-match-p "Success" result))
                 ;; File on disk should have all 4 lines
                 (should (string= (with-temp-buffer
@@ -483,11 +483,11 @@ have a trailing newline even though the appended content did not include one."
   (with-fs-fixture
     (let* ((target (expand-file-name "empty-buf-append.txt" test-fs--tmpdir)))
       ;; Create empty file
-      (iar--mygptel--fs-write-file target "")
+      (iar--fs-write-file target "")
       ;; Open it in a buffer
       (let ((buf (find-file target)))
         (unwind-protect
-            (let ((result (iar--mygptel--fs-append-file target "first line\n")))
+            (let ((result (iar--fs-append-file target "first line\n")))
               (should (string-match-p "Success" result))
               ;; Buffer should contain only the appended content (no leading newline)
               (with-current-buffer buf
@@ -506,7 +506,7 @@ have a trailing newline even though the appended content did not include one."
     (let* ((target (expand-file-name "real-append.txt" test-fs--tmpdir))
            (link (expand-file-name "link-append.txt" test-fs--tmpdir)))
       ;; Create the real file
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       ;; Create a symlink to it
       (make-symbolic-link target link)
       ;; Open the real file in a buffer
@@ -514,7 +514,7 @@ have a trailing newline even though the appended content did not include one."
         (unwind-protect
             (progn
               ;; Append via the symlink path -- should find the buffer
-              (let ((result (iar--mygptel--fs-append-file link "appended\n")))
+              (let ((result (iar--fs-append-file link "appended\n")))
                 (should (string-match-p "Success" result))
                 ;; Buffer content should include appended text
                 (with-current-buffer buf
@@ -536,24 +536,24 @@ have a trailing newline even though the appended content did not include one."
   (with-fs-fixture
     (let* ((target (expand-file-name "roundtrip.txt" test-fs--tmpdir))
            (content "Line 1\nLine 2\nLine 3\nSpecial chars: \t!@#$%^&*()\n"))
-      (iar--mygptel--fs-write-file target content)
-      (should (string= (iar--mygptel--fs-read-file target) content)))))
+      (iar--fs-write-file target content)
+      (should (string= (iar--fs-read-file target) content)))))
 
 (ert-deftest test-fs-roundtrip-write-append-read ()
   "write_file, append_file, then read_file should return combined content."
   (with-fs-fixture
     (let* ((target (expand-file-name "rt2.txt" test-fs--tmpdir)))
-      (iar--mygptel--fs-write-file target "base\n")
-      (iar--mygptel--fs-append-file target "added\n")
-      (should (string= (iar--mygptel--fs-read-file target) "base\nadded\n")))))
+      (iar--fs-write-file target "base\n")
+      (iar--fs-append-file target "added\n")
+      (should (string= (iar--fs-read-file target) "base\nadded\n")))))
 
 (ert-deftest test-fs-roundtrip-multibyte ()
   "write_file and read_file should handle multibyte (UTF-8) content."
   (with-fs-fixture
     (let* ((target (expand-file-name "unicode.txt" test-fs--tmpdir))
            (content "Cafe resume naive\nJapanese: \u3042\nEmoji: \U0001F600\n"))
-      (iar--mygptel--fs-write-file target content)
-      (should (string= (iar--mygptel--fs-read-file target) content)))))
+      (iar--fs-write-file target content)
+      (should (string= (iar--fs-read-file target) content)))))
 
 ;;; --- replace_in_file tests ---
 
@@ -561,21 +561,21 @@ have a trailing newline even though the appended content did not include one."
   "replace_in_file should replace exact match and return success."
   (with-fs-fixture
     (let* ((target (expand-file-name "replace.txt" test-fs--tmpdir)))
-      (iar--mygptel--fs-write-file target "alpha\nbeta\ngamma\n")
-      (let ((result (iar--mygptel--fs-replace target "beta" "BETA")))
+      (iar--fs-write-file target "alpha\nbeta\ngamma\n")
+      (let ((result (iar--fs-replace target "beta" "BETA")))
         (should (string-match-p "Success" result))
-        (should (string= (iar--mygptel--fs-read-file target)
+        (should (string= (iar--fs-read-file target)
                          "alpha\nBETA\ngamma\n"))))))
 
 (ert-deftest test-fs-replace-not-found ()
   "replace_in_file should return error when search text not found."
   (with-fs-fixture
     (let* ((target (expand-file-name "replace2.txt" test-fs--tmpdir)))
-      (iar--mygptel--fs-write-file target "alpha\nbeta\ngamma\n")
-      (let ((result (iar--mygptel--fs-replace target "nonexistent" "whatever")))
+      (iar--fs-write-file target "alpha\nbeta\ngamma\n")
+      (let ((result (iar--fs-replace target "nonexistent" "whatever")))
         (should (string-match-p "Error" result))
         ;; File should be unchanged
-        (should (string= (iar--mygptel--fs-read-file target)
+        (should (string= (iar--fs-read-file target)
                          "alpha\nbeta\ngamma\n"))))))
 
 (ert-deftest test-fs-replace-multiline ()
@@ -585,27 +585,27 @@ have a trailing newline even though the appended content did not include one."
            (original "function foo() {\n  return 1;\n}\n")
            (search "function foo() {\n  return 1;\n}")
            (replace "function foo() {\n  return 2;\n}"))
-      (iar--mygptel--fs-write-file target original)
-      (let ((result (iar--mygptel--fs-replace target search replace)))
+      (iar--fs-write-file target original)
+      (let ((result (iar--fs-replace target search replace)))
         (should (string-match-p "Success" result))
-        (should (string= (iar--mygptel--fs-read-file target)
+        (should (string= (iar--fs-read-file target)
                          "function foo() {\n  return 2;\n}\n"))))))
 
 (ert-deftest test-fs-replace-whitespace-significant ()
   "replace_in_file should treat whitespace as significant (no trimming)."
   (with-fs-fixture
     (let* ((target (expand-file-name "ws.txt" test-fs--tmpdir)))
-      (iar--mygptel--fs-write-file target "  indented line\n  other line\n")
+      (iar--fs-write-file target "  indented line\n  other line\n")
       ;; Search with leading spaces -- should match
-      (let ((result (iar--mygptel--fs-replace target "  indented line" "  replaced line")))
+      (let ((result (iar--fs-replace target "  indented line" "  replaced line")))
         (should (string-match-p "Success" result)))
       ;; Search without leading spaces -- should NOT match the indented version
-      (let ((result (iar--mygptel--fs-replace target "indented line" "should not match")))
+      (let ((result (iar--fs-replace target "indented line" "should not match")))
         (should (string-match-p "Error" result))))))
 
 (ert-deftest test-fs-replace-missing-file ()
   "replace_in_file on missing file should return clean error."
-  (let ((result (iar--mygptel--fs-replace "/nonexistent/file.txt" "foo" "bar")))
+  (let ((result (iar--fs-replace "/nonexistent/file.txt" "foo" "bar")))
     (should (stringp result))
     (should (string-match-p "Error" result))))
 
@@ -616,11 +616,11 @@ have a trailing newline even though the appended content did not include one."
   (with-fs-fixture
     (let* ((target (expand-file-name "buffered.txt" test-fs--tmpdir)))
       ;; Create initial file
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       ;; Open it in a buffer
       (let ((buf (find-file target)))
         (unwind-protect
-            (let ((result (iar--mygptel--fs-write-file target "updated\n")))
+            (let ((result (iar--fs-write-file target "updated\n")))
               (should (string-match-p "Success" result))
               ;; Buffer content should be updated
               (with-current-buffer buf
@@ -638,7 +638,7 @@ have a trailing newline even though the appended content did not include one."
   (with-fs-fixture
     (let* ((target (expand-file-name "dirty.txt" test-fs--tmpdir)))
       ;; Create initial file
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       ;; Open it in a buffer and make unsaved changes
       (let ((buf (find-file target)))
         (unwind-protect
@@ -648,7 +648,7 @@ have a trailing newline even though the appended content did not include one."
                 (insert "unsaved change\n")
                 (should (buffer-modified-p)))
               ;; Attempt to write_file -- should be rejected
-              (let ((result (iar--mygptel--fs-write-file target "new content\n")))
+              (let ((result (iar--fs-write-file target "new content\n")))
                 (should (string-match-p "Error" result))
                 (should (string-match-p "unsaved" result))
                 ;; File on disk should still be original
@@ -664,7 +664,7 @@ have a trailing newline even though the appended content did not include one."
   (with-fs-fixture
     (let* ((target (expand-file-name "readonly.txt" test-fs--tmpdir)))
       ;; Create initial file
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       ;; Open it in a buffer and make it read-only
       (let ((buf (find-file target)))
         (unwind-protect
@@ -672,7 +672,7 @@ have a trailing newline even though the appended content did not include one."
               (with-current-buffer buf
                 (setq buffer-read-only t))
               ;; Attempt to write_file -- should be rejected
-              (let ((result (iar--mygptel--fs-write-file target "new content\n")))
+              (let ((result (iar--fs-write-file target "new content\n")))
                 (should (string-match-p "Error" result))
                 (should (string-match-p "read-only" result))
                 ;; File on disk should still be original
@@ -689,7 +689,7 @@ have a trailing newline even though the appended content did not include one."
     (let* ((target (expand-file-name "atomic.txt" test-fs--tmpdir)))
       ;; Ensure no buffer is visiting this file
       (should-not (find-buffer-visiting target))
-      (let ((result (iar--mygptel--fs-write-file target "atomic content\n")))
+      (let ((result (iar--fs-write-file target "atomic content\n")))
         (should (string-match-p "Success" result))
         (should (string= (with-temp-buffer
                            (insert-file-contents target)
@@ -708,7 +708,7 @@ literal buffer-file-name string and does not resolve symlinks)."
     (let* ((target (expand-file-name "real.txt" test-fs--tmpdir))
            (link (expand-file-name "link.txt" test-fs--tmpdir)))
       ;; Create the real file
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       ;; Create a symlink to it
       (make-symbolic-link target link)
       ;; Open the real file in a buffer
@@ -717,7 +717,7 @@ literal buffer-file-name string and does not resolve symlinks)."
             (progn
               ;; Write via the symlink path -- should find the buffer
               ;; visiting the real file via truename resolution
-              (let ((result (iar--mygptel--fs-write-file link "via symlink\n")))
+              (let ((result (iar--fs-write-file link "via symlink\n")))
                 (should (string-match-p "Success" result))
                 ;; Buffer content should be updated
                 (with-current-buffer buf
@@ -741,7 +741,7 @@ is found regardless of which name was used to open it."
     (let* ((target (expand-file-name "real.txt" test-fs--tmpdir))
            (link (expand-file-name "link.txt" test-fs--tmpdir)))
       ;; Create the real file
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       ;; Create a symlink to it
       (make-symbolic-link target link)
       ;; Open the file via the symlink path
@@ -750,7 +750,7 @@ is found regardless of which name was used to open it."
             (progn
               ;; Write via the real path -- should find the buffer
               ;; that was opened via the symlink
-              (let ((result (iar--mygptel--fs-write-file target "via real path\n")))
+              (let ((result (iar--fs-write-file target "via real path\n")))
                 (should (string-match-p "Success" result))
                 ;; Buffer content should be updated
                 (with-current-buffer buf
@@ -774,7 +774,7 @@ mutating content during programmatic saves."
   (with-fs-fixture
     (let* ((target (expand-file-name "hook-test.txt" test-fs--tmpdir))
            (hook-called nil))
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       (let ((buf (find-file target)))
         (unwind-protect
             (progn
@@ -782,7 +782,7 @@ mutating content during programmatic saves."
                 (add-hook 'before-save-hook
                           (lambda () (setq hook-called t))
                           nil t))
-              (let ((result (iar--mygptel--fs-write-file target "new content\n")))
+              (let ((result (iar--fs-write-file target "new content\n")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))
                 (with-current-buffer buf
@@ -795,7 +795,7 @@ mutating content during programmatic saves."
   (with-fs-fixture
     (let* ((target (expand-file-name "after-hook-test.txt" test-fs--tmpdir))
            (hook-called nil))
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       (let ((buf (find-file target)))
         (unwind-protect
             (progn
@@ -803,7 +803,7 @@ mutating content during programmatic saves."
                 (add-hook 'after-save-hook
                           (lambda () (setq hook-called t))
                           nil t))
-              (let ((result (iar--mygptel--fs-write-file target "new content\n")))
+              (let ((result (iar--fs-write-file target "new content\n")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (when (buffer-live-p buf)
@@ -814,7 +814,7 @@ mutating content during programmatic saves."
   (with-fs-fixture
     (let* ((target (expand-file-name "append-hook-test.txt" test-fs--tmpdir))
            (hook-called nil))
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       (let ((buf (find-file target)))
         (unwind-protect
             (progn
@@ -822,7 +822,7 @@ mutating content during programmatic saves."
                 (add-hook 'before-save-hook
                           (lambda () (setq hook-called t))
                           nil t))
-              (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+              (let ((result (iar--fs-append-file target "appended\n")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))
                 (with-current-buffer buf
@@ -835,7 +835,7 @@ mutating content during programmatic saves."
   (with-fs-fixture
     (let* ((target (expand-file-name "append-after-hook-test.txt" test-fs--tmpdir))
            (hook-called nil))
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       (let ((buf (find-file target)))
         (unwind-protect
             (progn
@@ -843,7 +843,7 @@ mutating content during programmatic saves."
                 (add-hook 'after-save-hook
                           (lambda () (setq hook-called t))
                           nil t))
-              (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+              (let ((result (iar--fs-append-file target "appended\n")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (when (buffer-live-p buf)
@@ -856,7 +856,7 @@ annotate or alter the content being written."
   (with-fs-fixture
     (let* ((target (expand-file-name "append-annotate-test.txt" test-fs--tmpdir))
            (hook-called nil))
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       (let ((buf (find-file target)))
         (unwind-protect
             (progn
@@ -864,7 +864,7 @@ annotate or alter the content being written."
                 (add-hook 'write-region-annotate-functions
                           (lambda (_start _end) (setq hook-called t) nil)
                           nil t))
-              (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+              (let ((result (iar--fs-append-file target "appended\n")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (when (buffer-live-p buf)
@@ -876,7 +876,7 @@ This tests the actual threat model: a hook like delete-trailing-whitespace
 or format-on-save that modifies buffer content."
   (with-fs-fixture
     (let* ((target (expand-file-name "mutation-test.txt" test-fs--tmpdir)))
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       (let ((buf (find-file target)))
         (unwind-protect
             (progn
@@ -889,7 +889,7 @@ or format-on-save that modifies buffer content."
                               (when (search-forward "new content" nil t)
                                 (replace-match "MUTATED" nil t))))
                           nil t))
-              (let ((result (iar--mygptel--fs-write-file target "new content\n")))
+              (let ((result (iar--fs-write-file target "new content\n")))
                 (should (string-match-p "Success" result))
                 ;; Content should be exactly what we wrote, NOT mutated by the hook
                 (with-current-buffer buf
@@ -905,7 +905,7 @@ annotate or alter the content being written."
   (with-fs-fixture
     (let* ((target (expand-file-name "annotate-test.txt" test-fs--tmpdir))
            (hook-called nil))
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       (let ((buf (find-file target)))
         (unwind-protect
             (progn
@@ -913,7 +913,7 @@ annotate or alter the content being written."
                 (add-hook 'write-region-annotate-functions
                           (lambda (_start _end) (setq hook-called t) nil)
                           nil t))
-              (let ((result (iar--mygptel--fs-write-file target "new content\n")))
+              (let ((result (iar--fs-write-file target "new content\n")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (when (buffer-live-p buf)
@@ -926,7 +926,7 @@ file writing process."
   (with-fs-fixture
     (let* ((target (expand-file-name "wff-test.txt" test-fs--tmpdir))
            (hook-called nil))
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       (let ((buf (find-file target)))
         (unwind-protect
             (progn
@@ -934,7 +934,7 @@ file writing process."
                 (add-hook 'write-file-functions
                           (lambda () (setq hook-called t) nil)
                           nil t))
-              (let ((result (iar--mygptel--fs-write-file target "new content\n")))
+              (let ((result (iar--fs-write-file target "new content\n")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (when (buffer-live-p buf)
@@ -947,7 +947,7 @@ buffer contents being written to disk."
   (with-fs-fixture
     (let* ((target (expand-file-name "wcf-test.txt" test-fs--tmpdir))
            (hook-called nil))
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       (let ((buf (find-file target)))
         (unwind-protect
             (progn
@@ -955,7 +955,7 @@ buffer contents being written to disk."
                 (add-hook 'write-contents-functions
                           (lambda () (setq hook-called t) nil)
                           nil t))
-              (let ((result (iar--mygptel--fs-write-file target "new content\n")))
+              (let ((result (iar--fs-write-file target "new content\n")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (when (buffer-live-p buf)
@@ -966,7 +966,7 @@ buffer contents being written to disk."
   (with-fs-fixture
     (let* ((target (expand-file-name "append-wff-test.txt" test-fs--tmpdir))
            (hook-called nil))
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       (let ((buf (find-file target)))
         (unwind-protect
             (progn
@@ -974,7 +974,7 @@ buffer contents being written to disk."
                 (add-hook 'write-file-functions
                           (lambda () (setq hook-called t) nil)
                           nil t))
-              (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+              (let ((result (iar--fs-append-file target "appended\n")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (when (buffer-live-p buf)
@@ -985,7 +985,7 @@ buffer contents being written to disk."
   (with-fs-fixture
     (let* ((target (expand-file-name "append-wcf-test.txt" test-fs--tmpdir))
            (hook-called nil))
-      (iar--mygptel--fs-write-file target "original\n")
+      (iar--fs-write-file target "original\n")
       (let ((buf (find-file target)))
         (unwind-protect
             (progn
@@ -993,7 +993,7 @@ buffer contents being written to disk."
                 (add-hook 'write-contents-functions
                           (lambda () (setq hook-called t) nil)
                           nil t))
-              (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+              (let ((result (iar--fs-append-file target "appended\n")))
                 (should (string-match-p "Success" result))
                 (should (null hook-called))))
           (when (buffer-live-p buf)
@@ -1021,7 +1021,7 @@ the entire file into memory just to check the last character."
                                      (insert-file-contents target nil (1- (file-attribute-size (file-attributes target))) (file-attribute-size (file-attributes target)))
                                      (buffer-string))))
       ;; Append to it
-      (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+      (let ((result (iar--fs-append-file target "appended\n")))
         (should (string-match-p "Success" result))
         ;; Verify the file now ends with the appended content
         (let* ((size (file-attribute-size (file-attributes target)))
@@ -1040,7 +1040,7 @@ the nil attrs guard should treat the file as new and write without prefix."
       ;; This tests the TOCTOU scenario: file vanished after file-exists-p
       ;; but before file-attributes, or simply a non-existent file.
       (should-not (file-exists-p target))
-      (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+      (let ((result (iar--fs-append-file target "appended\n")))
         (should (string-match-p "Success" result))
         ;; File should be created with just the appended content (no prefix)
         (should (string= (with-temp-buffer
@@ -1056,7 +1056,7 @@ file-attributes returns size 0, which should be treated as 'no prefix needed'."
       ;; Create a 0-byte file
       (with-temp-file target nil)
       (should (= (file-attribute-size (file-attributes target)) 0))
-      (let ((result (iar--mygptel--fs-append-file target "content\n")))
+      (let ((result (iar--fs-append-file target "content\n")))
         (should (string-match-p "Success" result))
         (should (string= (with-temp-buffer
                            (insert-file-contents target)
@@ -1071,7 +1071,7 @@ reads from byte 0 to byte 1 (the only byte)."
     (let* ((target (expand-file-name "single.txt" test-fs--tmpdir)))
       (with-temp-file target (insert "A"))
       (should (= (file-attribute-size (file-attributes target)) 1))
-      (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+      (let ((result (iar--fs-append-file target "appended\n")))
         (should (string-match-p "Success" result))
         (should (string= (with-temp-buffer
                            (insert-file-contents target)
@@ -1085,7 +1085,7 @@ Tests the size=1 edge case where the single byte IS a newline."
     (let* ((target (expand-file-name "single-nl.txt" test-fs--tmpdir)))
       (with-temp-file target (insert "\n"))
       (should (= (file-attribute-size (file-attributes target)) 1))
-      (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+      (let ((result (iar--fs-append-file target "appended\n")))
         (should (string-match-p "Success" result))
         (should (string= (with-temp-buffer
                            (insert-file-contents target)
@@ -1105,7 +1105,7 @@ IS a newline, so no prefix should be added."
         (dotimes (_ lines)
           (insert chunk))
         (insert "\n"))
-      (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+      (let ((result (iar--fs-append-file target "appended\n")))
         (should (string-match-p "Success" result))
         ;; Verify no double newline
         (let* ((size (file-attribute-size (file-attributes target)))
@@ -1137,7 +1137,7 @@ condition-case should catch this and default to empty prefix."
                         (list nil 1 0 0 (current-time) (current-time)
                               (current-time) 100 "-rw-r--r--" nil 0 0)
                       (apply real-fa args)))))
-        (let ((result (iar--mygptel--fs-append-file target "appended\n")))
+        (let ((result (iar--fs-append-file target "appended\n")))
           (should (string-match-p "Success" result))
           ;; File should be created fresh with just the appended content (no prefix)
           (should (string= (with-temp-buffer
@@ -1156,7 +1156,7 @@ max-size characters are returned, followed by a truncation notice."
            (content (make-string 200 ?x)))
       (with-temp-file target (insert content))
       (let ((iar-fs-read-max-size 100))
-        (let ((result (iar--mygptel--fs-read-file target)))
+        (let ((result (iar--fs-read-file target)))
           (should (stringp result))
           ;; Should contain exact truncation notice with character count
           (should (string-suffix-p
@@ -1174,7 +1174,7 @@ max-size characters are returned, followed by a truncation notice."
            (content "Small file content\n"))
       (with-temp-file target (insert content))
       (let ((iar-fs-read-max-size 100))
-        (let ((result (iar--mygptel--fs-read-file target)))
+        (let ((result (iar--fs-read-file target)))
           (should (string= result content))
           (should-not (string-match-p "truncated" result)))))))
 
@@ -1185,7 +1185,7 @@ max-size characters are returned, followed by a truncation notice."
            (content (make-string 500 ?x)))
       (with-temp-file target (insert content))
       (let ((iar-fs-read-max-size nil))
-        (let ((result (iar--mygptel--fs-read-file target)))
+        (let ((result (iar--fs-read-file target)))
           (should (string= result content))
           (should-not (string-match-p "truncated" result)))))))
 
@@ -1196,7 +1196,7 @@ max-size characters are returned, followed by a truncation notice."
            (content (make-string 100 ?x)))
       (with-temp-file target (insert content))
       (let ((iar-fs-read-max-size 100))
-        (let ((result (iar--mygptel--fs-read-file target)))
+        (let ((result (iar--fs-read-file target)))
           ;; File size equals limit -- should NOT truncate
           (should (string= result content))
           (should-not (string-match-p "truncated" result))))))
@@ -1213,7 +1213,7 @@ keep exactly 50 characters and truncate the rest."
            (content (make-string 100 ?\u3042)))  ; Hiragana A
       (with-temp-file target (insert content))
       (let ((iar-fs-read-max-size 50))
-        (let ((result (iar--mygptel--fs-read-file target)))
+        (let ((result (iar--fs-read-file target)))
           (should (stringp result))
           ;; Should contain truncation notice
           (should (string-match-p "truncated" result))
@@ -1239,7 +1239,7 @@ truncation is skipped and the full file is returned."
            (content (make-string 200 ?x)))
       (with-temp-file target (insert content))
       (let ((iar-fs-read-max-size 0))
-        (let ((result (iar--mygptel--fs-read-file target)))
+        (let ((result (iar--fs-read-file target)))
           (should (string= result content)))))))
 
 (ert-deftest test-fs-read-file-no-truncation-when-max-size-negative ()
@@ -1252,7 +1252,7 @@ With the guard, -1 is not a positive integer so truncation is skipped."
            (content (make-string 200 ?x)))
       (with-temp-file target (insert content))
       (let ((iar-fs-read-max-size -1))
-        (let ((result (iar--mygptel--fs-read-file target)))
+        (let ((result (iar--fs-read-file target)))
           (should (string= result content)))))))
 
 (ert-deftest test-fs-read-file-no-truncation-when-max-size-nil ()
@@ -1264,7 +1264,7 @@ should handle nil gracefully since (integerp nil) is nil."
            (content (make-string 200 ?x)))
       (with-temp-file target (insert content))
       (let ((iar-fs-read-max-size nil))
-        (let ((result (iar--mygptel--fs-read-file target)))
+        (let ((result (iar--fs-read-file target)))
           (should (string= result content)))))))
 
 (ert-deftest test-fs-read-file-no-truncation-when-max-size-non-integer ()
@@ -1277,7 +1277,7 @@ With the guard, non-integers are rejected and truncation is skipped."
            (content (make-string 200 ?x)))
       (with-temp-file target (insert content))
       (let ((iar-fs-read-max-size "100"))
-        (let ((result (iar--mygptel--fs-read-file target)))
+        (let ((result (iar--fs-read-file target)))
           (should (string= result content)))))))
 
 (provide 'test-fs)

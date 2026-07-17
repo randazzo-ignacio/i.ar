@@ -62,7 +62,7 @@
           (cl-letf (((symbol-function 'iar--request-log-path)
                      (lambda () mock-log-path)))
             ;; Config string format: config lines + newline + JSON
-            (iar--mygptel--request-log-outgoing
+            (iar--request-log-outgoing
              "url = http://localhost:11434\nheader = Content-Type: application/json\ndata-binary = @-\n\n{\"model\": \"test\", \"messages\": []}")
             (should (file-exists-p mock-log-path))
             (let ((content (with-temp-buffer
@@ -84,7 +84,7 @@
         (progn
           (cl-letf (((symbol-function 'iar--request-log-path)
                      (lambda () mock-log-path)))
-            (iar--mygptel--request-log-outgoing "{\"test\": true}")
+            (iar--request-log-outgoing "{\"test\": true}")
             (should-not (file-exists-p mock-log-path))))
       (when (file-exists-p test-dir)
         (delete-directory test-dir t)))))

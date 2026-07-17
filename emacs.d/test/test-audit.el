@@ -13,7 +13,7 @@
 ;; Silence byte-compiler warnings for dynamically-bound test variables.
 (defvar iar-audit-log-max-size)
 (defvar iar--current-agent-name)
-(declare-function my-gptel--audit-maybe-rotate "iar-audit-log" ())
+(declare-function iar--audit-maybe-rotate "iar-audit-log" ())
 
 ;;; --- Test fixtures ---
 
@@ -80,9 +80,9 @@ Temporarily rebinds `iar--audit-log-path' to a temp file."
 ;;; --- Core audit log tests ---
 
 (ert-deftest test-audit-log-writes-formatted-line ()
-  "my-gptel--audit-log should write a timestamped, pipe-delimited line."
+  "iar--audit-log should write a timestamped, pipe-delimited line."
   (with-audit-fixture
-    (my-gptel--audit-log "write_file" "/some/path/file.txt")
+    (iar--audit-log "write_file" "/some/path/file.txt")
     (let ((content (test-audit--read-log)))
       (should (string-match-p "\\[[0-9]\\{4\\}-[0-9]\\{2\\}-[0-9]\\{2\\} [0-9]\\{2\\}:[0-9]\\{2\\}:[0-9]\\{2\\}\\]" content))
       (should (string-match-p "testagent" content))
@@ -90,10 +90,10 @@ Temporarily rebinds `iar--audit-log-path' to a temp file."
       (should (string-match-p "/some/path/file.txt" content)))))
 
 (ert-deftest test-audit-log-appends-multiple-entries ()
-  "my-gptel--audit-log should append entries, not overwrite."
+  "iar--audit-log should append entries, not overwrite."
   (with-audit-fixture
-    (my-gptel--audit-log "write_file" "/path/a.txt")
-    (my-gptel--audit-log "append_file" "/path/b.txt")
+    (iar--audit-log "write_file" "/path/a.txt")
+    (iar--audit-log "append_file" "/path/b.txt")
     (let ((content (test-audit--read-log)))
       (should (string-match-p "/path/a.txt" content))
       (should (string-match-p "/path/b.txt" content))
@@ -101,7 +101,7 @@ Temporarily rebinds `iar--audit-log-path' to a temp file."
       (should (= (length (split-string content "\n" t)) 2)))))
 
 (ert-deftest test-audit-log-creates-directory-if-missing ()
-  "my-gptel--audit-log should create the workspace directory if it doesn't exist."
+  "iar--audit-log should create the workspace directory if it doesn't exist."
   (let ((test-audit--tmpdir (make-temp-file "test-audit-" :dir-flag))
         (test-audit--log-path nil)
         (test-audit--old-agent-name
@@ -113,7 +113,7 @@ Temporarily rebinds `iar--audit-log-path' to a temp file."
     (unwind-protect
         (let ((iar--audit-log-path test-audit--log-path))
           (should-not (file-exists-p (file-name-directory test-audit--log-path)))
-          (my-gptel--audit-log "write_file" "/test.txt")
+          (iar--audit-log "write_file" "/test.txt")
           (should (file-exists-p test-audit--log-path)))
       (when (and test-audit--tmpdir (file-exists-p test-audit--tmpdir))
         (delete-directory test-audit--tmpdir t))
@@ -122,25 +122,25 @@ Temporarily rebinds `iar--audit-log-path' to a temp file."
 ;;; --- Wrapper function tests ---
 
 (ert-deftest test-audit-log-write-logs-path ()
-  "my-gptel--audit-log-write should log the filepath with write_file tool name."
+  "iar--audit-log-write should log the filepath with write_file tool name."
   (with-audit-fixture
-    (my-gptel--audit-log-write "/some/file.el")
+    (iar--audit-log-write "/some/file.el")
     (let ((content (test-audit--read-log)))
       (should (string-match-p "write_file" content))
       (should (string-match-p "/some/file.el" content)))))
 
 (ert-deftest test-audit-log-replace-logs-path ()
-  "my-gptel--audit-log-replace should log the filepath with replace_in_file tool name."
+  "iar--audit-log-replace should log the filepath with replace_in_file tool name."
   (with-audit-fixture
-    (my-gptel--audit-log-replace "/some/other.el")
+    (iar--audit-log-replace "/some/other.el")
     (let ((content (test-audit--read-log)))
       (should (string-match-p "replace_in_file" content))
       (should (string-match-p "/some/other.el" content)))))
 
 (ert-deftest test-audit-log-append-logs-path ()
-  "my-gptel--audit-log-append should log the filepath with append_file tool name."
+  "iar--audit-log-append should log the filepath with append_file tool name."
   (with-audit-fixture
-    (my-gptel--audit-log-append "/log/file.log")
+    (iar--audit-log-append "/log/file.log")
     (let ((content (test-audit--read-log)))
       (should (string-match-p "append_file" content))
       (should (string-match-p "/log/file.log" content)))))
@@ -148,26 +148,26 @@ Temporarily rebinds `iar--audit-log-path' to a temp file."
 ;;; --- execute_code_local audit tests ---
 
 (ert-deftest test-audit-log-exec-logs-command-and-exit-code ()
-  "my-gptel--audit-log-exec should log the command and exit code."
+  "iar--audit-log-exec should log the command and exit code."
   (with-audit-fixture
-    (my-gptel--audit-log-exec "echo hello" 0)
+    (iar--audit-log-exec "echo hello" 0)
     (let ((content (test-audit--read-log)))
       (should (string-match-p "execute_code_local" content))
       (should (string-match-p "exit=0" content))
       (should (string-match-p "echo hello" content)))))
 
 (ert-deftest test-audit-log-exec-non-zero-exit-code ()
-  "my-gptel--audit-log-exec should log non-zero exit codes."
+  "iar--audit-log-exec should log non-zero exit codes."
   (with-audit-fixture
-    (my-gptel--audit-log-exec "false" 1)
+    (iar--audit-log-exec "false" 1)
     (let ((content (test-audit--read-log)))
       (should (string-match-p "exit=1" content)))))
 
 (ert-deftest test-audit-log-exec-truncates-long-commands ()
-  "my-gptel--audit-log-exec should truncate commands longer than 200 chars."
+  "iar--audit-log-exec should truncate commands longer than 200 chars."
   (with-audit-fixture
     (let ((long-cmd (make-string 300 ?x)))
-      (my-gptel--audit-log-exec long-cmd 0)
+      (iar--audit-log-exec long-cmd 0)
       (let ((content (test-audit--read-log)))
         ;; Truncated command should end with "..."
         (should (string-match-p "\\.\\.\\." content))
@@ -175,10 +175,10 @@ Temporarily rebinds `iar--audit-log-path' to a temp file."
         (should-not (string-match-p (make-string 250 ?x) content))))))
 
 (ert-deftest test-audit-log-exec-does-not-truncate-short-commands ()
-  "my-gptel--audit-log-exec should not truncate commands under 200 chars."
+  "iar--audit-log-exec should not truncate commands under 200 chars."
   (with-audit-fixture
     (let ((short-cmd "ls -la /tmp"))
-      (my-gptel--audit-log-exec short-cmd 0)
+      (iar--audit-log-exec short-cmd 0)
       (let ((content (test-audit--read-log)))
         (should (string-match-p "ls -la /tmp" content))
         (should-not (string-match-p "\\.\\.\\." content))))))
@@ -186,7 +186,7 @@ Temporarily rebinds `iar--audit-log-path' to a temp file."
 ;;; --- Error resilience test ---
 
 (ert-deftest test-audit-log-does-not-crash-on-error ()
-  "my-gptel--audit-log should not signal errors even if logging fails.
+  "iar--audit-log should not signal errors even if logging fails.
 The condition-case should catch the error and log it via `message'
 instead of propagating it.  The function returns the result of the
 `message' call (a string) on error, not nil."
@@ -195,49 +195,49 @@ instead of propagating it.  The function returns the result of the
         (iar--current-agent-name "testagent"))
     ;; This should not signal an error.  The condition-case catches it
     ;; and the error handler calls `message', which returns a string.
-    (should (stringp (my-gptel--audit-log "write_file" "/test.txt")))))
+    (should (stringp (iar--audit-log "write_file" "/test.txt")))))
 
 ;;; --- Log injection prevention tests ---
 
 (ert-deftest test-audit-sanitize-detail-newlines ()
-  "my-gptel--audit-sanitize-detail should replace newlines with visible \\n."
-  (should (string= (my-gptel--audit-sanitize-detail "line1\nline2")
+  "iar--audit-sanitize-detail should replace newlines with visible \\n."
+  (should (string= (iar--audit-sanitize-detail "line1\nline2")
                    "line1\\nline2")))
 
 (ert-deftest test-audit-sanitize-detail-carriage-return ()
-  "my-gptel--audit-sanitize-detail should replace carriage returns with visible \\r."
-  (should (string= (my-gptel--audit-sanitize-detail "line1\rline2")
+  "iar--audit-sanitize-detail should replace carriage returns with visible \\r."
+  (should (string= (iar--audit-sanitize-detail "line1\rline2")
                    "line1\\rline2")))
 
 (ert-deftest test-audit-sanitize-detail-mixed ()
-  "my-gptel--audit-sanitize-detail should handle mixed newlines and carriage returns."
-  (should (string= (my-gptel--audit-sanitize-detail "a\nb\rc\rd\n")
+  "iar--audit-sanitize-detail should handle mixed newlines and carriage returns."
+  (should (string= (iar--audit-sanitize-detail "a\nb\rc\rd\n")
                    "a\\nb\\rc\\rd\\n")))
 
 (ert-deftest test-audit-sanitize-detail-no-newlines ()
-  "my-gptel--audit-sanitize-detail should pass through strings without newlines."
-  (should (string= (my-gptel--audit-sanitize-detail "/some/path/file.txt")
+  "iar--audit-sanitize-detail should pass through strings without newlines."
+  (should (string= (iar--audit-sanitize-detail "/some/path/file.txt")
                    "/some/path/file.txt")))
 
 (ert-deftest test-audit-sanitize-detail-non-string ()
-  "my-gptel--audit-sanitize-detail should handle non-string input via prin1-to-string."
-  (should (string= (my-gptel--audit-sanitize-detail 42) "42")))
+  "iar--audit-sanitize-detail should handle non-string input via prin1-to-string."
+  (should (string= (iar--audit-sanitize-detail 42) "42")))
 
 (ert-deftest test-audit-sanitize-detail-empty-string ()
-  "my-gptel--audit-sanitize-detail should return empty string for empty input."
-  (should (string= (my-gptel--audit-sanitize-detail "") "")))
+  "iar--audit-sanitize-detail should return empty string for empty input."
+  (should (string= (iar--audit-sanitize-detail "") "")))
 
 (ert-deftest test-audit-sanitize-detail-only-newlines ()
-  "my-gptel--audit-sanitize-detail should handle string of only newlines."
-  (should (string= (my-gptel--audit-sanitize-detail "\n\n\n")
+  "iar--audit-sanitize-detail should handle string of only newlines."
+  (should (string= (iar--audit-sanitize-detail "\n\n\n")
                    "\\n\\n\\n")))
 
 (ert-deftest test-audit-log-prevents-newline-injection ()
-  "my-gptel--audit-log should not allow newlines in detail to inject fake entries.
+  "iar--audit-log should not allow newlines in detail to inject fake entries.
 A filepath containing a newline should be sanitized to a single line,
 not split into two log entries."
   (with-audit-fixture
-    (my-gptel--audit-log "write_file" "/safe\n[2099-01-01 00:00:00] fake | delete | /etc/passwd")
+    (iar--audit-log "write_file" "/safe\n[2099-01-01 00:00:00] fake | delete | /etc/passwd")
     (let ((content (test-audit--read-log)))
       ;; The injected fake entry should NOT appear as a separate line
       (let ((lines (split-string content "\n" t)))
@@ -246,10 +246,10 @@ not split into two log entries."
         (should (string-match-p "\\\\n" (car lines)))))))
 
 (ert-deftest test-audit-log-exec-prevents-newline-injection ()
-  "my-gptel--audit-log-exec should sanitize commands with embedded newlines.
+  "iar--audit-log-exec should sanitize commands with embedded newlines.
 A command containing a newline should not inject a fake audit entry."
   (with-audit-fixture
-    (my-gptel--audit-log-exec "echo hello\n[2099-01-01 00:00:00] fake | delete | /etc" 0)
+    (iar--audit-log-exec "echo hello\n[2099-01-01 00:00:00] fake | delete | /etc" 0)
     (let ((content (test-audit--read-log)))
       (let ((lines (split-string content "\n" t)))
         (should (= (length lines) 1))
@@ -259,13 +259,13 @@ A command containing a newline should not inject a fake audit entry."
 ;;; --- Timeout audit logging test ---
 
 (ert-deftest test-audit-log-exec-timeout-exit-code ()
-  "my-gptel--audit-log-exec should log exit=-1 for timed-out commands.
+  "iar--audit-log-exec should log exit=-1 for timed-out commands.
 When a command times out, the sentinel in code_tools.el passes -1
-as the exit code to my-gptel--audit-log-exec. This test verifies
+as the exit code to iar--audit-log-exec. This test verifies
 that -1 is a valid exit-code argument and appears correctly in the
 audit log as exit=-1."
   (with-audit-fixture
-    (my-gptel--audit-log-exec "sleep 999" -1)
+    (iar--audit-log-exec "sleep 999" -1)
     (let ((content (test-audit--read-log)))
       (should (string-match-p "execute_code_local" content))
       (should (string-match-p "exit=-1" content))
@@ -274,15 +274,15 @@ audit log as exit=-1."
 ;;; --- Log rotation tests ---
 
 (ert-deftest test-audit-rotates-when-exceeding-max-size ()
-  "my-gptel--audit-log should rotate the log when it exceeds max-size.
+  "iar--audit-log should rotate the log when it exceeds max-size.
 After rotation, the old log is renamed to audit.log.1 and a fresh
 log is started with the new entry."
   (with-audit-fixture
     (let ((iar-audit-log-max-size 100)) ; 100 bytes -- very small
       ;; Write enough entries to exceed 100 bytes
-      (my-gptel--audit-log "write_file" "/path/that/is/long/enough/to/trigger/rotation/1")
-      (my-gptel--audit-log "write_file" "/path/that/is/long/enough/to/trigger/rotation/2")
-      (my-gptel--audit-log "write_file" "/path/that/is/long/enough/to/trigger/rotation/3")
+      (iar--audit-log "write_file" "/path/that/is/long/enough/to/trigger/rotation/1")
+      (iar--audit-log "write_file" "/path/that/is/long/enough/to/trigger/rotation/2")
+      (iar--audit-log "write_file" "/path/that/is/long/enough/to/trigger/rotation/3")
       ;; After the third entry, the log should have been rotated
       (let ((rotated-path (concat test-audit--log-path ".1")))
         (should (file-exists-p rotated-path))
@@ -300,28 +300,28 @@ log is started with the new entry."
           (should-not (string-match-p "rotation/2" current-content)))))))
 
 (ert-deftest test-audit-no-rotation-when-under-max-size ()
-  "my-gptel--audit-log should NOT rotate when the log is under max-size."
+  "iar--audit-log should NOT rotate when the log is under max-size."
   (with-audit-fixture
     (let ((iar-audit-log-max-size (* 10 1024 1024))) ; 10MB
-      (my-gptel--audit-log "write_file" "/small/path.txt")
+      (iar--audit-log "write_file" "/small/path.txt")
       (should-not (file-exists-p (concat test-audit--log-path ".1")))
       (let ((content (test-audit--read-log)))
         (should (string-match-p "/small/path.txt" content))))))
 
 (ert-deftest test-audit-no-rotation-when-max-size-nil ()
-  "my-gptel--audit-log should NOT rotate when max-size is nil."
+  "iar--audit-log should NOT rotate when max-size is nil."
   (with-audit-fixture
     (let ((iar-audit-log-max-size nil))
       ;; Write many entries
       (dotimes (i 10)
-        (my-gptel--audit-log "write_file" (format "/path/number/%d/abcdefghijklmnopqrstuvwxyz" i)))
+        (iar--audit-log "write_file" (format "/path/number/%d/abcdefghijklmnopqrstuvwxyz" i)))
       (should-not (file-exists-p (concat test-audit--log-path ".1")))
       ;; All 10 entries should be in the current log
       (let ((content (test-audit--read-log)))
         (should (= (length (split-string content "\n" t)) 10))))))
 
 (ert-deftest test-audit-rotation-overwrites-old-rotated-file ()
-  "my-gptel--audit-log rotation should overwrite any existing .1 file."
+  "iar--audit-log rotation should overwrite any existing .1 file."
   (with-audit-fixture
     (let ((iar-audit-log-max-size 50))
       ;; Create a fake old rotated file with stale content
@@ -330,8 +330,8 @@ log is started with the new entry."
           (insert "STALE CONTENT FROM PREVIOUS ROTATION\n"))
         (should (file-exists-p rotated-path))
         ;; Write enough to trigger rotation
-        (my-gptel--audit-log "write_file" "/path/long/enough/to/trigger/rotation/entry1")
-        (my-gptel--audit-log "write_file" "/path/long/enough/to/trigger/rotation/entry2")
+        (iar--audit-log "write_file" "/path/long/enough/to/trigger/rotation/entry1")
+        (iar--audit-log "write_file" "/path/long/enough/to/trigger/rotation/entry2")
         ;; The rotated file should now contain the first entry, not stale content
         (let ((rotated-content
                (with-temp-buffer
@@ -341,19 +341,19 @@ log is started with the new entry."
           (should (string-match-p "entry1" rotated-content)))))))
 
 (ert-deftest test-audit-rotation-when-log-does-not-exist ()
-  "my-gptel--audit-maybe-rotate should handle non-existent log gracefully.
+  "iar--audit-maybe-rotate should handle non-existent log gracefully.
 When the log file doesn't exist yet, rotation should be a no-op."
   (with-audit-fixture
     (let ((iar-audit-log-max-size 100))
       ;; Log doesn't exist yet -- should not crash
       (should-not (file-exists-p test-audit--log-path))
-      (my-gptel--audit-maybe-rotate)
+      (iar--audit-maybe-rotate)
       (should-not (file-exists-p (concat test-audit--log-path ".1"))))))
 
 ;;; --- Error observability tests ---
 
 (ert-deftest test-audit-log-error-logs-warning ()
-  "my-gptel--audit-log should log a warning message when write fails.
+  "iar--audit-log should log a warning message when write fails.
 The condition-case should catch the error and log it via `message'
 instead of silently swallowing it.  This makes audit log failures
 observable in *Messages*."
@@ -363,20 +363,20 @@ observable in *Messages*."
     (cl-letf (((symbol-function 'message)
                (lambda (fmt &rest args)
                  (push (apply #'format fmt args) logged-messages))))
-      (my-gptel--audit-log "write_file" "/test.txt")
+      (iar--audit-log "write_file" "/test.txt")
       ;; At least one message should contain "audit log write failed"
       (should (cl-some (lambda (m) (string-match-p "audit log write failed" m))
                        logged-messages)))))
 
 (ert-deftest test-audit-rotation-error-logs-warning ()
-  "my-gptel--audit-maybe-rotate should log a warning when rotation fails.
+  "iar--audit-maybe-rotate should log a warning when rotation fails.
 If rename-file fails (e.g., permissions), the error should be logged
 via `message' instead of silently swallowed."
   (with-audit-fixture
     (let ((iar-audit-log-max-size 1) ; tiny -- triggers rotation
           (logged-messages nil))
       ;; Write an entry to create the log file
-      (my-gptel--audit-log "write_file" "/test.txt")
+      (iar--audit-log "write_file" "/test.txt")
       ;; Mock rename-file to signal an error
       (cl-letf* (((symbol-function 'message)
                   (lambda (fmt &rest args)
@@ -385,7 +385,7 @@ via `message' instead of silently swallowed."
                   (lambda (_src _dst &optional _ok)
                     (signal 'file-error "Mocked rename failure"))))
         ;; This should trigger rotation which fails, logging a warning
-        (my-gptel--audit-log "write_file" "/test2.txt")
+        (iar--audit-log "write_file" "/test2.txt")
         ;; At least one message should contain "rotation failed"
         (should (cl-some (lambda (m) (string-match-p "rotation failed" m))
                          logged-messages))))))
@@ -393,13 +393,13 @@ via `message' instead of silently swallowed."
 ;;; --- Defensive guard tests for max-size ---
 
 (ert-deftest test-audit-rotation-guards-nil-max-size ()
-  "my-gptel--audit-maybe-rotate should skip rotation when max-size is nil.
+  "iar--audit-maybe-rotate should skip rotation when max-size is nil.
 nil is the documented 'disable rotation' value, but the guard must
 also handle it gracefully without crashing on (> nil 0)."
   (with-audit-fixture
     (let ((iar-audit-log-max-size nil))
       ;; Write an entry to create the log
-      (my-gptel--audit-log "write_file" "/test.txt")
+      (iar--audit-log "write_file" "/test.txt")
       ;; Should not crash, should not rotate
       (should-not (file-exists-p (concat test-audit--log-path ".1")))
       ;; Log should contain the entry
@@ -407,37 +407,37 @@ also handle it gracefully without crashing on (> nil 0)."
         (should (string-match-p "/test.txt" content))))))
 
 (ert-deftest test-audit-rotation-guards-zero-max-size ()
-  "my-gptel--audit-maybe-rotate should skip rotation when max-size is 0.
+  "iar--audit-maybe-rotate should skip rotation when max-size is 0.
 Zero is not a positive integer.  Without the guard, (> size 0) would
 be true for any non-empty log, causing rotation on every write."
   (with-audit-fixture
     (let ((iar-audit-log-max-size 0))
-      (my-gptel--audit-log "write_file" "/test.txt")
+      (iar--audit-log "write_file" "/test.txt")
       ;; Should not crash, should not rotate
       (should-not (file-exists-p (concat test-audit--log-path ".1")))
       (let ((content (test-audit--read-log)))
         (should (string-match-p "/test.txt" content))))))
 
 (ert-deftest test-audit-rotation-guards-negative-max-size ()
-  "my-gptel--audit-maybe-rotate should skip rotation when max-size is negative.
+  "iar--audit-maybe-rotate should skip rotation when max-size is negative.
 A negative value would cause (> size negative) to always be true,
 triggering rotation on every write."
   (with-audit-fixture
     (let ((iar-audit-log-max-size -1))
-      (my-gptel--audit-log "write_file" "/test.txt")
+      (iar--audit-log "write_file" "/test.txt")
       ;; Should not crash, should not rotate
       (should-not (file-exists-p (concat test-audit--log-path ".1")))
       (let ((content (test-audit--read-log)))
         (should (string-match-p "/test.txt" content))))))
 
 (ert-deftest test-audit-rotation-guards-non-integer-max-size ()
-  "my-gptel--audit-maybe-rotate should skip rotation when max-size is a string.
+  "iar--audit-maybe-rotate should skip rotation when max-size is a string.
 A non-integer value (e.g., string) would crash > with wrong-type-argument
 without the guard.  The :safe predicate rejects non-integers at the
 file-local-variable level, but a direct setq bypasses it."
   (with-audit-fixture
     (let ((iar-audit-log-max-size "100"))
-      (my-gptel--audit-log "write_file" "/test.txt")
+      (iar--audit-log "write_file" "/test.txt")
       ;; Should not crash, should not rotate
       (should-not (file-exists-p (concat test-audit--log-path ".1")))
       (let ((content (test-audit--read-log)))

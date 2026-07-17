@@ -18,7 +18,7 @@
 (require 'iar-utils)
 (require 'iar-audit-log)
 
-(defun iar--mygptel--tool-telegram (callback message)
+(defun iar--tool-telegram (callback message)
   "Send MESSAGE via Telegram Bot API.
 Calls CALLBACK with the result string when done.
 Credentials are read from AGENT_TELEGRAM_BOT_TOKEN and
@@ -75,7 +75,7 @@ The message is prefixed with [AgentName] for identification."
                            (setq ok (eq (plist-get parsed :ok) t)))
                        (error
                         (setq parse-error (error-message-string err))))
-                     (my-gptel--audit-log "telegram"
+                     (iar--audit-log "telegram"
                                           (format "msg=%s ok=%s" (substring full-message 0 (min 100 (length full-message))) (if ok "yes" "no")))
                      (funcall callback
                               (cond
@@ -100,6 +100,6 @@ The message is prefixed with [AgentName] for identification."
   :description "Send a Telegram notification message. The message is automatically prefixed with the agent name. Use this to notify the human about important findings, completed work, or issues that need attention."
   :args (list '(:name "message" :type "string" :description "The message text to send. Keep it concise -- this is a notification, not a report."))
   :async t
-  :function #'iar--mygptel--tool-telegram))
+  :function #'iar--tool-telegram))
 
 (provide 'iar-tool--telegram)

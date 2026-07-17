@@ -5,7 +5,7 @@
 
 (require 'gptel)
 
-(defun iar--mygptel--fs-read-file (filepath)
+(defun iar--fs-read-file (filepath)
   "Read the text contents of FILEPATH into a string.
 On error, returns a string starting with \\='Error:\\='.
 
@@ -38,6 +38,6 @@ correlates with characters."
   :name "read_file"
   :description "Read the text contents of a local file into context."
   :args (list '(:name "filepath" :type "string" :description "Absolute path to the file."))
-  :function #'iar--mygptel--fs-read-file))
+  :function #'iar--fs-read-file))
 
 (provide 'iar-tool--read-file)

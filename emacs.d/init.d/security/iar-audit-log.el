@@ -19,7 +19,7 @@
 ;; Parameter iar-audit-log-max-size is defined in
 ;; configs/ (split parameter files) (loaded early in init.el).
 
-(defun my-gptel--audit-sanitize-detail (detail)
+(defun iar--audit-sanitize-detail (detail)
   "Sanitize DETAIL for single-line audit log entry.
 Replaces newlines and carriage returns with their visible escaped
 representation to prevent log injection -- without this, a filepath
@@ -29,7 +29,7 @@ or command containing newlines could inject fake audit log entries."
     (setq s (replace-regexp-in-string "\r" "\\\\r" s))
     s))
 
-(defun my-gptel--audit-maybe-rotate ()
+(defun iar--audit-maybe-rotate ()
   "Rotate the audit log if it exceeds `iar-audit-log-max-size'.
 Renames the current log to `audit.log.1' (overwriting any previous
 rotation) and starts a fresh log.  Rotation is best-effort: errors
@@ -55,7 +55,7 @@ operation being audited."
              (message "Warning: audit log rotation failed: %s"
                       (error-message-string err)))))))))
 
-(defun my-gptel--audit-log (tool detail)
+(defun iar--audit-log (tool detail)
   "Append an audit entry for TOOL with DETAIL to the audit log.
 Does not signal errors -- audit logging is best-effort and must
 never break the operation it is auditing.
@@ -72,9 +72,9 @@ and rotates it if so.  This prevents unbounded growth of the audit log."
   (condition-case err
       (let ((timestamp (format-time-string "%Y-%m-%d %H:%M:%S"))
             (agent (iar--get-agent-name))
-            (safe-detail (my-gptel--audit-sanitize-detail detail)))
+            (safe-detail (iar--audit-sanitize-detail detail)))
         ;; Rotate the log if it has grown too large.
-        (my-gptel--audit-maybe-rotate)
+        (iar--audit-maybe-rotate)
         ;; Ensure the workspace directory exists before writing.
         ;; Check file-exists-p first to avoid a stat syscall on every call
         ;; after the directory has been created.
@@ -88,19 +88,19 @@ and rotates it if so.  This prevents unbounded growth of the audit log."
      (message "Warning: audit log write failed: %s"
               (error-message-string err)))))
 
-(defun my-gptel--audit-log-write (filepath)
+(defun iar--audit-log-write (filepath)
   "Audit log entry for write_file to FILEPATH."
-  (my-gptel--audit-log "write_file" filepath))
+  (iar--audit-log "write_file" filepath))
 
-(defun my-gptel--audit-log-replace (filepath)
+(defun iar--audit-log-replace (filepath)
   "Audit log entry for replace_in_file on FILEPATH."
-  (my-gptel--audit-log "replace_in_file" filepath))
+  (iar--audit-log "replace_in_file" filepath))
 
-(defun my-gptel--audit-log-append (filepath)
+(defun iar--audit-log-append (filepath)
   "Audit log entry for append_file to FILEPATH."
-  (my-gptel--audit-log "append_file" filepath))
+  (iar--audit-log "append_file" filepath))
 
-(defun my-gptel--audit-log-exec (command exit-code)
+(defun iar--audit-log-exec (command exit-code)
   "Audit log entry for execute_code_local with COMMAND and EXIT-CODE.
 EXIT-CODE is 0 for success, the process exit code for non-zero exits,
 or -1 if the command was killed due to timeout."
@@ -108,7 +108,7 @@ or -1 if the command was killed due to timeout."
          (if (> (length command) 200)
              (concat (substring command 0 197) "...")
            command)))
-    (my-gptel--audit-log "execute_code_local"
+    (iar--audit-log "execute_code_local"
                          (format "exit=%d cmd=%s" exit-code truncated-cmd))))
 
 (provide 'iar-audit-log)

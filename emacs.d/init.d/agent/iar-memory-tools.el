@@ -20,7 +20,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'iar-agent-utils)  ; iar--resolve-agent-audit-dir (moved from task_tools)
-(declare-function iar--mygptel--tool-reload-agent "iar-reload-tools" (&optional agent-name))
+(declare-function iar--tool-reload-agent "iar-reload-tools" (&optional agent-name))
 (declare-function iar--load-prompt "iar-prompt-loader" (name))
 
 ;; Declared in configs/ (split parameter files) (loaded before init.d modules).
@@ -296,7 +296,7 @@ called non-interactively (for use by iar-quit)."
                     (if (called-interactively-p 'any)
                         (user-error "%s" update-result)
                       nil))
-                (iar--mygptel--tool-reload-agent)
+                (iar--tool-reload-agent)
                 (message "[Summary updated: %d entries written to %s/SUMMARY.md]"
                           entry-count
                           (file-name-nondirectory

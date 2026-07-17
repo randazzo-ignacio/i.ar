@@ -32,17 +32,17 @@
 
 ;;; --- State ---
 
-(defvar-local my-gptel--loop-history nil
+(defvar-local iar--loop-history nil
   "Buffer-local ring of recent tool call signatures.
 Each entry is (tool-name . args-md5).  Most recent first.")
 
-(defvar-local my-gptel--loop-block-count 0
+(defvar-local iar--loop-block-count 0
   "Count of how many times the loop guard has blocked a call in this buffer.
 Reset when a non-repeating call is made.")
 
 ;;; --- Internal functions ---
 
-(defun my-gptel--loop-args-sig (args)
+(defun iar--loop-args-sig (args)
   "Create a stable hash signature from tool call ARGS.
 Uses md5 of the printed representation for fast comparison."
   (let ((print-circle nil)
@@ -50,44 +50,44 @@ Uses md5 of the printed representation for fast comparison."
         (print-length 200))
     (md5 (prin1-to-string args))))
 
-(defun my-gptel--loop-count-recent (sig)
+(defun iar--loop-count-recent (sig)
   "Count how many of the most recent entries in history match SIG.
 SIG is (name . args-hash).  Counts backwards from the head of
-`my-gptel--loop-history' until a non-matching entry is found."
+`iar--loop-history' until a non-matching entry is found."
   (let ((count 0))
     (catch 'done
-      (dolist (entry my-gptel--loop-history)
+      (dolist (entry iar--loop-history)
         (if (equal entry sig)
             (cl-incf count)
           (throw 'done nil))))
     count))
 
-(defun my-gptel--loop-push (sig)
+(defun iar--loop-push (sig)
   "Push SIG onto the history ring, trimming to max size.
 Guards against non-positive `iar-loop-history-size': the :safe
 predicate rejects non-positive values at the file-local-variable level,
 but a direct setq to 0 or negative bypasses it.  A negative value would
 cause cl-subseq to signal args-out-of-range.  Zero would silently disable
 loop detection (history always trimmed to empty).  Falls back to 20."
-  (push sig my-gptel--loop-history)
+  (push sig iar--loop-history)
   (let ((max-size iar-loop-history-size))
     (unless (and (integerp max-size) (> max-size 0))
       (setq max-size 20))
-    (when (> (length my-gptel--loop-history) max-size)
-      (setq my-gptel--loop-history
-            (cl-subseq my-gptel--loop-history 0 max-size)))))
+    (when (> (length iar--loop-history) max-size)
+      (setq iar--loop-history
+            (cl-subseq iar--loop-history 0 max-size)))))
 
-(defun my-gptel--loop-soft-message (name repeat-count)
+(defun iar--loop-soft-message (name repeat-count)
   "Build the correction message for a soft block.
 NAME is the tool name.  REPEAT-COUNT is total identical calls so far."
   (format (iar--load-prompt "loop_soft_block")
           name repeat-count name))
 
-(defun my-gptel--loop-hard-message (name repeat-count block-count)
+(defun iar--loop-hard-message (name repeat-count block-count)
   "Build the stop reason for a hard stop.
 NAME is the tool name.  REPEAT-COUNT is total identical calls so far.
 BLOCK-COUNT is the actual number of soft blocks that occurred,
-from `my-gptel--loop-block-count'.  This is more accurate than
+from `iar--loop-block-count'.  This is more accurate than
 computing an estimate from thresholds, especially if the block
 count was affected by intervening different calls or threshold
 reconfiguration."
@@ -96,7 +96,7 @@ reconfiguration."
 
 ;;; --- Hook function ---
 
-(defun iar--mygptel--loop-guard (info)
+(defun iar--loop-guard (info)
   "Pre-tool-call hook to detect and break repetitive tool call loops.
 INFO is the plist from `gptel-pre-tool-call-functions' containing
 :name, :args, :buffer, :backend, and :model.
@@ -107,10 +107,10 @@ Returns:
 - (:stop t :stop-reason reason) if hard threshold reached (request stopped)"
   (let* ((name (plist-get info :name))
          (args (plist-get info :args))
-         (sig (cons name (my-gptel--loop-args-sig args)))
-         (repeat-count (my-gptel--loop-count-recent sig)))
+         (sig (cons name (iar--loop-args-sig args)))
+         (repeat-count (iar--loop-count-recent sig)))
     ;; Always push to history (even for blocked calls — the model might retry)
-    (my-gptel--loop-push sig)
+    (iar--loop-push sig)
 
     ;; Total identical calls including this one
     (let* ((total (1+ repeat-count))
@@ -138,30 +138,30 @@ Returns:
       (cond
        ;; Hard stop: model didn't self-correct after soft blocks
        ((>= total final-hard)
-        (let ((reason (my-gptel--loop-hard-message name total my-gptel--loop-block-count)))
+        (let ((reason (iar--loop-hard-message name total iar--loop-block-count)))
           (message "[loop-guard] HARD STOP: %s called %d times identically" name total)
           (list :stop t :stop-reason reason)))
 
        ;; Soft block: warn the model and prevent execution
        ((>= total effective-soft)
-        (let ((msg (my-gptel--loop-soft-message name total)))
+        (let ((msg (iar--loop-soft-message name total)))
           (message "[loop-guard] SOFT BLOCK: %s called %d times identically, sending correction"
                    name total)
-          (cl-incf my-gptel--loop-block-count)
+          (cl-incf iar--loop-block-count)
           (list :block msg)))
 
        ;; No loop — reset block count if this is a different call
        (t
-        (when (> my-gptel--loop-block-count 0)
-          (setq my-gptel--loop-block-count 0))
+        (when (> iar--loop-block-count 0)
+          (setq iar--loop-block-count 0))
         nil)))))
 
 ;;; --- Setup ---
 
-(defun my-gptel--loop-guard-setup ()
+(defun iar--loop-guard-setup ()
   "Register the loop guard hook globally."
-  (add-hook 'iar-gptel-pre-tool-call-functions #'iar--mygptel--loop-guard))
+  (add-hook 'iar-gptel-pre-tool-call-functions #'iar--loop-guard))
 
-(my-gptel--loop-guard-setup)
+(iar--loop-guard-setup)
 
 (provide 'iar-loop-guard)

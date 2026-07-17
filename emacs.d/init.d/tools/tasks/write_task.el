@@ -7,7 +7,7 @@
 (require 'subr-x)
 (require 'iar-agent-utils)  ; path resolution + validation
 
-(defun iar--mygptel--tool-write-task (name content)
+(defun iar--tool-write-task (name content)
   "Create a new task file in the current agent's tasks directory.
 NAME is the task name (letters, digits, hyphens, underscores only).
 CONTENT is the task content in markdown.
@@ -32,6 +32,6 @@ existing files -- use remove_task first."
   :description "Create a new task file in the current agent's tasks directory. Refuses to overwrite existing files (use remove_task first). Task name: only letters, digits, hyphens, underscores. The .md extension is added automatically."
   :args (list '(:name "name" :type "string" :description "Task name (letters, digits, hyphens, underscores only). The .md extension is added automatically.")
               '(:name "content" :type "string" :description "Task content in markdown."))
-  :function #'iar--mygptel--tool-write-task))
+  :function #'iar--tool-write-task))
 
 (provide 'iar-tool--write-task)

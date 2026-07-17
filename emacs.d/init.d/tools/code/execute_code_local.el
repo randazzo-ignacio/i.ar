@@ -9,9 +9,9 @@
 ;; long-running commands (network requests, compilation, etc.) because
 ;; gptel's state machine is not blocked waiting for the tool to return.
 ;;
-;; Output sanitization: When my-gptel--sanitize-exec-output is non-nil
+;; Output sanitization: When iar--sanitize-exec-output is non-nil
 ;; (enabled for CTF/external operations), the output is passed through
-;; my-gptel--sanitize-external-output to strip control sequences and
+;; iar--sanitize-external-output to strip control sequences and
 ;; flag prompt injection patterns before returning to the AI.  The flag
 ;; is captured at call time (not read in the sentinel) because process
 ;; sentinels run in an unpredictable buffer context.
@@ -20,7 +20,7 @@
 (require 'iar-output-sanitizer)
 (require 'iar-audit-log)
 
-(defun iar--mygptel--async-shell-command (callback command &optional timeout)
+(defun iar--async-shell-command (callback command &optional timeout)
   "Run COMMAND asynchronously, returning result via CALLBACK.
 
 Returns immediately, calls CALLBACK with the result string when done.
@@ -37,7 +37,7 @@ needed."
          (timed-out nil)
          (timer nil)
          (proc nil)
-         (sanitize-output (bound-and-true-p my-gptel--sanitize-exec-output)))
+         (sanitize-output (bound-and-true-p iar--sanitize-exec-output)))
     (setq proc
           (condition-case err
               (make-process
@@ -61,12 +61,12 @@ needed."
                              ((and exit-code (/= exit-code 0))
                               (format "Command exited with code %d.\nOutput:\n%s" exit-code output))
                              (t output))))
-                       (my-gptel--audit-log-exec cmd
+                       (iar--audit-log-exec cmd
                          (if timed-out -1
                            (if (and exit-code (/= exit-code 0)) exit-code 0)))
                        (funcall cb
                                 (if sanitize-output
-                                    (my-gptel--sanitize-external-output result)
+                                    (iar--sanitize-external-output result)
                                   result)))))))
             (error
              (when (buffer-live-p buf) (kill-buffer buf))
@@ -86,7 +86,7 @@ needed."
   :async t
   :function (lambda (callback command)
               (condition-case err
-                  (iar--mygptel--async-shell-command callback command)
+                  (iar--async-shell-command callback command)
                 (error (funcall callback
                                 (format "Error: Failed to execute command: %s\nDetail: %s"
                                         command (error-message-string err))))))))

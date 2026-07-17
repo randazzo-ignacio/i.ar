@@ -9,13 +9,13 @@
 (require 'iar-audit-log)
 (require 'iar-utils)  ; iar--with-suppressed-save-hooks
 
-(defun iar--mygptel--fs-append-file (filepath content)
+(defun iar--fs-append-file (filepath content)
   "Append CONTENT to the end of FILEPATH.
 If the file is open in an Emacs buffer, appends to that buffer and saves.
 Otherwise, appends directly to the file on disk.
 If the file exists and does not end with a newline, one is prepended.
 If the file does not exist, it is created.  Parent directories are
-created if needed, matching `iar--mygptel--fs-write-file' behavior.
+created if needed, matching `iar--fs-write-file' behavior.
 Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
   (let* ((expanded-path (expand-file-name filepath))
          (guard-reason (iar--guard-check-append expanded-path)))
@@ -45,7 +45,7 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
                         (insert content))
                       (iar--with-suppressed-save-hooks
                         (save-buffer))
-                      (my-gptel--audit-log-append expanded-path)
+                      (iar--audit-log-append expanded-path)
                       (format "Success: Content appended to '%s'" expanded-path))))
                 (let* ((attrs (file-attributes expanded-path))
                        (size (and attrs (file-attribute-size attrs)))
@@ -60,7 +60,7 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
                               (error ""))
                           "")))
                   (write-region (concat prefix content) nil expanded-path t 'silent)
-                  (my-gptel--audit-log-append expanded-path)
+                  (iar--audit-log-append expanded-path)
                   (format "Success: Content appended to '%s'" expanded-path))))
           (error (format "Error: Failed to append to '%s'. Emacs says: %s"
                          expanded-path (error-message-string err))))))))
@@ -71,6 +71,6 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
   :description "Append text content to the end of an existing file. Use this to add new notes, logs, or subheadings to a file without erasing its current contents. Automatically prepends a newline if the file does not already end with one, ensuring appended content always starts on a fresh line."
   :args (list '(:name "filepath" :type "string" :description "Absolute path to the file.")
               '(:name "content" :type "string" :description "The text content to add to the end of the file."))
-  :function #'iar--mygptel--fs-append-file))
+  :function #'iar--fs-append-file))
 
 (provide 'iar-tool--append-file)

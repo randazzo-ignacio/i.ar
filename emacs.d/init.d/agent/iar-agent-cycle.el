@@ -44,7 +44,7 @@
 (defvar iar-agents-path nil
   "Relative path to agent profile directories.")
 
-(declare-function iar--mygptel--block-unknown-tools "iar-tool-guard" (info))
+(declare-function iar--block-unknown-tools "iar-tool-guard" (info))
 (declare-function iar--load-prompt "iar-prompt-loader" (name))
 (declare-function iar-load-knowledge-dir "iar-knowledge-loader" (label))
 
@@ -366,7 +366,7 @@ until it either completes all steps or reaches the turn limit."
       ;; names at TPRE stage with a cleaner error message than gptel's
       ;; built-in handling in gptel--handle-tool-use (TOOL state).
       (add-hook 'iar-gptel-pre-tool-call-functions
-                #'iar--mygptel--block-unknown-tools
+                #'iar--block-unknown-tools
                 nil t)
 
       ;; Continuation hook: fires on every DONE/ERRS/ABRT state.

@@ -77,7 +77,7 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
 (ert-deftest test-task-read-tasks-returns-all-files ()
   "read_tasks should return all .md task files with names (no .md extension)."
   (with-task-fixture
-    (let ((result (iar--mygptel--tool-read-tasks)))
+    (let ((result (iar--tool-read-tasks)))
       (should (stringp result))
       (should (string-match-p "fix-bugs" result))
       (should (string-match-p "Fix Bugs" result))
@@ -91,7 +91,7 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
   (with-task-fixture
     (let* ((agent-dir (expand-file-name "tasks/testagent" test-task--tmpdir)))
       (delete-file (expand-file-name "add-feature.md" agent-dir))
-      (let ((result (iar--mygptel--tool-read-tasks)))
+      (let ((result (iar--tool-read-tasks)))
         (should (stringp result))
         (should (string-match-p "fix-bugs" result))
         (should-not (string-match-p "add-feature" result))))))
@@ -100,7 +100,7 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
   "read_tasks should return message when no task files exist."
   (with-task-fixture
     (let ((iar--current-agent-name "otheragent"))
-      (let ((result (iar--mygptel--tool-read-tasks)))
+      (let ((result (iar--tool-read-tasks)))
         (should (stringp result))
         (should (string-match-p "No tasks" result))))))
 
@@ -109,7 +109,7 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
 (ert-deftest test-task-write-task-creates-file ()
   "write_task should create a new .md task file."
   (with-task-fixture
-    (let ((result (iar--mygptel--tool-write-task "new-task" "# New Task\n\nDo something."))
+    (let ((result (iar--tool-write-task "new-task" "# New Task\n\nDo something."))
           (task-path (expand-file-name "tasks/testagent/new-task.md" test-task--tmpdir)))
       (should (stringp result))
       (should (string-match-p "created" result))
@@ -121,7 +121,7 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
 (ert-deftest test-task-write-task-refuses-overwrite ()
   "write_task should refuse to overwrite an existing task file."
   (with-task-fixture
-    (let ((result (iar--mygptel--tool-write-task "fix-bugs" "# Overwrite attempt")))
+    (let ((result (iar--tool-write-task "fix-bugs" "# Overwrite attempt")))
       (should (stringp result))
       (should (string-match-p "Error" result))
       (should (string-match-p "already exists" result)))))
@@ -129,10 +129,10 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
 (ert-deftest test-task-write-task-rejects-invalid-name ()
   "write_task should reject names with dots, slashes, spaces."
   (with-task-fixture
-    (should (string-match-p "Error" (iar--mygptel--tool-write-task "foo.bar" "content")))
-    (should (string-match-p "Error" (iar--mygptel--tool-write-task "foo/bar" "content")))
-    (should (string-match-p "Error" (iar--mygptel--tool-write-task "foo bar" "content")))
-    (should (string-match-p "Error" (iar--mygptel--tool-write-task "../etc" "content")))))
+    (should (string-match-p "Error" (iar--tool-write-task "foo.bar" "content")))
+    (should (string-match-p "Error" (iar--tool-write-task "foo/bar" "content")))
+    (should (string-match-p "Error" (iar--tool-write-task "foo bar" "content")))
+    (should (string-match-p "Error" (iar--tool-write-task "../etc" "content")))))
 
 ;;; --- remove_task tests ---
 
@@ -140,7 +140,7 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
   "remove_task should delete the task file."
   (with-task-fixture
     (let* ((task-path (expand-file-name "tasks/testagent/fix-bugs.md" test-task--tmpdir))
-           (result (iar--mygptel--tool-remove-task "fix-bugs")))
+           (result (iar--tool-remove-task "fix-bugs")))
       (should (stringp result))
       (should (string-match-p "removed" result))
       (should-not (file-exists-p task-path)))))
@@ -148,7 +148,7 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
 (ert-deftest test-task-remove-task-nonexistent ()
   "remove_task should error when task file does not exist."
   (with-task-fixture
-    (let ((result (iar--mygptel--tool-remove-task "nonexistent")))
+    (let ((result (iar--tool-remove-task "nonexistent")))
       (should (stringp result))
       (should (string-match-p "Error" result))
       (should (string-match-p "does not exist" result)))))
@@ -156,16 +156,16 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
 (ert-deftest test-task-remove-task-rejects-invalid-name ()
   "remove_task should reject names with dots, slashes, spaces."
   (with-task-fixture
-    (should (string-match-p "Error" (iar--mygptel--tool-remove-task "foo.bar")))
-    (should (string-match-p "Error" (iar--mygptel--tool-remove-task "foo/bar")))
-    (should (string-match-p "Error" (iar--mygptel--tool-remove-task "foo bar")))))
+    (should (string-match-p "Error" (iar--tool-remove-task "foo.bar")))
+    (should (string-match-p "Error" (iar--tool-remove-task "foo/bar")))
+    (should (string-match-p "Error" (iar--tool-remove-task "foo bar")))))
 
 ;;; --- read_history tests ---
 
 (ert-deftest test-task-read-history-single-agent ()
   "read_history with agent_name should return that agent's log."
   (with-task-fixture
-    (let ((result (iar--mygptel--tool-read-history "testagent")))
+    (let ((result (iar--tool-read-history "testagent")))
       (should (stringp result))
       (should (string-match-p "did something" result))
       (should (string-match-p "did something else" result))
@@ -174,14 +174,14 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
 (ert-deftest test-task-read-history-missing-agent ()
   "read_history for nonexistent agent should return error."
   (with-task-fixture
-    (let ((result (iar--mygptel--tool-read-history "nonexistent_agent")))
+    (let ((result (iar--tool-read-history "nonexistent_agent")))
       (should (stringp result))
       (should (string-match-p "Error" result)))))
 
 (ert-deftest test-task-read-history-unified ()
   "read_history without agent_name should merge all agents sorted by time."
   (with-task-fixture
-    (let ((result (iar--mygptel--tool-read-history)))
+    (let ((result (iar--tool-read-history)))
       (should (stringp result))
       (should (string-match-p "UNIFIED" result))
       (should (string-match-p "testagent" result))
@@ -196,7 +196,7 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
   "read_history should reject agent names with path traversal characters."
   (with-task-fixture
     ;; read_history wraps errors in condition-case and returns error string
-    (let ((result (iar--mygptel--tool-read-history "../../etc/passwd")))
+    (let ((result (iar--tool-read-history "../../etc/passwd")))
       (should (stringp result))
       (should (string-match-p "Invalid agent name" result)))))
 

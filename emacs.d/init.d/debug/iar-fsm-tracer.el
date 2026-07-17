@@ -74,7 +74,7 @@ Returns 0 if KEY is nil or not a list."
 
 ;;; --- FSM transition tracer ---
 
-(defun iar--mygptel--fsm-trace-transition (fsm new-state)
+(defun iar--fsm-trace-transition (fsm new-state)
   "Log FSM transition from current state to NEW-STATE."
   (when iar-fsm-trace-enabled
     (condition-case err
@@ -97,7 +97,7 @@ Returns 0 if KEY is nil or not a list."
 
 ;;; --- Tool call inspector (:before, NOT :override) ---
 
-(defun iar--mygptel--fsm-trace-tool-call-before (fsm tool-spec tool-call &rest _)
+(defun iar--fsm-trace-tool-call-before (fsm tool-spec tool-call &rest _)
   "Log tool call details BEFORE the original gptel--process-tool-call runs.
 This is a :before advice -- the original function handles all state
 mutations (:result, :tool-result, remaining count, FSM transition).
@@ -123,7 +123,7 @@ We only observe and log."
 
 ;;; --- Tool use handler inspector ---
 
-(defun iar--mygptel--fsm-trace-handle-tool-use-before (fsm)
+(defun iar--fsm-trace-handle-tool-use-before (fsm)
   "Log gptel--handle-tool-use internal state BEFORE it runs.
 This is a :before advice that inspects the filtered tool-use list
 and tool-spec lookup to diagnose why tool calls may not execute."
@@ -163,7 +163,7 @@ Call this once during initialization to enable FSM tracing."
   ;; FSM transition tracer -- :before, purely observational
   (iar-gptel-advise-fsm-transition :before
               (lambda (fsm &optional new-state)
-                (iar--mygptel--fsm-trace-transition fsm
+                (iar--fsm-trace-transition fsm
                   (or new-state
                       (iar-gptel-fsm-next fsm)))))
   ;; Tool call inspector -- :before, NOT :override
@@ -171,11 +171,11 @@ Call this once during initialization to enable FSM tracing."
   ;; and FSM transitions. We only log before it runs.
   (iar-gptel-advise-process-tool-call :before
               (lambda (fsm tool-spec tool-call result)
-                (iar--mygptel--fsm-trace-tool-call-before fsm tool-spec tool-call result)))
+                (iar--fsm-trace-tool-call-before fsm tool-spec tool-call result)))
   ;; Tool use handler inspector -- :before, logs internal state
   (iar-gptel-advise-handle-tool-use :before
               (lambda (fsm)
-                (iar--mygptel--fsm-trace-handle-tool-use-before fsm)))
+                (iar--fsm-trace-handle-tool-use-before fsm)))
   (message "[fsm-tracer] Installed on gptel FSM functions (:before, no override)"))
 
 (iar-fsm-trace-setup)

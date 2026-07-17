@@ -9,7 +9,7 @@
 (require 'iar-audit-log)
 (require 'iar-utils)  ; iar--with-suppressed-save-hooks
 
-(defun iar--mygptel--fs-write-file (filepath content)
+(defun iar--fs-write-file (filepath content)
   "Write CONTENT to FILEPATH, creating parent dirs if needed.
 If the file is open in an Emacs buffer, writes to that buffer and saves.
 Otherwise, uses atomic write (temp file + rename).
@@ -35,13 +35,13 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
                       (insert content)
                       (iar--with-suppressed-save-hooks
                         (save-buffer))
-                      (my-gptel--audit-log-write expanded-path)
+                      (iar--audit-log-write expanded-path)
                       (format "Success: File written to '%s'" expanded-path))))
                 (let ((tmp-file (make-temp-file "gptel-write-")))
                   (with-temp-file tmp-file
                     (insert content))
                   (rename-file tmp-file expanded-path t)
-                  (my-gptel--audit-log-write expanded-path)
+                  (iar--audit-log-write expanded-path)
                   (format "Success: File written to '%s'" expanded-path))))
           (error (format "Error: Failed to write file to '%s'. Emacs says: %s"
                          expanded-path (error-message-string err))))))))
@@ -52,6 +52,6 @@ Returns a string starting with \\='Success:\\=' or \\='Error:\\='."
   :description "Create a new file or completely overwrite an existing file with new text content. Use this to save new agent profiles or rewrite configurations."
   :args (list '(:name "filepath" :type "string" :description "Absolute path to the destination file.")
               '(:name "content" :type "string" :description "The full text content to write into the file."))
-  :function #'iar--mygptel--fs-write-file))
+  :function #'iar--fs-write-file))
 
 (provide 'iar-tool--write-file)

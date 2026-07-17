@@ -9,7 +9,7 @@
 (require 'iar-audit-log)
 (require 'iar-utils)  ; iar--with-suppressed-save-hooks
 
-(defun iar--mygptel--fs-replace (path search-text replace-text)
+(defun iar--fs-replace (path search-text replace-text)
   "Find SEARCH-TEXT in PATH and replace it with REPLACE-TEXT.
 SEARCH-TEXT is matched exactly as provided -- whitespace is significant.
 If the file is open in an Emacs buffer, performs the replacement in
@@ -43,7 +43,7 @@ with a misleading message."
                             (replace-match replace-text t t)
                             (iar--with-suppressed-save-hooks
                               (save-buffer))
-                            (my-gptel--audit-log-replace expanded-path)
+                            (iar--audit-log-replace expanded-path)
                             (format "Success: Replaced text in '%s'" expanded-path))
                         (format "Error: Target string not found in '%s'" expanded-path))))))
               (with-temp-buffer
@@ -55,7 +55,7 @@ with a misleading message."
                       (let ((tmp-file (make-temp-file "gptel-replace-")))
                         (write-region (point-min) (point-max) tmp-file nil 'silent)
                         (rename-file tmp-file expanded-path t))
-                      (my-gptel--audit-log-replace expanded-path)
+                      (iar--audit-log-replace expanded-path)
                       (format "Success: Replaced text in '%s'" expanded-path))
                   (format "Error: Target string not found in '%s'" expanded-path)))))
         (error (format "Error: Failed to replace text in '%s'. Emacs says: %s"
@@ -68,6 +68,6 @@ with a misleading message."
   :args (list '(:name "path" :type "string")
               '(:name "search_text" :type "string")
               '(:name "replace_text" :type "string"))
-  :function #'iar--mygptel--fs-replace))
+  :function #'iar--fs-replace))
 
 (provide 'iar-tool--replace-in-file)

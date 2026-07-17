@@ -19,7 +19,7 @@
 
 ;;; --- reload_os ---
 
-(defun iar--mygptel--tool-reload-os ()
+(defun iar--tool-reload-os ()
   "Reload Emacs init.el to pick up modifications to .el files.
 Resets the global gptel-tools list first to avoid duplicate tool
 registrations, then re-loads init.el so all add-to-list calls
@@ -45,11 +45,11 @@ in the current buffer so it inherits the fresh defaults."
   :name "reload_os"
   :description "Reload Emacs init.el to pick up modifications to .el files. Use after modifying Emacs Lisp files to test changes without restarting Emacs. Resets and rebuilds gptel-tools automatically."
   :args (list)
-  :function #'iar--mygptel--tool-reload-os))
+  :function #'iar--tool-reload-os))
 
 ;;; --- reload_agent ---
 
-(defun iar--mygptel--tool-reload-agent (&optional agent-name)
+(defun iar--tool-reload-agent (&optional agent-name)
   "Reload the current agent's profile from its prompt.org file and update
 the gptel system message in the current buffer.
 If AGENT-NAME is provided (e.g., \"mccarthy\"), reload that agent
@@ -98,6 +98,6 @@ instead of the currently loaded one."
   :name "reload_agent"
   :description "Reload the current agent's gptel prompt from its .org file, updating the system message in the current chat buffer. Use after modifying an agent's .org profile to test changes without killing the chat. Optionally pass agent_name to reload a specific agent."
   :args (list '(:name "agent_name" :type "string" :description "Optional: name of agent to reload (e.g., 'mccarthy'). If omitted, reloads the currently loaded agent." :optional t))
-  :function #'iar--mygptel--tool-reload-agent))
+  :function #'iar--tool-reload-agent))
 
 (provide 'iar-reload-tools)

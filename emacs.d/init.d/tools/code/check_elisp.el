@@ -54,7 +54,7 @@ the source or leaving .elc artifacts.  Captures the *Compile-Log* buffer."
         (delete-file dest-file)))
     result))
 
-(defun iar--mygptel--tool-check-elisp (filepath)
+(defun iar--tool-check-elisp (filepath)
   "Check an Emacs Lisp file for syntax errors, unbalanced parens, and
 byte-compilation warnings. Returns a diagnostic report string.
 The source file is never modified."
@@ -89,6 +89,6 @@ The source file is never modified."
   :name "check_elisp"
   :description "Check an Emacs Lisp (.el) file for syntax errors, unbalanced parentheses, and byte-compilation warnings. Returns a diagnostic report. Does NOT modify the file."
   :args (list '(:name "filepath" :type "string" :description "Absolute path to the .el file to check."))
-  :function #'iar--mygptel--tool-check-elisp))
+  :function #'iar--tool-check-elisp))
 
 (provide 'iar-tool--check-elisp)
