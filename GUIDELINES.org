@@ -1,0 +1,439 @@
+# i.ar Coding Guidelines
+
+Evidence-based conventions. Every rule traces to something found during the ownership read-through of the codebase (July 2026). No invented rules.
+
+* Table of Contents                                                     :TOC:
+- [[*i-naming-conventions][I. Naming Conventions]]
+- [[*ii-module-structure][II. Module Structure]]
+- [[*iii-tool-patterns][III. Tool Patterns]]
+- [[*iv-security-rules][IV. Security Rules]]
+- [[*v-prompt-and-text-rules][V. Prompt and Text Rules]]
+- [[*vi-error-handling][VI. Error Handling]]
+- [[*vii-architecture-rules][VII. Architecture Rules]]
+- [[*viii-test-conventions][VIII. Test Conventions]]
+- [[*ix-anti-patterns][IX. Anti-Patterns]]
+- [[*x-cl-lib-adoption][X. cl-lib Adoption]]
+- [[*xi-module-loading][XI. Module Loading]]
+- [[*xii-forward-declaration-comment-format][XII. Forward-Declaration Comment Format]]
+
+* I. Naming Conventions
+
+** 1. Prefixes
+
+| Prefix       | Usage                                | Example                     |
+|--------------+--------------------------------------+-----------------------------|
+| =iar--=    | Internal functions and variables     | =iar--resolve-agent-dir=  |
+| =iar-=      | Public functions and user-facing defcustoms | =iar-load-agent=, =iar-loop-soft-threshold= |
+| =iar-tool--= | Tool module provide symbols          | =iar-tool--read-file=     |
+
+No =my-gptel--= prefix. No =iar--mygptel--= prefix. These existed because modules hooked directly into gptel internals. The tool call layer eliminates that coupling. All functions are =iar--= (internal) or =iar-= (public).
+
+/Evidence:/ =my-gptel--= prefix found in audit-log, output-sanitizer, loop-guard, buffer-monitor, request-logger, fsm-tracer, delegate-tool, agent-cycle, reload-tools, and all filesystem tools. Every instance was a gptel coupling artifact. The tool call layer removes the coupling, so the prefix has no reason to exist.
+
+** 2. Parameter Naming
+
+Tool function parameters that come from gptel's JSON API use =snake_case= (matching the JSON keys gptel passes through). Internal elisp functions use =kebab-case= (lisp convention).
+
+/Evidence:/ =git_commit= tool receives =repo_path= (snake_case, from JSON). =iar--git-run= receives =repo-dir= (kebab-case, internal). gptel handles the mapping. Two naming conventions for two contexts.
+
+** 3. File Naming
+
+Module files: =iar-kebab-case.el=. Tool files: =<tool_name>.el= (one tool per file). Test files: =test-<module-name>.el=.
+
+/Evidence:/ Consistent across all 42 source files and 21 test files. No change needed.
+
+** 4. Temp File Prefixes
+
+All =make-temp-file= calls use =iar-= prefix. No =gptel-= or unprefixed temp files.
+
+/Evidence:/ =make-temp-file "gptel-write-"= in write_file, =make-temp-file "gptel-replace-"= in replace_in_file, =make-temp-file "elc-check-"= in check_elisp. All legacy.
+
+* II. Module Structure
+
+** 5. One Responsibility Per File
+
+Each file does one thing. If a file grows beyond 200 lines, it gets its own folder and is split into multiple files within that folder. The pressure to split is intentional -- it forces you to identify the distinct responsibilities.
+
+/Evidence:/ =iar-agent-cycle.el= at 547 lines mixed profile loading, cycle prompt loading, knowledge loading, continuation, completion detection, timeout, FSM monitoring, token tracking, cycle logging, and Telegram notification. =iar-knowledge-loader.el= at 260 lines mixed knowledge loading, prompt info display, buffer info display, and prompt viewing. Both were too big and did too many things.
+
+** 6. Directory Structure
+
+#+begin_example
+init.d/
+  shared/          -- Utilities used across multiple modules
+  core/            -- Boot-time setup (locale, packages, UI, gptel, mounts)
+  tool-call/       -- The single integration point with gptel
+  security/        -- File guard, audit log, output sanitizer, loop guard, tool guard
+  tools/           -- One tool per file, categorized by role
+    filesystem/
+    code/
+    tasks/
+    git/
+    notify/
+    agent/         -- reload_os, reload_agent, delegate
+  agent/           -- Agent system logic (loader, knowledge, memory, cycle, prompt-loader)
+  debug/           -- Status mode (replaces buffer-monitor, request-logger, fsm-tracer)
+  session/         -- Session-aware quit
+  dynamic/         -- Auto-discovered modules (darwin-created)
+#+end_example
+
+Tools go in =tools/=. Agent logic goes in =agent/=. Configs go in =configs/=. No tools in =agent/=, no agent logic in =tools/=.
+
+/Evidence:/ =iar-delegate-tool.el= was in =agent/= but registered a tool via =gptel-make-tool=. =iar-reload-tools.el= was in =agent/= but both functions were tools with no separate agent logic. Both belong in =tools/=.
+
+** 7. Explicit Dependencies
+
+Modules with explicit dependencies must =require= those dependencies at the top of the file. No implicit load-order reliance. If a module calls a function from another module, it requires that module.
+
+/Evidence:/ =iar-mount-awareness.el= provides =iar--extra-mounts-prompt-string= which =iar-agent-loader.el= calls. No =require=. Works only because init.el load order happens to be correct. Reordering init.el silently breaks it. Same pattern in =iar-quit.el= (calls =iar-summarize-session= without requiring =iar-memory-tools=), =iar-loop-guard.el= (declares =iar--load-prompt= without requiring =iar-prompt-loader=), and =iar-tool-guard.el=.
+
+** 8. Boot-Time Requires Only
+
+All =require= statements are top-level. No lazy loading, no =require= inside function bodies. Dependencies are loaded at startup, not at first use.
+
+/Evidence:/ =iar-agent-loader.el= does =(require 'ox)= inside =iar-read-agent-profile= at call time. First agent load has surprise latency from org-export lazy loading. =iar-delegate-tool.el= loads =delegate_continue.org= as a defconst at module load time. Two different strategies for the same kind of dependency. Unify to boot-time.
+
+** 9. Provide Statement
+
+Every module ends with =(provide '<symbol>)=. No exceptions, even for files loaded via =load= instead of =require=.
+
+/Evidence:/ =metaconfig/gptel.el= has no provide. Loaded via =load-file= from =iar-gptel-setup.el=. Inconsistent with every other module. Prevents =require= from working if someone tries it later.
+
+** 10. Configs Split Per-Functionality
+
+Configuration lives in =configs/= (replacing =metaconfig/=), split by functional area. Each file is small, focused, and discoverable. Not one monolithic file.
+
+#+begin_example
+configs/
+  paths.el          -- Base directory paths
+  keybindings.el    -- Keybinding defcustoms
+  delimiters.el     -- Prompt delimiters and markers
+  git.el            -- Git commit params
+  delegate.el       -- Delegation params
+  cycle.el          -- Agent cycle params
+  loop-guard.el     -- Loop guard thresholds
+  memory.el         -- Memory tool params
+  file-guard.el     -- File guard protected paths (manifest)
+  debug.el          -- Debug/status mode toggles and thresholds
+  gptel.el          -- Ollama backend config
+#+end_example
+
+/Evidence:/ =parameters.el= at 485 lines, 39 defcustoms. Too large to read in a single tool call. Users cannot find what they need without scanning the whole file. Grows unbounded as features are added.
+
+** 11. Forward Declarations
+
+Modules declare =(defvar iar-some-param)= (nil, not a default value) when they reference a parameter owned by a config file. The config file owns the =defcustom= with the real default. Forward declarations use nil, not defaults. Config owns the value.
+
+/Evidence:/ =iar-tool-result-truncation.el= does =(defvar iar-tool-result-max-chars 10000)= -- sets a default. Other modules use =(defvar iar-foo nil)=. Inconsistent. The 10000 default is dead code because parameters.el is always loaded first and sets the real value.
+
+* III. Tool Patterns
+
+** 12. Tools Are Async By Default
+
+Tools use =:async t= in =gptel-make-tool=. Sync only when there is a clear justification: the operation is trivially fast and local (file reads, task listing, git commit). Network operations, shell commands, and anything that could block Emacs are async.
+
+/Evidence:/ =execute_code_local= and =send_telegram= are async (network/shell ops). =list_directory=, =read_file=, =read_tasks=, =git_commit= are sync (fast local ops). =check_elisp= is sync but should be async (byte-compile can take time on large files).
+
+** 13. Tools Are Leaf Nodes
+
+Tools are correct, secure, and self-contained. DRY is secondary. Internal duplication in tools is acceptable as long as they work and ensure security. Different standard from shared modules.
+
+/Evidence:/ =write_file= and =append_file= both implement buffer-aware vs. disk-aware write paths with similar structure. Extracting a shared helper would couple the tools. The duplication is acceptable because tools are leaf nodes.
+
+** 14. Tool Registration Via Tool Call Layer
+
+Tools register with the tool call layer, not directly with =add-to-list 'gptel-tools=. The tool call layer is the single integration point with gptel.
+
+/Evidence:/ Every tool file does =(add-to-list 'gptel-tools (gptel-make-tool ...))= at the bottom. This directly couples tools to gptel's internal variable. With the tool call layer, registration goes through i.ar's own mechanism.
+
+** 15. Tool Descriptions Stay In Code
+
+Tool descriptions are API contracts with the LLM, not prompt templates. They stay in the code, in English, alongside the tool definition.
+
+/Evidence:/ Tool descriptions in =gptel-make-tool= calls. Most models are multilingual. English is the lingua franca of LLM training data. Externalizing descriptions would create unnecessary file coupling.
+
+** 16. Tool Returns
+
+Tools return "Success:" or "Error:" strings with descriptive context. The LLM uses these to self-correct. Internal functions return nil on failure (see Error Handling).
+
+/Evidence:/ Consistent across all tools. =write_file= returns "Success: wrote N chars to PATH" or "Error: <detail>". =git_commit= returns "Success: committed" or "Error: <detail>". =read_tasks= returns content or "Error reading tasks: <detail>".
+
+** 17. call-process For No-Shell Execution
+
+Tools that run external commands use =call-process= directly. No shell, no injection surface.
+
+/Evidence:/ =git_commit= uses =call-process= for all git operations. No shell, no string interpolation, no injection surface. Correct pattern.
+
+** 18. Env Vars For Credentials
+
+Credentials come from environment variables, not defcustoms. Single source of truth. Set by the container launch script.
+
+/Evidence:/ =send_telegram= reads =AGENT_TELEGRAM_BOT_TOKEN= and =AGENT_TELEGRAM_CHAT_ID= from env vars. =agent-cycle.el= had defcustoms for the same credentials -- two sources of truth. Env vars win. Git author name/email should follow the same pattern (currently hardcoded in a public repo).
+
+* IV. Security Rules
+
+** 19. Security Wins Over Efficiency. Cleanliness Wins Over Efficiency.
+
+When security and efficiency conflict, security wins. When cleanliness and efficiency conflict, cleanliness wins. Security and cleanliness are peers -- neither overrides the other.
+
+/Evidence:/ =iar-file-guard.el= recompiles regex patterns on every call. Performance overhead, but the code is clean and correct. User explicitly endorsed this tradeoff. Caching would add complexity for unmeasured benefit.
+
+** 20. :safe Omission On Security-Sensitive Defcustoms
+
+Security-sensitive defcustoms intentionally omit =:safe= so Emacs prompts the user when a file-local variable tries to change them. No silent bypass.
+
+/Evidence:/ =iar-guard-allow-self-modification= lacks =:safe=. A file-local variable cannot silently enable self-modification. =iar-telegram-bot-token= and =iar-telegram-chat-id= (now eliminated) followed the same pattern.
+
+** 21. Return Reason Strings From Security Checks
+
+Security check functions return the reason for blocking as a string, not a boolean. Callers can display the reason to the agent for self-correction.
+
+/Evidence:/ =iar--guard-check-write= returns the reason string (e.g., "Agent prompt files are always protected"). =write_file= passes this to the agent. The agent knows WHY it was blocked, not just THAT it was blocked.
+
+** 22. Path Traversal Defense Is A Shared Utility
+
+Path traversal defense (=file-truename= check) is a shared utility function in =shared/=. All file-reading and file-writing functions call it. No reimplemented per module.
+
+/Evidence:/ =iar--load-agent-profile= does its own =file-truename= check. =iar--resolve-agent-dir= does its own. =iar--resolve-task-path= does its own. =reload_agent= does its own (acknowledged as redundant). Four implementations of the same defense. One shared utility.
+
+** 23. File Guard Uses Manifest, Not Regex
+
+File guard protected paths are defined in a manifest file listing exact paths/files to guard, not regex patterns. The manifest is tiered (always-protected vs. conditionally-protected).
+
+/Evidence:/ Current regex patterns are too broad. =/HISTORY\\.log\\'= matches any file named HISTORY.log anywhere. =/containers/= has no end anchor. Regex was the quick solution; manifest is the proper solution.
+
+** 24. :before Advice Only For Observers
+
+Observer modules use =:before= advice only. =:override= is banned. =:around= is used only for interception (tool result truncation), never for pure observation.
+
+/Evidence:/ =:override= advice on FSM functions silently swallowed errors and left the FSM stuck at TOOL state forever. The incident is documented in =iar-fsm-tracer.el= header comment. =:before= advice observes without interfering. =:around= advice on =gptel--process-tool-call= (truncation) intercepts and modifies the result, which is legitimate -- but it's not observation, it's interception.
+
+** 25. Restrictions Are Framework-Level, Not Per-Tool-Call
+
+Tool call restrictions (rate limiting, network restrictions, tool gating) are framework-level features, not per-tool-call checks. No =gptel-confirm-tool-calls=.
+
+/Evidence:/ =gptel-confirm-tool-calls= set to nil in delegate buffers and cycle buffers. Adds friction without providing real safety. The file guard, loop guard, and tool guard are the safety mechanisms. The container is the boundary. Rate limiting comes as a framework feature, not a per-call check.
+
+* V. Prompt and Text Rules
+
+** 26. Prompt Text Lives In Prompt Files
+
+Text that instructs the LLM's behavior (prompt templates, correction messages, completion markers, continue prompts, delimiters) lives in =.org= files under =prompts/common/=. Code reads them via =iar--load-prompt=. Nowhere in code should behavioral instruction text be hardcoded.
+
+/Evidence:/ =loop-guard.el= does it right -- correction messages in =loop_soft_block.org= and =loop_hard_stop.org=. =agent-cycle.el= does it wrong -- =LOOP_COMPLETE=, =CYCLE_COMPLETE=, and natural language detection patterns hardcoded in elisp. =iar-mount-awareness.el= does it wrong -- "The following directories are mounted..." hardcoded in elisp. =parameters.el= does it wrong -- delimiters hardcoded as defcustoms.
+
+** 27. Tool Descriptions Stay In Code
+
+Tool descriptions are API contracts, not behavioral instructions. They stay in the code.
+
+/Evidence:/ See rule 15. Different concern from prompt templates.
+
+** 28. System Messages Stay In Code
+
+System messages (truncation notices, error strings, "Success:"/"Error:" strings) are feedback to the agent about what happened, not behavioral instructions. They stay in code.
+
+/Evidence:/ ="[... file truncated at %d characters ...]"= in =read_file.el=. ="[... truncated: %d total chars, kept first %d and last %d ...]"= in tool-result-truncation. These are status reports, not instructions. Externalizing them would create file coupling without benefit.
+
+** 29. Three Categories Of Text
+
+| Category          | What It Is                  | Where It Lives                |
+|-------------------+-----------------------------+-------------------------------|
+| Prompt templates  | LLM behavioral instructions | =.org= files in =prompts/common/= |
+| Tool descriptions | API contracts with the LLM | In code, alongside tool definition |
+| System messages   | Status reports to the LLM   | In code                       |
+
+/Evidence:/ The distinction emerged from reviewing mount-awareness (prompt text in code -- wrong), tool descriptions (in code -- right), and truncation notices (system messages in code -- right). Three categories, three homes.
+
+** 30. Completion Detection Via Markers, Not Heuristics
+
+Completion detection uses exact marker matching. The marker string lives in a prompt file. The LLM is instructed in its prompt to output the marker. No natural language heuristics.
+
+/Evidence:/ =iar--cycle-complete-p= has 3 detection methods: exact sentinels, natural language phrases requiring HISTORY reference. The natural language detection is fragile -- it worked in practice but is architecturally wrong. The ==== DELEGATION RESULT ==== marker pattern is the correct approach: marker in prompt file, exact match in code.
+
+* VI. Error Handling
+
+** 31. Two Error Conventions
+
+Tools return "Success:"/"Error:" strings for LLM consumption. Internal functions return nil on failure. Callers decide how to handle nil (signal, load default, propagate).
+
+/Evidence:/ =write_file= returns "Error: <detail>" for the LLM. =iar--load-agent-profile= returns nil for the caller. =iar--load-prompt= currently signals on missing file -- should return nil instead. Two layers, two error strategies.
+
+** 32. Leaf Functions Return Nil
+
+Functions that can fail return nil. Callers decide how to handle: signal, load a default, propagate. The leaf function never decides the error strategy.
+
+/Evidence:/ =iar--load-agent-profile= returns nil if prompt.org doesn't exist. Callers (interactive =iar-load-agent=, reload_agent, delegate) handle nil. =iar--load-prompt= signals -- inconsistent. Change to return nil.
+
+** 33. condition-case For Best-Effort Operations
+
+=condition-case= wraps operations that must never break the primary operation: audit logging, debug instrumentation, observer modules. Errors are caught and demoted to =message= calls.
+
+/Evidence:/ =iar-audit-log.el= wraps every log write in =condition-case=. Audit logging never breaks the operation being audited. =iar-fsm-tracer.el= wraps every trace write. Tracing never breaks the FSM. Correct pattern for secondary operations.
+
+** 34. No Double Error Suppression
+
+Do not combine error suppression mechanisms. If =condition-case= wraps a call, the call should not also suppress errors. If =load= is called with =nil t= (no error, no message), do not also wrap it in =condition-case=.
+
+/Evidence:/ =reload_os= does =(load init-path nil t)= inside =condition-case=. The =nil t= suppresses errors at the =load= level, so =condition-case= never fires. If =load= fails silently, the function reports success. False positive.
+
+** 35. No condition-case nil That Swallows All Errors
+
+=condition-case nil= catches all error conditions silently. Use specific error types or =condition-case err= with explicit handling. If you must catch all, at least log the error.
+
+/Evidence:/ =iar--cycle-load-cycle-prompt= and =iar--cycle-load-continue-prompt= use =condition-case nil= to catch all errors and fall back. Silently swallows non-"file not found" errors too.
+
+* VII. Architecture Rules
+
+** 36. The Tool Call Layer Is The Single Integration Point With gptel
+
+i.ar modules hook into the tool call layer, not gptel internals. The tool call layer is the only module that touches gptel's FSM, curl internals, or tool processing. It owns: tool registration, pre/post-tool-call hooks, audit logging, result truncation, and token usage tracking.
+
+/Evidence:/ =iar-gptel-compat.el= wrapped 13 gptel internal symbols. Every module that used these wrappers needed rearchitecting. The compat layer was the responsible hack (indirection), but the real answer is: don't reach into gptel's internals. Build one integration point at the right level of abstraction.
+
+** 37. Don't Reimplement Framework Capabilities
+
+If gptel can do it, use gptel. Do not reimplement gptel's request mechanism, token tracking, or tool processing with raw curl and JSON parsing.
+
+/Evidence:/ =iar-memory-tools.el= reimplements gptel's request mechanism with raw curl, JSON construction, process management, and response parsing. ~200 lines of duplicated infrastructure. =iar-request-logger.el= regex-parses token counts from raw JSON when gptel already tracks tokens. =iar-agent-cycle.el= reimplements Telegram send logic instead of calling the telegram tool.
+
+** 38. Environment Facts vs. User Preferences
+
+Environment facts (UTF-8 is required, MELPA URL is stable, pipe connection type is correct for non-interactive) go in code with no config. User preferences (model selection, keybindings, thresholds) go in config files with defcustoms.
+
+/Evidence:/ =iar-locale.el= hardcodes UTF-8 with no defcustoms. Correct -- UTF-8 is a requirement, not a preference. =metaconfig/gptel.el= hardcodes WireGuard IP, models, and request params. Wrong -- these are user preferences that belong in config.
+
+** 39. Config Values That Are Effectively Immutable
+
+Config values that never change at runtime (directory paths, delimiters, markers) should not be presented as customizable. They are set once at load time and never change. Use =defconst= or plain =setq=, not =defcustom=.
+
+/Evidence:/ =iar--audit-log-path= is a =defconst= computed from =iar-audit-path= at load time. If =iar-audit-path= is changed via Customize after load, the path is stale. The path never changes in practice -- making it appear mutable is misleading.
+
+** 40. Debug Instrumentation Is A Status Bar, Not Log Files
+
+Debug information is surfaced in a status bar (mode line) for real-time awareness, not in log files for post-hoc analysis. The status bar shows: agent name, prompt size, last request input tokens, last response output tokens, cumulative input tokens, cumulative output tokens. No gptel internals (FSM state, tool call counts) in the status bar.
+
+Logs (audit log) are for forensic analysis. The status bar is for operational awareness. Different tools for different jobs.
+
+/Evidence:/ Three debug modules (buffer-monitor, request-logger, fsm-tracer) wrote to separate log files (BUFFER.log, REQUESTS.log, FSM.log). User cannot be trusted to read logs proactively. The information that matters (token usage, buffer size) should be visible at a glance. All three modules change fundamentally with the tool call layer -- they get replaced by one status mode module.
+
+* VIII. Test Conventions
+
+** 41. Test Naming
+
+Test files: =test-<module-name>.el=. Test cases: =ert-deftest test-<module>-<behavior>=.
+
+/Evidence:/ Consistent across all 21 test files. No change needed.
+
+** 42. Mocking Via cl-letf
+
+No external mocking framework. =cl-letf= for function mocking. =make-temp-file= with =:dir-flag= for temp directories. =unwind-protect= for cleanup.
+
+/Evidence:/ Used across test-file-guard (62 tests), test-fs (72 tests), test-delegate (38 tests). Standard Emacs pattern. No external dependencies.
+
+** 43. Integration Test Tagging
+
+Tests that spawn real processes or re-evaluate code are tagged =:tags '(integration)=. Can be excluded from coverage runs.
+
+/Evidence:/ =reload_os= tests re-evaluate init.el, wiping coverage data. Tagged =:reload= and excluded when coverage is active. Same pattern for any test with side effects beyond temp files.
+
+** 44. Tests Must Pass After Every Refactored Module
+
+Not at the end -- after every single module. Revert on failure if not fixed in 15 minutes.
+
+/Evidence:/ Sprint plan rule. Prevents accumulating broken state across multiple module changes.
+
+* IX. Anti-Patterns
+
+** 45. No Backward-Compat Aliases
+
+No =defalias= for backward compatibility. Update all callers to use the canonical name. Aliases accumulate and hide the real API.
+
+/Evidence:/ =iar--valid-agent-name-p=, =iar--valid-task-name-p=, =iar--get-agent-dir= in =iar-agent-utils.el=. =iar--memory-get-agent-dir=, =iar-summarize-memories= in =iar-memory-tools.el=. =iar-darwin-run-cycle= in =iar-agent-cycle.el=. All kept "for backward compatibility" -- all should be removed.
+
+** 46. No Magic String Sentinels
+
+No string sentinels like "unknown" used as fallback values. Use nil. Callers check for nil.
+
+/Evidence:/ =iar--get-agent-name= returns "unknown" as fallback. =iar--resolve-agent-dir= checks =(equal agent-name "unknown")=. FSM logs dumped into =audit/unknown/= directory because the sentinel was used as a real directory name. nil is cleaner and prevents this class of bug.
+
+** 47. No Side Effects In let* Bindings
+
+No =(let* ((_ (unless ... (make-directory ...))) ...)=. Side effects during binding are hard to read. Use explicit forms before the =let*= or restructure.
+
+/Evidence:/ =iar-agent-loader.el= uses =_= binding for =make-directory= side effect. Unusual style, harder to read than an explicit =unless= form.
+
+** 48. No cl-return-from Without Explicit cl-block
+
+=cl-return-from= creates an implicit =cl-block= around the function body. Non-obvious control flow. Use explicit =cl-block=, restructure with =cond=/=if=, or use =catch=/=throw=.
+
+/Evidence:/ =iar-knowledge-loader.el=, =iar-memory-tools.el=, =iar-delegate-tool.el= all use =cl-return-from= without explicit =cl-block=. Three files with non-obvious control flow.
+
+** 49. No Anonymous Lambdas In advice-add
+
+Use named functions in =advice-add=. Anonymous lambdas cannot be removed by name. =reload_os= re-runs setup and adds duplicate advice.
+
+/Evidence:/ =iar-buffer-monitor.el=, =iar-request-logger.el=, =iar-fsm-tracer.el= all use anonymous lambdas in =advice-add=. =reload_os= re-runs setup functions, adding duplicate advice each time.
+
+** 50. No Copy-Paste Modules
+
+Every line of code must be explainable by the owner. If a line cannot be explained, it gets learned or removed. No cargo-cult code.
+
+/Evidence:/ =iar-evil-mode.el= was copy-pasted from a forum without deep understanding. =declare-function= calls may be unnecessary. The module may be temporary (bridge while learning Emacs keybindings).
+
+** 51. No :override Advice
+
+=:override= advice silently swallows errors and leaves the FSM stuck. Banned. Use =:before= for observation, =:around= for interception.
+
+/Evidence:/ Documented in =iar-fsm-tracer.el= header comment. =:override= on FSM functions caused the FSM to get stuck at TOOL state forever.
+
+** 52. No Hardcoded Personal Data In Public Repo Files
+
+No names, emails, IP addresses, or network topology details in public repo files. Use env vars with generic fallbacks.
+
+/Evidence:/ =iar-git-author-name= = "Ignacio Randazzo", =iar-git-author-email= = "ignacio@randazzo.ar" in =parameters.el= (public repo). =10.66.0.5:11434= WireGuard IP in =gptel.el= (public repo). Fork users get Nacho's name on their commits and a non-existent Ollama host.
+
+** 53. No Prompt Text In Elisp Code
+
+See rule 26. Prompt templates, behavioral instructions, and completion markers go in =.org= files. Not in defconsts, not in defcustoms, not inline strings.
+
+** 54. No Reimplementing Framework Capabilities
+
+See rule 37. Use gptel's API. Do not reimplement with raw curl and JSON parsing.
+
+* X. cl-lib Adoption
+
+** 55. Full cl-lib Adoption
+
+The codebase uses cl-lib as its standard library. All cl-lib constructs are available: =setf=, =alist-get=, =cl-return-from= (with explicit =cl-block=), =cl-remove-if=, =cl-remove-if-not=, =cl-loop=, =cl-subseq=, =cl-block=. No mix-and-match with plain elisp equivalents where cl-lib provides a better tool.
+
+/Evidence:/ =setf= + =alist-get= in knowledge-loader. =cl-remove-if= in fsm-tracer. =cl-return-from= in 3 files. =cl-subseq= in loop-guard. =cl-remove-if-not= in read-history. All present but not consistent. Commit fully.
+
+* XI. Module Loading
+
+** 56. Load Order Managed By init.el
+
+init.el owns the load order. Modules declare dependencies via =require=. init.el loads configs first, then modules in dependency order. If a module's dependency is not loaded, =require= signals an error (fail loud, fail fast).
+
+/Evidence:/ init.el has explicit load order with comments explaining each step. No magic, no implicit discovery (except =dynamic/= which is intentional). The =require= rule (7) makes dependencies explicit so reordering init.el produces errors, not silent failures.
+
+** 57. Self-Installing Modules
+
+Modules that install hooks or advice do so via a setup function called at the bottom of the file. The setup function is idempotent -- it removes existing hooks/advice before adding new ones. =reload_os= can re-run setup without duplicates.
+
+/Evidence:/ =iar-buffer-monitor-setup=, =iar-request-log-setup=, =iar-fsm-trace-setup= all self-install. But they use anonymous lambdas and don't guard against double-install. =reload_os= adds duplicates. Fix: named functions + remove-before-add in setup.
+
+* XII. Forward-Declaration Comment Format
+
+** 58. Forward Declarations Include Why
+
+When a module forward-declares a variable with =(defvar iar-some-param)=, the comment explains why:
+
+#+begin_src elisp
+;; Forward-declared: owned by configs/loop-guard.el.
+;; Declared here so this module can reference it before configs load.
+(defvar iar-loop-soft-threshold)
+#+end_src
+
+Not just "Defined in configs/loop-guard.el" but WHY it's declared here.
+
+/Evidence:/ =iar-gptel-setup.el= has forward declarations without comments explaining why. =iar-agent-loader.el= has forward declarations with "Defined in" comments but not "why declared here" comments. Inconsistent.
