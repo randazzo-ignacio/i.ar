@@ -16,6 +16,7 @@
 (defconst init-tools-tasks-dir (expand-file-name "tools/tasks" init-dir))
 (defconst init-tools-notify-dir (expand-file-name "tools/notify" init-dir))
 (defconst init-tools-git-dir (expand-file-name "tools/git" init-dir))
+(defconst init-tools-matrix-dir (expand-file-name "tools/matrix" init-dir))
 (defconst init-security-dir (expand-file-name "security" init-dir))
 (defconst init-session-dir (expand-file-name "session" init-dir))
 (defconst init-dynamic-dir (expand-file-name "dynamic" init-dir))
@@ -28,7 +29,7 @@
 ;; resolve files in sibling subdirectories.
 (dolist (subdir (list init-shared-dir init-core-dir init-agent-dir init-tools-dir
                        init-tools-fs-dir init-tools-code-dir init-tools-tasks-dir
-                       init-tools-notify-dir init-tools-git-dir
+                       init-tools-notify-dir init-tools-git-dir init-tools-matrix-dir
                        init-security-dir init-session-dir init-dynamic-dir
                        init-debug-dir init-tool-call-dir))
   (add-to-list 'load-path subdir))
@@ -139,6 +140,11 @@
 
 ;; Git tools
 (load (expand-file-name "git_commit.el" init-tools-git-dir))
+
+;; Matrix tools (peer-to-peer agent communication)
+(load (expand-file-name "send_matrix_message.el" init-tools-matrix-dir))
+(load (expand-file-name "read_matrix_chat.el" init-tools-matrix-dir))
+(load (expand-file-name "list_matrix_chats.el" init-tools-matrix-dir))
 
 ;; ──────────────────────────────────────────────────────────
 ;; Agent modules

@@ -29,6 +29,7 @@ done
 
 source "${REPO_DIR}/metaconfig/header.sh"
 source "${REPO_DIR}/utils/telegram.sh"
+source "${REPO_DIR}/utils/matrix.sh"
 
 IMAGE_NAME="iar-emacboros"
 LOCAL_OLLAMA_HOST="${EMACBOROS_OLLAMA_HOST:-10.66.0.5:11434}"
@@ -101,6 +102,7 @@ Environment:
   EMACBOROS_OLLAMA_HOST     Ollama API host (overridden by --ollama-host)
   AGENT_TELEGRAM_BOT_TOKEN  Telegram bot token for notifications (loop mode)
   AGENT_TELEGRAM_CHAT_ID    Telegram chat ID for notifications (loop mode)
+  *_MATRIX_TOKEN        Matrix bot tokens (sourced from utils/matrix.sh)
 
 Examples:
   # Interactive session with self-modification
@@ -497,6 +499,12 @@ build_podman_args() {
         $([[ -n "${OLLAMA_CTX}" ]] && echo "-e EMACBOROS_OLLAMA_CTX=${OLLAMA_CTX}") \
         -e "AGENT_TELEGRAM_BOT_TOKEN=${AGENT_TELEGRAM_BOT_TOKEN:-}" \
         -e "AGENT_TELEGRAM_CHAT_ID=${AGENT_TELEGRAM_CHAT_ID:-}" \
+        -e "MIRROR_BOT_MATRIX_TOKEN=${MIRROR_BOT_MATRIX_TOKEN:-}" \
+        -e "DARWIN_BOT_MATRIX_TOKEN=${DARWIN_BOT_MATRIX_TOKEN:-}" \
+        -e "AUDITOR_BOT_MATRIX_TOKEN=${AUDITOR_BOT_MATRIX_TOKEN:-}" \
+        -e "CTFWIZARD_BOT_MATRIX_TOKEN=${CTFWIZARD_BOT_MATRIX_TOKEN:-}" \
+        -e "GARDENER_BOT_MATRIX_TOKEN=${GARDENER_BOT_MATRIX_TOKEN:-}" \
+        -e "HUMAN_MATRIX_TOKEN=${HUMAN_MATRIX_TOKEN:-}" \
         $([[ -n "${GPTEL_FORK_PATH}" ]] && echo "-v ${GPTEL_FORK_PATH}:/root/.emacs.d/gptel-fork:z -e EMACBOROS_GPTEL_FORK_PATH=/root/.emacs.d/gptel-fork") \
         $([[ "${SELF_MODIFICATION:-0}" -eq 1 ]] && echo "-e EMACBOROS_SELF_MODIFICATION=1") \
         $([[ -n "${EXTRA_MOUNTS_ENV}" ]] && echo "-e IAR_EXTRA_MOUNTS=${EXTRA_MOUNTS_ENV}") \
@@ -605,6 +613,12 @@ run_cycle() {
         $([[ -n "${OLLAMA_CTX}" ]] && echo "-e EMACBOROS_OLLAMA_CTX=${OLLAMA_CTX}") \
         -e "AGENT_TELEGRAM_BOT_TOKEN=${AGENT_TELEGRAM_BOT_TOKEN:-}" \
         -e "AGENT_TELEGRAM_CHAT_ID=${AGENT_TELEGRAM_CHAT_ID:-}" \
+        -e "MIRROR_BOT_MATRIX_TOKEN=${MIRROR_BOT_MATRIX_TOKEN:-}" \
+        -e "DARWIN_BOT_MATRIX_TOKEN=${DARWIN_BOT_MATRIX_TOKEN:-}" \
+        -e "AUDITOR_BOT_MATRIX_TOKEN=${AUDITOR_BOT_MATRIX_TOKEN:-}" \
+        -e "CTFWIZARD_BOT_MATRIX_TOKEN=${CTFWIZARD_BOT_MATRIX_TOKEN:-}" \
+        -e "GARDENER_BOT_MATRIX_TOKEN=${GARDENER_BOT_MATRIX_TOKEN:-}" \
+        -e "HUMAN_MATRIX_TOKEN=${HUMAN_MATRIX_TOKEN:-}" \
         $([[ -n "${GPTEL_FORK_PATH}" ]] && echo "-v ${GPTEL_FORK_PATH}:/root/.emacs.d/gptel-fork:z -e EMACBOROS_GPTEL_FORK_PATH=/root/.emacs.d/gptel-fork") \
         $([[ "${SELF_MODIFICATION:-0}" -eq 1 ]] && echo "-e EMACBOROS_SELF_MODIFICATION=1") \
         $([[ -n "${EXTRA_MOUNTS_ENV}" ]] && echo "-e IAR_EXTRA_MOUNTS=${EXTRA_MOUNTS_ENV}") \
