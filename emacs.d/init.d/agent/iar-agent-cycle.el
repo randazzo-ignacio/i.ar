@@ -317,7 +317,7 @@ until it either completes all steps or reaches the turn limit."
       ;; Insert prompt and send
       (insert prompt)
       (message "[%s] Sending cycle prompt to %s agent..." agent-name agent-name)
-      (gptel-send)))
+      (gptel-send))
 
     ;; Batch mode event loop: wait until completed or timeout
     (when noninteractive
@@ -345,6 +345,6 @@ until it either completes all steps or reaches the turn limit."
                      agent-name timeout turn-count tool-call-count
                      (iar--cycle-token-summary)))
           (setq iar--cycle-state nil)
-          (kill-emacs exit-code)))))
+          (kill-emacs exit-code))))))
 
 (provide 'iar-agent-cycle)
