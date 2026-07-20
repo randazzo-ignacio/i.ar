@@ -27,21 +27,14 @@ Returns a formatted string transcript."
      ((or (null room_id) (string-empty-p room_id))
       "Error: Room ID is empty. Provide a valid Matrix room ID.")
      (t
-      (let* ((url (format "%s/_matrix/client/r0/rooms/%s/messages"
-                          server room_id))
-             (params (format "?dir=b&limit=%d" (or limit 20)))
-             (full-url (concat url params))
+      (let* ((url (format "%s/_matrix/client/r0/rooms/%s/messages?dir=b&limit=%d"
+                          server room_id (or limit 20)))
              (output (with-temp-buffer
-                       (let ((proc (make-process
-                                    :name "matrix-read"
-                                    :buffer (current-buffer)
-                                    :connection-type 'pipe
-                                    :command (list "curl" "-s" "-m" "15"
-                                                   "-H" (format "Authorization: Bearer %s" token)
-                                                   full-url))))
-                         (accept-process-output proc 15)
-                         (when (process-live-p proc) (delete-process proc))
-                         (buffer-string)))))
+                       (call-process "curl" nil (current-buffer) nil
+                                     "-s" "-m" "15"
+                                     "-H" (format "Authorization: Bearer %s" token)
+                                     url)
+                       (buffer-string))))
         (condition-case err
             (let* ((parsed (with-temp-buffer
                              (insert output)
@@ -54,10 +47,10 @@ Returns a formatted string transcript."
                   (format "Error: Matrix API error %s: %s"
                           errcode
                           (or (plist-get parsed :error) "unknown"))
-                (if (or (null events) (not (listp events)) (zerop (length events)))
+                (if (or (null events) (not (sequencep events)) (zerop (length events)))
                     (format "No messages found in room %s." room_id)
-                  (iar--matrix-format-messages events room_id))))
-          (error
+                  (iar--matrix-format-messages (append events nil) room_id))))
+          (error err
            (format "Error: Failed to parse Matrix response: %s" output))))))))
 
 (defun iar--matrix-format-messages (events room_id)

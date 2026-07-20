@@ -26,16 +26,11 @@ Returns a formatted string listing all rooms with metadata."
      (t
       (let* ((url (format "%s/_matrix/client/r0/joined_rooms" server))
              (output (with-temp-buffer
-                       (let ((proc (make-process
-                                    :name "matrix-list"
-                                    :buffer (current-buffer)
-                                    :connection-type 'pipe
-                                    :command (list "curl" "-s" "-m" "10"
-                                                   "-H" (format "Authorization: Bearer %s" token)
-                                                   url))))
-                         (accept-process-output proc 10)
-                         (when (process-live-p proc) (delete-process proc))
-                         (buffer-string)))))
+                       (call-process "curl" nil (current-buffer) nil
+                                     "-s" "-m" "10"
+                                     "-H" (format "Authorization: Bearer %s" token)
+                                     url)
+                       (buffer-string))))
         (condition-case err
             (let* ((parsed (with-temp-buffer
                              (insert output)
@@ -48,10 +43,10 @@ Returns a formatted string listing all rooms with metadata."
                   (format "Error: Matrix API error %s: %s"
                           errcode
                           (or (plist-get parsed :error) "unknown"))
-                (if (or (null rooms) (not (listp rooms)) (zerop (length rooms)))
+                (if (or (null rooms) (not (sequencep rooms)) (zerop (length rooms)))
                     "No rooms joined. Use the Matrix client (e.g. Element) to join or create rooms."
-                  (iar--matrix-format-rooms rooms))))
-          (error
+                  (iar--matrix-format-rooms (append rooms nil)))))
+          (error err
            (format "Error: Failed to parse Matrix response: %s" output))))))))
 
 (defun iar--matrix-format-rooms (rooms)

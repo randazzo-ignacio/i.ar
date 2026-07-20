@@ -307,8 +307,8 @@ if [[ "${MODE}" == "loop" ]]; then
     GIT_AUTHOR_EMAIL="${AGENT_NAME}@emacboros.local"
 else
     CONTAINER_NAME="iar-interactive-$$"
-    GIT_AUTHOR_NAME="i.ar Agent"
-    GIT_AUTHOR_EMAIL="agent@emacboros.local"
+    GIT_AUTHOR_NAME="emacboros"
+    GIT_AUTHOR_EMAIL="emacboros@proton.me"
 fi
 
 # =============================================================================
@@ -482,123 +482,11 @@ fi
 # Build common Podman arguments
 # =============================================================================
 build_podman_args() {
-    local interactive_flag="$1"  # "-it" or ""
-    local entrypoint_cmd="$2"    # full command string for --entrypoint
+    # Echoes common Podman arguments shared by interactive and loop modes.
+    # Callers add: -it (interactive only), --entrypoint + command (loop only),
+    # TERM=dumb (loop only), and the image name.
 
     echo \
-        --rm ${interactive_flag} \
-        --name "${CONTAINER_NAME}" \
-        --memory="${MEMORY_LIMIT}" \
-        --security-opt no-new-privileges \
-        --cap-drop=all \
-        --cap-add=NET_RAW \
-        --cap-add=NET_BIND_SERVICE \
-        ${NET_OPTS} \
-        -e "EMACBOROS_OLLAMA_HOST=${OLLAMA_HOST}" \
-        $([[ -n "${OLLAMA_MODEL}" ]] && echo "-e EMACBOROS_OLLAMA_MODEL=${OLLAMA_MODEL}") \
-        $([[ -n "${OLLAMA_CTX}" ]] && echo "-e EMACBOROS_OLLAMA_CTX=${OLLAMA_CTX}") \
-        -e "AGENT_TELEGRAM_BOT_TOKEN=${AGENT_TELEGRAM_BOT_TOKEN:-}" \
-        -e "AGENT_TELEGRAM_CHAT_ID=${AGENT_TELEGRAM_CHAT_ID:-}" \
-        -e "MIRROR_BOT_MATRIX_TOKEN=${MIRROR_BOT_MATRIX_TOKEN:-}" \
-        -e "DARWIN_BOT_MATRIX_TOKEN=${DARWIN_BOT_MATRIX_TOKEN:-}" \
-        -e "AUDITOR_BOT_MATRIX_TOKEN=${AUDITOR_BOT_MATRIX_TOKEN:-}" \
-        -e "CTFWIZARD_BOT_MATRIX_TOKEN=${CTFWIZARD_BOT_MATRIX_TOKEN:-}" \
-        -e "GARDENER_BOT_MATRIX_TOKEN=${GARDENER_BOT_MATRIX_TOKEN:-}" \
-        -e "HUMAN_MATRIX_TOKEN=${HUMAN_MATRIX_TOKEN:-}" \
-        $([[ -n "${GPTEL_FORK_PATH}" ]] && echo "-v ${GPTEL_FORK_PATH}:/root/.emacs.d/gptel-fork:z -e EMACBOROS_GPTEL_FORK_PATH=/root/.emacs.d/gptel-fork") \
-        $([[ "${SELF_MODIFICATION:-0}" -eq 1 ]] && echo "-e EMACBOROS_SELF_MODIFICATION=1") \
-        $([[ -n "${EXTRA_MOUNTS_ENV}" ]] && echo "-e IAR_EXTRA_MOUNTS=${EXTRA_MOUNTS_ENV}") \
-        -e "LANG=C.utf8" \
-        --tmpfs /tmp:rw,size=256m \
-        --tmpfs /run:rw,size=64m \
-        --tmpfs /var/tmp:rw,size=64m \
-        -v "${REPO_DIR}/emacs.d:/root/.emacs.d:z" \
-        -v "${REPO_DIR}/metaconfig:/root/.emacs.d/metaconfig:z" \
-        -v "${REPO_DIR}/prompts:/root/.emacs.d/agents.d:z" \
-        -v "${PERSONALIZATION_DIR}/knowledge:/root/.emacs.d/knowledge:z" \
-        -v "${PERSONALIZATION_DIR}/tasks:/root/.emacs.d/tasks:z" \
-        -v "${PERSONALIZATION_DIR}/audit:/root/.emacs.d/audit:z" \
-        "${IAR_MOUNT_OPTS[@]}" \
-        "${SSH_MOUNT_OPTS[@]}" \
-        "${DYNAMIC_MOUNT_OPTS[@]}" \
-        "${PERSONALIZATION_MOUNT_OPTS[@]}" \
-        -e "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}" \
-        -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}" \
-        -e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" \
-        -e "GIT_COMMITTER_EMAIL=${GIT_AUTHOR_EMAIL}" \
-        -e "GIT_PAGER=cat" \
-        -e "TERM=dumb" \
-        --entrypoint /bin/bash \
-        "${IMAGE_NAME}" \
-        -c "${entrypoint_cmd}"
-}
-
-# =============================================================================
-# Interactive mode
-# =============================================================================
-run_interactive() {
-    info "=========================================="
-    info "i.ar Interactive Session"
-    info "  Personalization: ${PERSONALIZATION_DIR}"
-    info "  Ollama: ${OLLAMA_HOST}"
-    info "  Model: ${OLLAMA_MODEL:-glm-5.2:cloud (default)}"
-    info "  Context: ${OLLAMA_CTX:-1048576 (default)}"
-    if [[ "${SELF_MODIFICATION}" -eq 1 ]]; then
-        info "  Self-modification: ENABLED"
-    else
-        info "  Self-modification: disabled"
-    fi
-    info "  Container: ${CONTAINER_NAME}"
-    info "=========================================="
-
-    # shellcheck disable=SC2086
-    podman run --rm -it \
-        --read-only \
-        --name "${CONTAINER_NAME}" \
-        --memory="${MEMORY_LIMIT}" \
-        --security-opt no-new-privileges \
-        --cap-drop=all \
-        --cap-add=NET_RAW \
-        --cap-add=NET_BIND_SERVICE \
-        ${NET_OPTS} \
-        -e "EMACBOROS_OLLAMA_HOST=${OLLAMA_HOST}" \
-        $([[ -n "${OLLAMA_MODEL}" ]] && echo "-e EMACBOROS_OLLAMA_MODEL=${OLLAMA_MODEL}") \
-        $([[ -n "${OLLAMA_CTX}" ]] && echo "-e EMACBOROS_OLLAMA_CTX=${OLLAMA_CTX}") \
-        $([[ -n "${GPTEL_FORK_PATH}" ]] && echo "-v ${GPTEL_FORK_PATH}:/root/.emacs.d/gptel-fork:z -e EMACBOROS_GPTEL_FORK_PATH=/root/.emacs.d/gptel-fork") \
-        $([[ "${SELF_MODIFICATION:-0}" -eq 1 ]] && echo "-e EMACBOROS_SELF_MODIFICATION=1") \
-        $([[ -n "${EXTRA_MOUNTS_ENV}" ]] && echo "-e IAR_EXTRA_MOUNTS=${EXTRA_MOUNTS_ENV}") \
-        -e "LANG=C.utf8" \
-        --tmpfs /tmp:rw,size=256m \
-        --tmpfs /run:rw,size=64m \
-        --tmpfs /var/tmp:rw,size=64m \
-        -v "${REPO_DIR}/emacs.d:/root/.emacs.d:z" \
-        -v "${REPO_DIR}/metaconfig:/root/.emacs.d/metaconfig:z" \
-        -v "${REPO_DIR}/prompts:/root/.emacs.d/agents.d:z" \
-        -v "${PERSONALIZATION_DIR}/knowledge:/root/.emacs.d/knowledge:z" \
-        -v "${PERSONALIZATION_DIR}/tasks:/root/.emacs.d/tasks:z" \
-        -v "${PERSONALIZATION_DIR}/audit:/root/.emacs.d/audit:z" \
-        "${IAR_MOUNT_OPTS[@]}" \
-        "${SSH_MOUNT_OPTS[@]}" \
-        "${DYNAMIC_MOUNT_OPTS[@]}" \
-        "${PERSONALIZATION_MOUNT_OPTS[@]}" \
-        -e "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}" \
-        -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}" \
-        -e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" \
-        -e "GIT_COMMITTER_EMAIL=${GIT_AUTHOR_EMAIL}" \
-        -e "GIT_PAGER=cat" \
-        "${IMAGE_NAME}" && \
-        info "Session ended" || \
-        error "Container failed to start"
-}
-
-# =============================================================================
-# Loop mode -- run one cycle
-# =============================================================================
-run_cycle() {
-    info "Starting ${AGENT_NAME} cycle ${CYCLE}/${MAX_CYCLES} (timeout: ${TIMEOUT}s)"
-
-    # shellcheck disable=SC2086
-    podman run \
         --rm \
         --read-only \
         --name "${CONTAINER_NAME}" \
@@ -640,7 +528,44 @@ run_cycle() {
         -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}" \
         -e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" \
         -e "GIT_COMMITTER_EMAIL=${GIT_AUTHOR_EMAIL}" \
-        -e "GIT_PAGER=cat" \
+        -e "GIT_PAGER=cat"
+}
+
+# =============================================================================
+# Interactive mode
+# =============================================================================
+run_interactive() {
+    info "=========================================="
+    info "i.ar Interactive Session"
+    info "  Personalization: ${PERSONALIZATION_DIR}"
+    info "  Ollama: ${OLLAMA_HOST}"
+    info "  Model: ${OLLAMA_MODEL:-glm-5.2:cloud (default)}"
+    info "  Context: ${OLLAMA_CTX:-1048576 (default)}"
+    if [[ "${SELF_MODIFICATION}" -eq 1 ]]; then
+        info "  Self-modification: ENABLED"
+    else
+        info "  Self-modification: disabled"
+    fi
+    info "  Container: ${CONTAINER_NAME}"
+    info "=========================================="
+
+    # shellcheck disable=SC2086
+    podman run -it \
+        $(build_podman_args) \
+        "${IMAGE_NAME}" && \
+        info "Session ended" || \
+        error "Container failed to start"
+}
+
+# =============================================================================
+# Loop mode -- run one cycle
+# =============================================================================
+run_cycle() {
+    info "Starting ${AGENT_NAME} cycle ${CYCLE}/${MAX_CYCLES} (timeout: ${TIMEOUT}s)"
+
+    # shellcheck disable=SC2086
+    podman run \
+        $(build_podman_args) \
         -e "TERM=dumb" \
         --entrypoint /bin/bash \
         "${IMAGE_NAME}" \
