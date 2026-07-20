@@ -193,7 +193,10 @@ STATUS and INFO come from `iar-post-response-functions'."
                (tool-call-count (plist-get iar--cycle-state :tool-call-count))
                (max-turns (plist-get iar--cycle-state :max-turns))
                (start (plist-get info :position))
-               (end (marker-position (or start (point-max))))
+               (end (cond
+                 ((markerp start) (marker-position start))
+                 ((integerp start) start)
+                 (t (point-max))))
                (cont-prompt (plist-get iar--cycle-state :continue-prompt)))
           ;; Log response to cycle.log
           (iar--cycle-log-append agent-name
