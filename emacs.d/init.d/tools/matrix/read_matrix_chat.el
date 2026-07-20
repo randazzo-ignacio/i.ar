@@ -58,7 +58,7 @@ Returns a formatted string transcript."
                     (format "No messages found in room %s." room_id)
                   (iar--matrix-format-messages events room_id))))
           (error
-           (format "Error: Failed to parse Matrix response: %s" output)))))))
+           (format "Error: Failed to parse Matrix response: %s" output))))))))
 
 (defun iar--matrix-format-messages (events room_id)
   "Format Matrix EVENTS into a readable transcript.
@@ -105,7 +105,7 @@ LIMIT is the number of messages to retrieve (default 20, max 100)."
              (result (iar--matrix-read-messages room_id n)))
         (iar--audit-log "matrix_read"
                         (format "room=%s limit=%d" room_id n))
-        result))))))
+        result)))))
 
 (iar-tool-register
  (gptel-make-tool

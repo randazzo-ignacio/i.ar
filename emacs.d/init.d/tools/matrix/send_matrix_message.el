@@ -128,7 +128,7 @@ Calls CALLBACK with the result string when done."
                                         errcode
                                         (or (plist-get parsed :error) "unknown")))
                                (t
-                                (format "Error: Matrix API returned: %s" output)))))))
+                                (format "Error: Matrix API returned: %s" output)))))))))
         (run-with-timer
          20 nil
          (lambda ()
@@ -136,7 +136,7 @@ Calls CALLBACK with the result string when done."
              (delete-process proc)
              (when (buffer-live-p buf) (kill-buffer buf))
              (funcall callback
-                      "Error: Matrix request timed out after 20 seconds.")))))))))))
+                      "Error: Matrix request timed out after 20 seconds.")))))))))
 
 (iar-tool-register
  (gptel-make-tool

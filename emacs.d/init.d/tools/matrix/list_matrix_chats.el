@@ -52,7 +52,7 @@ Returns a formatted string listing all rooms with metadata."
                     "No rooms joined. Use the Matrix client (e.g. Element) to join or create rooms."
                   (iar--matrix-format-rooms rooms))))
           (error
-           (format "Error: Failed to parse Matrix response: %s" output)))))))
+           (format "Error: Failed to parse Matrix response: %s" output))))))))
 
 (defun iar--matrix-format-rooms (rooms)
   "Format ROOMS (list of room ID strings) into a readable listing."
@@ -70,7 +70,7 @@ Returns a formatted string listing all rooms with metadata."
         "Error: Matrix token not configured for this agent. Ensure the agent name maps to a *_MATRIX_TOKEN environment variable."
       (let ((result (iar--matrix-list-rooms)))
         (iar--audit-log "matrix_list" "rooms queried")
-        result)))))
+        result))))
 
 (iar-tool-register
  (gptel-make-tool
