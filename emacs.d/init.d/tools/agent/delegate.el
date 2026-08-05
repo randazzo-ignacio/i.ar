@@ -15,12 +15,17 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'iar-agent-utils)  ; validation
-(require 'iar-agent-loader)  ; iar--load-agent-profile
+(require 'iar-agent-loader)  ; iar--setup-assembled-buffer, iar--archetype-for-personality, iar--project-for-personality
+(require 'iar-prompt-assembly)  ; iar--assemble-prompt
 (require 'iar-tool-guard)    ; iar--block-unknown-tools
 (require 'iar-prompt-loader)  ; iar--load-prompt
 (require 'iar-mount-awareness)  ; iar--extra-mounts-prompt-string
 
 ;; Declared in configs/ (split parameter files) (loaded before init.d modules).
+;; Forward-declared: owned by configs/paths.el.
+(defvar iar-personalities-path nil
+  "Relative path to personality definition files.")
+
 (defvar iar-delegation-result-marker nil
   "Marker that sub-agents emit before their concise summary.")
 
@@ -118,12 +123,18 @@ TIMEOUT is optional max seconds to wait (default 600, minimum 1)."
      ((not task-valid)
       (funcall callback "Delegate tool error: :task must be a non-empty string"))
      (t
-      (let ((profile (iar--load-agent-profile agent)))
-        (if (not profile)
-            (funcall callback
-                     (format "Agent profile '%s' not found in agents.d/" agent))
-          (iar--spawn-async-delegate
-           callback agent task ctx timeout-secs profile)))))))
+      (condition-case err
+          (let* ((archetype (iar--archetype-for-personality agent))
+                 (project (iar--project-for-personality agent))
+                 (result (iar--assemble-prompt archetype agent project))
+                 (profile (plist-get result :prompt))
+                 (tools (plist-get result :tools)))
+            (iar--spawn-async-delegate
+             callback agent task ctx timeout-secs profile tools))
+        (error
+         (funcall callback
+                  (format "Delegate error: personality '%s' not found: %s"
+                          agent (error-message-string err)))))))))
 
 (defconst iar--delegate-continue-prompt
   (iar--load-prompt "delegate_continue")
@@ -245,7 +256,7 @@ full response if the marker is not found."
                        (format "Delegate '%s' returned empty response after %d text-only turns."
                                agent max-turns))))))))))
 
-(defun iar--spawn-async-delegate (callback agent task ctx timeout-secs profile)
+(defun iar--spawn-async-delegate (callback agent task ctx timeout-secs profile tools)
   "Spawn an async delegate buffer and send the task.
 The sub-agent's streaming output is mirrored into the parent buffer
 so the user can watch progress in real time."
@@ -268,26 +279,25 @@ so the user can watch progress in real time."
     (with-current-buffer buf
       (text-mode)
       (gptel-mode 1)
-      (setq-local gptel-system-prompt
-                  (if (fboundp 'iar--extra-mounts-prompt-string)
-                      (concat profile (iar--extra-mounts-prompt-string))
-                    profile))
+      (setq-local gptel-system-prompt profile)
       ;; Set agent name for audit logging and status mode.
-      ;; Both buffer-local and global so audit logging resolves agent name.
-      ;; process buffers can resolve the agent name.
       (setq-local iar--current-agent-name agent)
       (setq iar--current-agent-name agent)
-      (let ((agent-dir (expand-file-name iar-agents-path user-emacs-directory)))
-        (setq-local iar--current-agent-file
-                    (expand-file-name (format "%s/prompt.org" agent) agent-dir))
-        (setq iar--current-agent-file
-              (expand-file-name (format "%s/prompt.org" agent) agent-dir)))
+      (setq-local iar--current-agent-file
+                  (expand-file-name (format "%s.org" agent)
+                                    (expand-file-name iar-personalities-path user-emacs-directory)))
+      (setq iar--current-agent-file
+            (expand-file-name (format "%s.org" agent)
+                              (expand-file-name iar-personalities-path user-emacs-directory)))
       (setq-local iar--delegate-depth (1+ parent-depth))
       (when (>= iar--delegate-depth iar-delegate-max-depth)
         (setq-local gptel-tools
                     (cl-remove-if (lambda (tool)
                                     (equal (gptel-tool-name tool) "delegate"))
                                   (copy-sequence gptel-tools))))
+      ;; Apply tool gating from project
+      (when tools
+        (setq-local gptel-tools tools))
 
       ;; Tool call tracker: set tools-called flag when any tool is called.
       ;; This lets the completion hook distinguish between a genuine final

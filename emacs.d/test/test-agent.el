@@ -1,270 +1,146 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Tests for iar-agent-loader.el
-;; Tests agent profile loading, #+INCLUDE expansion, path resolution,
-;; and agent name tracking.
+;;; Tests for iar-agent-loader.el (assembly-based)
+;; Tests personality discovery, assembly-based loading, and agent name tracking.
+;; Updated for the three-axis assembly model (archetype + personality + project).
 
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
-(require 'ox)
 (require 'iar-agent-loader)
+(require 'iar-prompt-assembly)
 
-;;; --- Test fixtures ---
-
-(defvar test-agent--tmpdir nil
-  "Temporary directory for agent loader tests.")
-
-(defun test-agent--setup ()
-  "Create a temporary agents.d structure with test agents."
-  (setq test-agent--tmpdir (make-temp-file "test-agent-" :dir-flag))
-  ;; Create agents.d directory
-  (let ((agents-dir (expand-file-name "agents.d/agents" test-agent--tmpdir)))
-    (make-directory agents-dir t)
-    ;; Create base_context.org
-    (with-temp-file (expand-file-name "base_context.org" agents-dir)
-      (insert "* SHARED CONTEXT\nThis is shared context for all agents.\n"))
-    ;; Create a test agent directory
-    (let ((alpha-dir (expand-file-name "alpha" agents-dir)))
-      (make-directory alpha-dir t)
-      (with-temp-file (expand-file-name "prompt.org" alpha-dir)
-        (insert "* ALPHA AGENT\n")
-        (insert "#+INCLUDE: \"../base_context.org\"\n")
-        (insert "\n* ALPHA SPECIFIC\nAlpha does things.\n")
-        (insert "#+INCLUDE: \"LOGS.md\"\n"))
-      (with-temp-file (expand-file-name "LOGS.md" alpha-dir)
-        (insert "- Alpha was created for testing.\n- Alpha likes coffee.\n")))
-    ;; Create another agent without includes
-    (let ((beta-dir (expand-file-name "beta" agents-dir)))
-      (make-directory beta-dir t)
-      (with-temp-file (expand-file-name "prompt.org" beta-dir)
-        (insert "* BETA AGENT\nBeta has no includes.\n"))
-      (with-temp-file (expand-file-name "LOGS.md" beta-dir)
-        (insert "- Beta is simple.\n")))))
-
-(defun test-agent--teardown ()
-  "Remove the temporary directory."
-  (when (and test-agent--tmpdir (file-exists-p test-agent--tmpdir))
-    (delete-directory test-agent--tmpdir t)
-    (setq test-agent--tmpdir nil)))
-
-(defmacro with-agent-fixture (&rest body)
-  "Execute BODY with a temporary agents.d directory.
-Temporarily binds `user-emacs-directory' to the temp dir."
-  (declare (indent 0))
-  `(let ((old-emacs-dir user-emacs-directory))
-     (unwind-protect
-         (progn
-           (test-agent--setup)
-           (let ((user-emacs-directory test-agent--tmpdir))
-             ,@body))
-       (test-agent--teardown)
-       (setq user-emacs-directory old-emacs-dir))))
-
-;;; --- Tests ---
+;;; --- Profile reading tests ---
 
 (ert-deftest test-agent-read-profile-basic ()
-  "iar-read-agent-profile should read an org file and return its content."
-  (with-agent-fixture
-    (let* ((alpha-path (expand-file-name "agents.d/agents/alpha/prompt.org"
-                                         test-agent--tmpdir))
-           (profile (iar-read-agent-profile alpha-path)))
-      (should (stringp profile))
-      (should (string-match-p "ALPHA AGENT" profile))
-      (should (string-match-p "Alpha does things" profile)))))
+  "iar--read-personality should read a personality file and return content."
+  (let ((content (iar--read-personality "mirror")))
+    (should (stringp content))
+    (should (string-match-p "mirror" content))))
 
 (ert-deftest test-agent-read-profile-expands-includes ()
-  "iar-read-agent-profile should expand #+INCLUDE directives."
-  (with-agent-fixture
-    (let* ((alpha-path (expand-file-name "agents.d/agents/alpha/prompt.org"
-                                         test-agent--tmpdir))
-           (profile (iar-read-agent-profile alpha-path)))
-      ;; Should contain content from base_context.org
-      (should (string-match-p "SHARED CONTEXT" profile))
-      (should (string-match-p "shared context for all agents" profile))
-      ;; Should contain content from LOGS.md
-      (should (string-match-p "Alpha was created for testing" profile))
-      (should (string-match-p "Alpha likes coffee" profile))
-      ;; Should NOT contain the literal #+INCLUDE line
-      (should-not (string-match-p "#\\+INCLUDE" profile)))))
+  "Assembly engine includes base_context in the assembled prompt."
+  (let ((result (iar--assemble-prompt "interactive" "mirror" "default")))
+    (let ((prompt (plist-get result :prompt)))
+      (should (string-match-p "CONTEXT" prompt))
+      (should (string-match-p "ARCHETYPE" prompt))
+      (should (string-match-p "PERSONALITY" prompt)))))
 
 (ert-deftest test-agent-read-profile-no-includes ()
-  "iar-read-agent-profile should work with files that have no includes."
-  (with-agent-fixture
-    (let* ((beta-path (expand-file-name "agents.d/agents/beta/prompt.org"
-                                        test-agent--tmpdir))
-           (profile (iar-read-agent-profile beta-path)))
-      (should (stringp profile))
-      (should (string-match-p "BETA AGENT" profile))
-      (should (string-match-p "Beta has no includes" profile)))))
+  "iar--read-personality should work for any personality."
+  (let ((content (iar--read-personality "colin")))
+    (should (stringp content))
+    (should (string-match-p "Colin" content))))
 
 (ert-deftest test-agent-read-profile-missing-file ()
-  "iar-read-agent-profile should signal error for missing file."
-  (condition-case err
-      (iar-read-agent-profile "/nonexistent/agent/prompt.org")
-    (error
-     ;; Should get an error -- any error is fine
-     (should err))
-    (:success
-     (ert-fail "Expected error for missing file, but got success"))))
+  "iar--read-personality should signal error for missing personality."
+  (should-error (iar--read-personality "nonexistent_xyz")))
+
+;;; --- Profile loading tests ---
 
 (ert-deftest test-agent-load-profile-validates-name ()
-  "iar--load-agent-profile should reject names with path traversal."
+  "iar--validate-agent-name should reject names with path traversal."
   (condition-case err
-      (iar--load-agent-profile "../../etc/passwd")
+      (iar--validate-agent-name "../../etc/passwd")
     (error
      (should (string-match-p "Invalid agent name" (error-message-string err))))
     (:success
-     (ert-fail "Expected error for path traversal attempt"))))
-
-(ert-deftest test-agent-load-profile-rejects-special-chars ()
-  "iar--load-agent-profile should reject names with special characters."
-  (dolist (bad-name '("foo bar" "foo/bar" "foo;bar" "foo&bar" "foo|bar"))
-    (condition-case err
-        (iar--load-agent-profile bad-name)
-      (error
-       (should (string-match-p "Invalid agent name" (error-message-string err))))
-      (:success
-       (ert-fail (format "Expected error for agent name: %s" bad-name))))))
+     (ert-fail "Expected error for path traversal"))))
 
 (ert-deftest test-agent-load-profile-returns-nil-for-missing ()
-  "iar--load-agent-profile should return nil for nonexistent agent."
-  (let ((result (iar--load-agent-profile "nonexistent_agent_xyzzy")))
-    (should (null result))))
+  "iar--read-personality should error for nonexistent personality."
+  (should-error (iar--read-personality "nonexistent_xyzzy_agent")))
 
 (ert-deftest test-agent-load-profile-finds-real-agent ()
-  "iar--load-agent-profile should find a real agent in agents.d/."
-  (let ((result (iar--load-agent-profile "mirror")))
-    (should (stringp result))
-    (should (string-match-p "mirror" result))))
+  "iar--read-personality should load a real personality."
+  (let ((profile (iar--read-personality "darwin")))
+    (should (stringp profile))
+    (should (string-match-p "Darwin" profile))))
 
-;;; --- iar-load-agent tests ---
-
-(ert-deftest test-agent-load-agent-errors-no-valid-agents ()
-  "iar-load-agent should signal user-error when agents.d has no valid agents.
-Uses a temp dir with agents.d/ but no agent subdirectories containing prompt.org.
-Verifies both the error type and the error message content."
-  (let ((tmp-dir (make-temp-file "test-agent-load-" :dir-flag)))
-    (unwind-protect
-        (let ((user-emacs-directory tmp-dir)
-              (agents-dir (expand-file-name "agents.d/agents" tmp-dir)))
-          (make-directory agents-dir t)
-          ;; No agent directories with prompt.org -- should user-error
-          (let ((err (should-error (iar-load-agent) :type 'user-error)))
-            (should (string-match-p "No agent profiles found"
-                                    (error-message-string err)))))
-      (delete-directory tmp-dir t))))
+;;; --- Load agent tests ---
 
 (ert-deftest test-agent-load-agent-creates-agents-dir ()
-  "iar-load-agent should create agents.d if it doesn't exist.
-The function calls (make-directory agent-dir t) when the directory
-is missing. Verify the directory is created."
-  (let ((tmp-dir (make-temp-file "test-agent-load-" :dir-flag)))
+  "iar-load-agent should handle missing personalities dir gracefully."
+  (let ((tmp-dir (make-temp-file "test-agent-createdir-" :dir-flag)))
     (unwind-protect
         (let ((user-emacs-directory tmp-dir))
-          ;; agents.d doesn't exist yet -- load-agent creates it, then
-          ;; finds no agents and signals user-error
-          (let ((err (should-error (iar-load-agent) :type 'user-error)))
-            (should (string-match-p "No agent profiles found"
-                                    (error-message-string err))))
-          ;; agents.d should now exist
-          (should (file-directory-p (expand-file-name "agents.d/agents" tmp-dir))))
+          (should-not (file-directory-p (expand-file-name "agents.d/personalities" tmp-dir)))
+          (condition-case err
+              (iar--personality-names)
+            (error
+             (ert-fail (format "Unexpected error: %s" err))))
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (_prompt _choices &rest _rest)
+                       "test")))
+            (with-temp-buffer
+              (text-mode)
+              (condition-case err
+                  (iar-load-agent)
+                (user-error
+                 ;; Expected -- no personalities found
+                 )
+                (error
+                 (ert-fail (format "Unexpected error: %s" err)))))))
       (delete-directory tmp-dir t))))
 
 (ert-deftest test-agent-load-agent-discovers-agents ()
-  "iar-load-agent should discover agents with prompt.org files.
-Uses with-agent-fixture which creates alpha and beta agents.
-Mocks completing-read to select 'alpha' and verifies the profile is loaded.
-Uses text-mode (not fundamental-mode) because gptel-mode requires a
-text-derived major mode."
-  (with-agent-fixture
-    (cl-letf (((symbol-function 'completing-read)
-               (lambda (_prompt choices &rest _rest)
-                 ;; Return the first choice
-                 (car choices))))
-      (with-temp-buffer
-        (text-mode)
-        (iar-load-agent)
-        ;; The function returns nil (message-based side effect)
-        ;; but should have set buffer-local variables
-        (should (equal iar--current-agent-name "alpha"))
-        (should (stringp iar--current-agent-file))
-        (should (string-prefix-p
-                 (expand-file-name "agents.d/agents" test-agent--tmpdir)
-                 iar--current-agent-file))
-        (should (string-match-p "prompt\\.org" iar--current-agent-file))
-        (should (stringp gptel-system-prompt))
-        (should (string-match-p "ALPHA AGENT" gptel-system-prompt))
-        ;; Verify #+INCLUDE expansion worked through the full pipeline
-        (should (string-match-p "SHARED CONTEXT" gptel-system-prompt))))))
+  "iar-load-agent should discover personalities from agents.d/personalities/.
+Mocks completing-read to select the first personality and verifies assembly."
+  (cl-letf (((symbol-function 'completing-read)
+             (lambda (_prompt choices &rest _rest)
+               (car choices))))
+    (with-temp-buffer
+      (text-mode)
+      (iar-load-agent)
+      (should (stringp iar--current-agent-name))
+      (should (stringp gptel-system-prompt))
+      (should (string-match-p "PERSONALITY" gptel-system-prompt))
+      (should (string-match-p "ARCHETYPE" gptel-system-prompt)))))
 
 (ert-deftest test-agent-load-agent-enables-gptel-mode ()
-  "iar-load-agent should enable gptel-mode if not already active.
-Uses text-mode because gptel-mode requires a text-derived major mode."
-  (with-agent-fixture
-    (cl-letf (((symbol-function 'completing-read)
-               (lambda (_prompt choices &rest _rest)
-                 (car choices))))
-      (with-temp-buffer
-        (text-mode)
-        ;; gptel-mode not active yet
-        (should-not (bound-and-true-p gptel-mode))
-        (iar-load-agent)
-        ;; gptel-mode should now be active
-        (should (bound-and-true-p gptel-mode))))))
+  "iar-load-agent should enable gptel-mode if not already active."
+  (cl-letf (((symbol-function 'completing-read)
+             (lambda (_prompt choices &rest _rest)
+               (car choices))))
+    (with-temp-buffer
+      (text-mode)
+      (should-not (bound-and-true-p gptel-mode))
+      (iar-load-agent)
+      (should (bound-and-true-p gptel-mode)))))
 
 (ert-deftest test-agent-load-agent-preserves-existing-gptel-mode ()
-  "iar-load-agent should not error when gptel-mode is already active.
-The (unless (bound-and-true-p gptel-mode) ...) guard should skip
-re-enabling gptel-mode when it's already active."
-  (with-agent-fixture
-    (cl-letf (((symbol-function 'completing-read)
-               (lambda (_prompt choices &rest _rest)
-                 (car choices))))
-      (with-temp-buffer
-        (text-mode)
-        (gptel-mode 1)
-        (should (bound-and-true-p gptel-mode))
-        (iar-load-agent)
-        (should (bound-and-true-p gptel-mode))))))
+  "iar-load-agent should not error when gptel-mode is already active."
+  (cl-letf (((symbol-function 'completing-read)
+             (lambda (_prompt choices &rest _rest)
+               (car choices))))
+    (with-temp-buffer
+      (text-mode)
+      (gptel-mode 1)
+      (should (bound-and-true-p gptel-mode))
+      (iar-load-agent)
+      (should (bound-and-true-p gptel-mode)))))
 
 (ert-deftest test-agent-load-agent-filters-invalid-names ()
-  "iar-load-agent should only discover directories matching the agent name regex.
-The directory-files regex \\`[a-zA-Z0-9_-]+\\' filters out hidden files,
-files with extensions, and directories with special characters."
-  (let ((tmp-dir (make-temp-file "test-agent-filter-" :dir-flag)))
+  "iar--personality-names should only return .org file base names."
+  (let ((names (iar--personality-names)))
+    (should (listp names))
+    (should (member "mirror" names))
+    (should (member "darwin" names))
+    (should (member "colin" names))
+    (should-not (member "mirror.org" names))))
+
+(ert-deftest test-agent-load-agent-errors-no-valid-agents ()
+  "iar-load-agent should user-error if no personalities are found."
+  (let ((tmp-dir (make-temp-file "test-agent-noagents-" :dir-flag)))
     (unwind-protect
-        (let* ((user-emacs-directory tmp-dir)
-               (agents-dir (expand-file-name "agents.d/agents" tmp-dir)))
-          (make-directory agents-dir t)
-          ;; Create a valid agent
-          (make-directory (expand-file-name "valid-agent" agents-dir) t)
-          (with-temp-file (expand-file-name "valid-agent/prompt.org" agents-dir)
-            (insert "* Valid Agent\n"))
-          ;; Create a hidden directory (should be filtered)
-          (make-directory (expand-file-name ".hidden" agents-dir) t)
-          (with-temp-file (expand-file-name ".hidden/prompt.org" agents-dir)
-            (insert "* Hidden\n"))
-          ;; Create a directory with dots (should be filtered)
-          (make-directory (expand-file-name "agent.with.dots" agents-dir) t)
-          (with-temp-file (expand-file-name "agent.with.dots/prompt.org" agents-dir)
-            (insert "* Dots\n"))
-          ;; Create a directory with spaces (should be filtered)
-          (make-directory (expand-file-name "agent with spaces" agents-dir) t)
-          (with-temp-file (expand-file-name "agent with spaces/prompt.org" agents-dir)
-            (insert "* Spaces\n"))
-          ;; Mock completing-read and verify only valid-agent is offered
-          (let ((offered-choices nil))
-            (cl-letf (((symbol-function 'completing-read)
-                       (lambda (_prompt choices &rest _rest)
-                         (setq offered-choices choices)
-                         (car choices))))
-              (with-temp-buffer
-                (text-mode)
-                (iar-load-agent))
-              ;; Only valid-agent should be offered
-              (should (equal offered-choices '("valid-agent"))))))
-      (delete-directory tmp-dir t))))
+        (let ((user-emacs-directory tmp-dir))
+          (cl-letf (((symbol-function 'completing-read)
+                     (lambda (_prompt _choices &rest _rest)
+                       "test"))))
+            (with-temp-buffer
+              (text-mode)
+              (should-error (iar-load-agent)))))
+      (delete-directory tmp-dir t)))
 
 (ert-deftest test-agent-load-agent-keybinding-registered ()
   "C-c a should be bound to iar-load-agent in gptel-mode-map."

@@ -157,13 +157,19 @@
 ;; ──────────────────────────────────────────────────────────
 ;; Agent modules
 ;; ──────────────────────────────────────────────────────────
-;; Dynamic agent loader
+;; Project parser -- parse project.org files (knowledge, tools, objective)
+(load (expand-file-name "iar-project-parser.el" init-agent-dir))
+
+;; Prompt assembly engine -- assemble from archetype + personality + project
+(load (expand-file-name "iar-prompt-assembly.el" init-agent-dir))
+
+;; Agent loader -- personality selection and prompt assembly (C-c a)
 (load (expand-file-name "iar-agent-loader.el" init-agent-dir))
 
 ;; Dynamic knowledge loader
 (load (expand-file-name "iar-knowledge-loader.el" init-agent-dir))
 
-;; Personality loader -- inject personality into agent prompt (C-c p)
+;; Personality loader -- compatibility shim (merged into agent-loader)
 (load (expand-file-name "iar-personality-loader.el" init-agent-dir))
 
 ;; Buffer info (C-c b, C-c v) -- split from knowledge-loader

@@ -1,0 +1,3 @@
+#+KNOWLEDGE: iar/
+#+TOOLS: list_directory read_file write_file append_file execute_code_local read_task create_task write_subtask remove_task read_history git_commit send_telegram
+#+OBJECTIVE: Documentation sync. Check source files against docs/iar/, fix drift, commit changes. No code modification, no delegate, no reload. Read-only to codebase, read-write to docs.

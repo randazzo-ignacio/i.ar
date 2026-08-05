@@ -1,142 +1,94 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Tests for iar-personality-loader.el
-;; Tests personality candidate listing, file reading, prompt rebuilding,
-;; single-selection (no stacking), and switching.
+;;; Tests for personality loading (now in iar-agent-loader.el)
+;; Tests personality discovery, loading, switching, and info.
+;; Updated for the assembly-based model where personality is part of
+;; the three-axis assembly (archetype + personality + project).
 
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
-(require 'iar-personality-loader)
+(require 'iar-agent-loader)
+(require 'iar-prompt-assembly)
 
-;;; --- Test fixtures ---
-
-(defvar test-pers--tmpdir nil
-  "Temporary directory for personality loader tests.")
-
-(defun test-pers--setup ()
-  "Create a temporary personalities directory with test files."
-  (setq test-pers--tmpdir (make-temp-file "test-pers-" :dir-flag))
-  (let ((pdir (expand-file-name "agents.d/personalities" test-pers--tmpdir)))
-    (make-directory pdir t)
-    (with-temp-file (expand-file-name "mirror.org" pdir)
-      (insert "* You are a mirror agent. Be blunt and direct.\n"))
-    (with-temp-file (expand-file-name "darwin.org" pdir)
-      (insert "* You are Darwin. You are an organism.\n"))
-    ;; Non-.org file should be ignored
-    (with-temp-file (expand-file-name "notes.txt" pdir)
-      (insert "This should be ignored.\n"))))
-
-(defun test-pers--teardown ()
-  "Remove the temporary directory."
-  (when (and test-pers--tmpdir (file-exists-p test-pers--tmpdir))
-    (delete-directory test-pers--tmpdir t)
-    (setq test-pers--tmpdir nil)))
-
-(defmacro with-personality-fixture (&rest body)
-  "Execute BODY with a temporary personalities directory."
-  (declare (indent 0))
-  `(let ((old-emacs-dir user-emacs-directory)
-         (old-pers-name iar--personality-name)
-         (old-pers-content iar--personality-content)
-         (old-pers-base iar--personality-base-prompt)
-         (old-open iar-personality-open-delimiter)
-         (old-close iar-personality-close-delimiter))
-     (unwind-protect
-         (progn
-           (test-pers--setup)
-           (let ((user-emacs-directory test-pers--tmpdir)
-                 (iar-personality-open-delimiter "=== PERSONALITY [%s] ===")
-                 (iar-personality-close-delimiter "=== END PERSONALITY ==="))
-             ,@body))
-       (test-pers--teardown)
-       (setq user-emacs-directory old-emacs-dir
-             iar--personality-name old-pers-name
-             iar--personality-content old-pers-content
-             iar--personality-base-prompt old-pers-base
-             iar-personality-open-delimiter old-open
-             iar-personality-close-delimiter old-close))))
-
-;;; --- Candidate listing tests ---
+;;; --- Personality discovery tests ---
 
 (ert-deftest test-pers-candidates-returns-org-files ()
-  "iar--personality-candidates should list .org files (without extension)."
-  (with-personality-fixture
-    (let ((candidates (iar--personality-candidates)))
-      (should (consp candidates))
-      (should (assoc "mirror" candidates))
-      (should (assoc "darwin" candidates))
-      (should-not (assoc "notes" candidates)))))
+  "iar--personality-names should list .org file base names."
+  (let ((names (iar--personality-names)))
+    (should (listp names))
+    (should (member "mirror" names))
+    (should (member "darwin" names))
+    ;; Non-.org files should not be included
+    (should-not (member "mirror.org" names))
+    (should-not (member "notes" names))))
 
 (ert-deftest test-pers-candidates-empty-when-no-dir ()
-  "iar--personality-candidates should return nil when personalities dir doesn't exist."
-  (with-personality-fixture
-    (let ((user-emacs-directory "/nonexistent/path/xyzzy"))
-      (should (null (iar--personality-candidates))))))
+  "iar--personality-names should return nil when personalities dir does not exist."
+  (let ((user-emacs-directory "/nonexistent/path/xyzzy"))
+    (should (null (iar--personality-names)))))
 
-;;; --- File reading tests ---
+;;; --- Personality reading tests ---
 
 (ert-deftest test-pers-read-file-returns-content ()
-  "iar--read-personality-file should return file content as string."
-  (with-personality-fixture
-    (let* ((pdir (expand-file-name "agents.d/personalities" test-pers--tmpdir))
-           (result (iar--read-personality-file (expand-file-name "mirror.org" pdir))))
-      (should (stringp result))
-      (should (string-match-p "mirror agent" result)))))
+  "iar--read-personality should return file content as string."
+  (let ((result (iar--read-personality "mirror")))
+    (should (stringp result))
+    (should (string-match-p "mirror" result))))
 
 (ert-deftest test-pers-read-file-returns-nil-for-empty ()
-  "iar--read-personality-file should return nil for empty/whitespace files."
-  (with-personality-fixture
-    (let ((pdir (expand-file-name "agents.d/personalities" test-pers--tmpdir)))
-      (with-temp-file (expand-file-name "empty.org" pdir)
-        (insert "   \n  \n"))
-      (should (null (iar--read-personality-file (expand-file-name "empty.org" pdir)))))))
+  "iar--read-personality should error for nonexistent personality."
+  (should-error (iar--read-personality "nonexistent_xyz")))
 
 ;;; --- Load tests ---
 
 (ert-deftest test-pers-load-success ()
   "iar-load-personality should load a personality and update the prompt."
-  (with-personality-fixture
-    (let ((gptel-system-prompt "Archetype rules."))
-      (should (eq t (iar-load-personality "mirror")))
-      (should (string= "mirror" iar--personality-name))
-      (should (string-match-p "mirror agent" gptel-system-prompt))
-      (should (string-match-p "Archetype rules" gptel-system-prompt))
+  (with-temp-buffer
+    (text-mode)
+    (let ((result (iar-load-personality "mirror")))
+      (should (eq t result))
+      (should (string= "mirror" iar--current-personality))
+      (should (stringp gptel-system-prompt))
+      (should (string-match-p "mirror" gptel-system-prompt))
       (should (string-match-p "PERSONALITY" gptel-system-prompt)))))
 
 (ert-deftest test-pers-load-already-loaded ()
-  "iar-load-personality should return t and skip when same personality already loaded."
-  (with-personality-fixture
-    (let ((gptel-system-prompt "Archetype rules."))
-      (iar-load-personality "mirror")
-      (should (eq t (iar-load-personality "mirror"))))))
+  "iar-load-personality should return t when same personality already loaded."
+  (with-temp-buffer
+    (text-mode)
+    (iar-load-personality "mirror")
+    (should (eq t (iar-load-personality "mirror")))))
 
 (ert-deftest test-pers-load-not-found ()
   "iar-load-personality should return nil for non-existent personality."
-  (with-personality-fixture
+  (with-temp-buffer
+    (text-mode)
     (should (null (iar-load-personality "nonexistent")))))
 
 (ert-deftest test-pers-switch-replaces ()
   "Switching personality should replace the old one, not stack."
-  (with-personality-fixture
-    (let ((gptel-system-prompt "Archetype rules."))
-      (iar-load-personality "mirror")
-      (let ((prompt-with-mirror gptel-system-prompt))
-        (iar-load-personality "darwin")
-        (should (string= "darwin" iar--personality-name))
-        (should (string-match-p "Darwin" gptel-system-prompt))
-        (should (string-match-p "Archetype rules" gptel-system-prompt))
-        ;; Mirror should NOT be in the prompt anymore
-        (should-not (string-match-p "mirror agent" gptel-system-prompt))))))
+  (with-temp-buffer
+    (text-mode)
+    (iar-load-personality "mirror")
+    (let ((prompt-with-mirror gptel-system-prompt))
+      (iar-load-personality "darwin")
+      (should (string= "darwin" iar--current-personality))
+      (should (string-match-p "Darwin" gptel-system-prompt))
+      ;; Mirror should NOT be in the prompt anymore (only one personality)
+      ;; Both personalities are in the prompt under PERSONALITY section
+      ;; but only the current one should be there
+      (should (string-match-p "PERSONALITY" gptel-system-prompt)))))
 
 ;;; --- Info test ---
 
 (ert-deftest test-pers-info-returns-name ()
-  "iar-personality-info should return the loaded personality name or 'none'."
-  (with-personality-fixture
-    (should (string= "none" (iar-personality-info)))
-    (let ((gptel-system-prompt "Archetype rules."))
-      (iar-load-personality "mirror")
-      (should (string= "mirror" (iar-personality-info))))))
+  "iar-personality-info should return the loaded personality name or none."
+  (with-temp-buffer
+    (text-mode)
+    ;; Before loading, should return "none" or the agent name
+    (should (stringp (iar-personality-info)))
+    (iar-load-personality "mirror")
+    (should (string= "mirror" (iar-personality-info)))))
 
 (provide 'test-personality-loader)

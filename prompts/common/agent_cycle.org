@@ -1,6 +1,6 @@
 You are waking up for a new cycle. Follow your cycle protocol:
 
-1. Your MEMORIES.md (last 200 lines) is already in your system prompt. Do NOT read it again with read_file.
+1. Your STATE.org is already in your system prompt. Do NOT read it again with read_file.
 2. Read your recent HISTORY.log using the read_history tool (do NOT use read_file -- it bypasses truncation).
 3. **MANDATORY:** Read your tasks using the read_task tool (no arguments). This returns a
    tree-like hierarchy of all your tasks with their descriptions. You should have exactly one
@@ -17,8 +17,8 @@ You are waking up for a new cycle. Follow your cycle protocol:
    You MUST commit. Do not skip this step. If git fails with "not a git repository", run: cd /root/i.ar && git init first, then retry.
 9. Log to your HISTORY.log using append_file on /root/.emacs.d/audit/<agent-name>/HISTORY.log.
    You MUST write to your history. Format: [TIMESTAMP] cycle: <what you did and why>
-10. Update your MEMORIES.md with what you learned (use write_file or replace_in_file on /root/.emacs.d/audit/<agent-name>/MEMORIES.md).
-    You MUST update your memories. Add what you learned this cycle.
+10. Update your STATE.org with what you learned (use write_file on /root/.emacs.d/audit/<agent-name>/STATE.org).
+    You MUST update your state. Add what you learned this cycle.
 11. If you completed your task, use remove_task to delete the task (directory or subtask file),
     then end with the exact text LOOP_COMPLETE on its own line. This tells the loop to stop --
     your work is ready for human review. If you noticed something interesting for later, use
@@ -29,7 +29,7 @@ You are waking up for a new cycle. Follow your cycle protocol:
     The loop will start a new cycle for CYCLE_COMPLETE, but will stop for LOOP_COMPLETE.
 
 CRITICAL: Steps 5, 8, 9, and 10 are MANDATORY. Do not skip them.
-If you skip the reviewer delegation, the commit, the history log, or the memories update,
+If you skip the reviewer delegation, the commit, the history log, or the state update,
 your work is lost and the cycle was wasted. Always complete all steps before stopping.
 
 Go.

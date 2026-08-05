@@ -152,17 +152,11 @@
 ;;; --- iar--cycle-load-profile tests ---
 
 (ert-deftest test-darwin-load-profile-returns-string ()
-  "iar--cycle-load-profile should return a non-empty string for a valid agent."
-  (let ((user-emacs-directory (make-temp-file "test-darwin-" :dir-flag)))
-    (unwind-protect
-        (let* ((agents-dir (expand-file-name "agents.d/agents" user-emacs-directory))
-               (test-agent-dir (expand-file-name "testagent" agents-dir)))
-          (make-directory test-agent-dir t)
-          (with-temp-file (expand-file-name "prompt.org" test-agent-dir)
-            (insert "* Test Agent\n\nThis is a test agent profile.\n"))
-          (should (stringp (iar--cycle-load-profile "testagent")))
-          (should (< 0 (length (iar--cycle-load-profile "testagent")))))
-      (delete-directory user-emacs-directory t))))
+  "iar--cycle-load-profile should return a non-empty string for a valid personality."
+  (let ((profile (iar--cycle-load-profile "darwin")))
+    (should (stringp profile))
+    (should (< 0 (length profile)))
+    (should (string-match-p "Darwin" profile))))
 
 (ert-deftest test-darwin-load-profile-errors-on-missing ()
   "iar--cycle-load-profile should error for a nonexistent agent."
@@ -230,7 +224,7 @@
     (should (= 0 (plist-get state :exit-code)))
     (should (= 0 (plist-get state :turn-count)))
     (should (= 0 (plist-get state :tool-call-count)))
-    (should (string= "darwin" (plist-get state :agent-name)))
+    (should (string= "darwin" (plist-get state :agent)))
     (should (= 40 (plist-get state :max-turns)))))
 
 ;;; --- Defcustom :safe predicate tests ---

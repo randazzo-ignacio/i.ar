@@ -1,179 +1,203 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Dynamic Agent Loader for gptel
-;; Discovers agent directories under agents.d/<name>/prompt.org
-;; and loads them with #+INCLUDE expansion.
+;;; Agent Loader for gptel -- Assembly-based prompt construction
+;;
+;; Replaces the monolithic prompt.org loading with three-axis assembly:
+;; Archetype (behavioral mode) + Personality (voice) + Project (knowledge/tools/objective).
+;;
+;; C-c a: Select personality -> assemble with interactive archetype + default project.
+;; C-c p: Switch personality -> re-assemble with current archetype + project.
+;;
+;; The assembly engine (iar-prompt-assembly.el) handles:
+;; - Reading archetype, personality, base_context
+;; - Mode-based memory injection (LOGS.md or STATE.org)
+;; - Auto-loading project knowledge
+;; - Tool gating via #+TOOLS metadata
 
 (require 'cl-lib)
 (require 'subr-x)
-(require 'ox)  ; org-export-expand-include-keyword (boot-time require, GUIDELINES.org rule 8)
 (require 'iar-agent-utils)  ; iar--validate-agent-name, iar--path-traversal-check
 (require 'iar-utils)  ; iar--non-blank-p
-(require 'iar-mount-awareness)  ; iar--extra-mounts-prompt-string
+(require 'iar-prompt-assembly)
+(require 'iar-project-parser)
 
 (declare-function gptel-mode "gptel" (&optional arg))
 (defvar gptel-mode-map)
+(defvar gptel-tools)
 
-;; Declared in configs/ (split parameter files) (loaded before init.d modules).
-(defvar iar-personal-file-max-lines nil
-  "Maximum lines to inject from personal files. nil = no limit.")
-(defvar iar-agents-path nil
-  "Relative path to agent profile directories.")
-(defvar iar-audit-path nil
-  "Relative path to audit log directory.")
+;; Declared in configs/ (loaded before init.d modules).
 (defvar iar-key-load-agent nil
   "Keybinding to load an agent personality.")
+(defvar iar-key-load-personality nil
+  "Keybinding to switch personality.")
+(defvar iar-personalities-path nil
+  "Relative path to personality definition files.")
+(defvar iar-archetypes-path nil
+  "Relative path to archetype definition files.")
+(defvar iar-projects-path nil
+  "Relative path to project definition files.")
 
-;;; --- Agent state variables ---
-
-(defvar iar--current-agent-name nil
-  "Name of the currently loaded agent (e.g., \"mccarthy\").
-Set buffer-local by `iar-load-agent' and `iar--tool-reload-agent'.")
-
-(defvar iar--current-agent-file nil
-  "Full path to the currently loaded agent's prompt.org file.
-Set buffer-local by `iar-load-agent' and `iar--tool-reload-agent'.")
-
-;; Declared here so iar-agent-loader can reset them when switching agents.
-;; Defined in iar-knowledge-loader.el.
+;; Declared in iar-knowledge-loader.el.
 (defvar iar--knowledge-base-prompt nil)
 (defvar iar--knowledge-loaded-labels nil)
 (defvar iar--knowledge-blocks nil)
 
-;;; --- Profile reading ---
+;;; --- Agent state variables ---
 
-(defun iar--read-personal-file (agent-name filename)
-  "Read a personal file for AGENT-NAME from the tasks mount.
-FILENAME is the base name (e.g., \"LOGS.md\", \"SUMMARY.md\", \"MEMORIES.md\").
-Returns the file content string, or empty string if the file does not exist.
+(defvar iar--current-agent-name nil
+  "Name of the currently loaded personality (e.g., \"mirror\").
+Set buffer-local by `iar-load-agent'. Alias for `iar--current-personality'
+for backward compatibility with audit logging and path resolution.")
 
-If the file exceeds `iar-personal-file-max-lines' lines, only the
-last N lines are returned with a truncation notice prepended.  The full
-file remains on disk -- this only affects what goes into the LLM context.
-This replaces the old #+INCLUDE approach -- personal files are injected
-programmatically from the tasks mount rather than via org-mode includes."
-  (let* ((audit-base (expand-file-name iar-audit-path user-emacs-directory))
-         (filepath (expand-file-name (format "%s/%s" agent-name filename) audit-base)))
-    (if (file-exists-p filepath)
-        (with-temp-buffer
-          (insert-file-contents filepath)
-          (if (and (integerp iar-personal-file-max-lines)
-                   (> (count-lines (point-min) (point-max))
-                      iar-personal-file-max-lines))
-              ;; Truncate: keep last N lines with notice
-              (let* ((total-lines (count-lines (point-min) (point-max)))
-                     (max-lines iar-personal-file-max-lines))
-                (goto-char (point-min))
-                (forward-line (- total-lines max-lines))
-                (let ((truncated-content
-                       (string-trim (buffer-substring-no-properties (point) (point-max)))))
-                  (format "[... %d lines truncated, showing last %d lines ...]\n\n%s"
-                          (- total-lines max-lines) max-lines truncated-content)))
-            ;; No truncation needed
-            (string-trim (buffer-string))))
-      "")))
+(defvar iar--current-agent-file nil
+  "Full path to the currently loaded personality's .org file.
+Set buffer-local by `iar-load-agent'. Kept for backward compat.")
 
-(defun iar--inject-personal-files (profile agent-name)
-  "Append personal files (LOGS.md, SUMMARY.md, and optionally MEMORIES.md)
-to PROFILE string for AGENT-NAME.
-These are injected programmatically from the tasks mount, replacing
-the old #+INCLUDE approach that required the files to sit next to
-prompt.org in the agents.d directory."
-  (let* ((logs (iar--read-personal-file agent-name "LOGS.md"))
-         (summary (iar--read-personal-file agent-name "SUMMARY.md"))
-         ;; Darwin uses MEMORIES.md instead of LOGS.md + SUMMARY.md
-         (memories (iar--read-personal-file agent-name "MEMORIES.md"))
-         (parts (list profile)))
-    ;; Darwin's MEMORIES.md replaces LOGS.md + SUMMARY.md
-    (when (and (iar--non-blank-p memories)
-               (not (iar--non-blank-p logs))
-               (not (iar--non-blank-p summary)))
-      (push (format "\n\n%s" memories) parts))
-    ;; Standard agents: LOGS.md + SUMMARY.md
-    (when (iar--non-blank-p logs)
-      (push (format "\n\n%s" logs) parts))
-    (when (iar--non-blank-p summary)
-      (push (format "\n\n%s" summary) parts))
-    (mapconcat #'identity (nreverse parts) "")))
+(defvar-local iar--current-archetype nil
+  "Name of the currently loaded archetype (e.g., \"interactive\").")
 
-(defun iar-read-agent-profile (filepath)
-  "Read an Org file, expand all #+INCLUDE directives, and inject personal files.
-Personal files (LOGS.md, SUMMARY.md, MEMORIES.md) are injected from
-the tasks mount, NOT via #+INCLUDE.  This keeps personal data out of
-the agents.d directory (which is the shared prompts repo).
+(defvar-local iar--current-personality nil
+  "Name of the currently loaded personality (e.g., \"mirror\").")
 
-The agent name is derived from FILEPATH's parent directory name."
-  (let* ((agent-name (file-name-nondirectory
-                      (directory-file-name
-                       (file-name-directory filepath))))
-         (profile
-          (with-temp-buffer
-            ;; Anchor the temporary buffer to the agent directory so relative paths work
-            (setq default-directory (file-name-directory filepath))
-            (insert-file-contents filepath)
-            ;; Briefly activate org-mode so the export engine understands the syntax
-            (org-mode)
-            ;; Magically flatten all #+INCLUDE tags into one cohesive document
-            (org-export-expand-include-keyword)
-            (buffer-string))))
-    ;; Inject personal files from tasks mount
-    (iar--inject-personal-files profile agent-name)))
+(defvar-local iar--current-project nil
+  "Name of the currently loaded project (e.g., \"default\").")
 
-(defun iar--load-agent-profile (agent-name)
-  "Load an agent profile by name from agents.d/<name>/prompt.org.
-Validates the agent name, checks for path traversal, and expands
-#+INCLUDE directives via `iar-read-agent-profile'.
-Returns the profile string or nil if not found."
-  (iar--validate-agent-name agent-name)
-  (let* ((agent-dir (expand-file-name iar-agents-path user-emacs-directory))
-         (prompt-path (expand-file-name (format "%s/prompt.org" agent-name) agent-dir)))
-    (unless (string-prefix-p agent-dir (file-truename prompt-path))
-      (error "Path traversal attempt blocked for agent: '%s'" agent-name))
-    (when (file-exists-p prompt-path)
-      (iar-read-agent-profile prompt-path))))
+(defvar-local iar--current-mode nil
+  "Mode symbol for the current session (interactive, autonomous, etc.).")
 
-(defun iar-load-agent ()
-  "Prompt user to select an agent persona and inject it into gptel.
-Discovers agent directories under agents.d/<name>/ containing prompt.org."
-  (interactive)
-  (let* ((agent-dir (expand-file-name iar-agents-path user-emacs-directory))
-         (_ (unless (file-directory-p agent-dir)
-              (make-directory agent-dir t)))
-         ;; Find all subdirectories containing prompt.org
-         (agent-names
-          (cl-remove-if-not
-           (lambda (name)
-             (let ((prompt-path (expand-file-name (format "%s/prompt.org" name) agent-dir)))
-               (file-exists-p prompt-path)))
-           (directory-files agent-dir nil "\\`[a-zA-Z0-9_-]+\\'" t)))
-         (_ (unless agent-names
-              (user-error "No agent profiles found in %s" agent-dir)))
-         (chosen (completing-read "Select Agent Persona: " agent-names nil t))
-         (full-path (expand-file-name (format "%s/prompt.org" chosen) agent-dir))
-         (profile (iar--load-agent-profile chosen)))
-    (unless (bound-and-true-p gptel-mode)
-      (gptel-mode 1))
-    (setq-local gptel-system-prompt
-                (if (fboundp 'iar--extra-mounts-prompt-string)
-                    (concat profile (iar--extra-mounts-prompt-string))
-                  profile))
-    ;; Track which agent file was loaded (for reload_agent tool)
-    ;; Set both buffer-local and global default so debug modules (request
-    ;; logger, FSM tracer, buffer monitor) can resolve the agent name when
-    ;; their advice runs in gptel's process buffers, not the gptel buffer.
-    (setq-local iar--current-agent-file full-path)
-    (setq iar--current-agent-file full-path)
-    ;; Track the agent name (for memory tools and per-agent file paths)
-    (setq-local iar--current-agent-name chosen)
-    (setq iar--current-agent-name chosen)
-    ;; Reset knowledge state when loading a new agent
+;;; --- Personality-to-archetype mapping ---
+
+(defconst iar-personality-archetype-map
+  '(("mirror" . "interactive")
+    ("darwin" . "autonomous")
+    ("gardener" . "continuous")
+    ("librarian" . "continuous")
+    ("davinci" . "interactive")
+    ("colin" . "interactive"))
+  "Mapping from personality names to default archetype names.
+Used by the cycle runner to determine the archetype from the --agent flag.")
+
+;;; --- Personality discovery ---
+
+(defun iar--personality-names ()
+  "Return a list of available personality names (strings).
+Reads from agents.d/personalities/*.org."
+  (let ((pdir (expand-file-name iar-personalities-path user-emacs-directory))
+        names)
+    (when (file-directory-p pdir)
+      (dolist (entry (directory-files pdir nil "\\.org\\'" t))
+        (push (file-name-base entry) names)))
+    (sort names #'string<)))
+
+(defun iar--archetype-for-personality (personality-name)
+  "Return the default archetype for PERSONALITY-NAME.
+Looks up `iar-personality-archetype-map'. Returns \"interactive\" if
+the personality is not in the map."
+  (or (cdr (assoc personality-name iar-personality-archetype-map))
+      "interactive"))
+
+(defun iar--project-for-personality (personality-name)
+  "Return the project name for PERSONALITY-NAME.
+If a project file matching the personality name exists, use it.
+Otherwise, use \"default\"."
+  (let ((project-path (expand-file-name
+                       (format "%s.org" personality-name)
+                       (expand-file-name iar-projects-path user-emacs-directory))))
+    (if (file-exists-p project-path)
+        personality-name
+      "default")))
+
+;;; --- Assembly and buffer setup ---
+
+(defun iar--setup-assembled-buffer (archetype personality project)
+  "Assemble prompt and set up buffer-local state.
+ARCHETYPE, PERSONALITY, PROJECT are name strings.
+Sets gptel-system-prompt, gptel-tools, and all tracking variables.
+Returns the assembled plist."
+  (let ((result (iar--assemble-prompt archetype personality project)))
+    (setq-local gptel-system-prompt (plist-get result :prompt))
+    (setq-local gptel-tools (plist-get result :tools))
+    (setq-local iar--current-archetype archetype)
+    (setq-local iar--current-personality personality)
+    (setq-local iar--current-project project)
+    (setq-local iar--current-mode (plist-get result :mode))
+    ;; Backward compat: agent-name = personality name
+    (setq-local iar--current-agent-name personality)
+    (setq iar--current-agent-name personality)
+    ;; Backward compat: agent-file = personality file path
+    (let ((pers-path (expand-file-name
+                      (format "%s.org" personality)
+                      (expand-file-name iar-personalities-path user-emacs-directory))))
+      (setq-local iar--current-agent-file pers-path)
+      (setq iar--current-agent-file pers-path))
+    ;; Reset knowledge state (manual C-c k loads stack on top)
     (setq-local iar--knowledge-base-prompt nil)
     (setq-local iar--knowledge-loaded-labels nil)
     (setq-local iar--knowledge-blocks nil)
-    (message "[OK] Agent %s loaded! Prompt: %d chars (~%d tokens)"
-             chosen (length profile) (/ (length profile) 4))))
+    result))
+
+;;; --- Interactive commands ---
+
+(defun iar-load-agent ()
+  "Prompt user to select a personality and assemble the system prompt.
+Uses the interactive archetype + selected personality + default project.
+This is the primary entry point for interactive sessions (C-c a)."
+  (interactive)
+  (let* ((names (iar--personality-names))
+         (_ (unless names
+              (user-error "No personalities found in %s"
+                          (expand-file-name iar-personalities-path user-emacs-directory))))
+         (chosen (completing-read "Select Personality: " names nil t))
+         (archetype "interactive")
+         (project "default"))
+    (unless (bound-and-true-p gptel-mode)
+      (gptel-mode 1))
+    (let ((result (iar--setup-assembled-buffer archetype chosen project)))
+      (message "[OK] Personality %s loaded! Archetype: %s, Project: %s. Prompt: %d chars (~%d tokens)"
+               chosen archetype project
+               (length (plist-get result :prompt))
+               (/ (length (plist-get result :prompt)) 4)))))
+
+(defun iar-load-personality (name)
+  "Non-interactively switch personality to NAME.
+Re-assembles the prompt with the current archetype and project.
+Returns t if loaded, nil if personality not found."
+  (let* ((names (iar--personality-names))
+         (archetype (or iar--current-archetype "interactive"))
+         (project (or iar--current-project "default")))
+    (if (not (member name names))
+        (progn
+          (message "[personality] '%s' not found" name)
+          nil)
+      (let ((result (iar--setup-assembled-buffer archetype name project)))
+        (message "[personality] Switched to '%s'. Prompt: %d chars (~%d tokens)"
+                 name (length (plist-get result :prompt))
+                 (/ (length (plist-get result :prompt)) 4))
+        t))))
+
+(defun iar-load-personality-interactive ()
+  "Prompt user to select a personality and switch to it.
+Re-assembles the prompt with the current archetype and project.
+This is C-c p -- switch personality mid-session."
+  (interactive)
+  (unless (bound-and-true-p gptel-mode)
+    (gptel-mode 1))
+  (let* ((names (iar--personality-names))
+         (_ (unless names
+              (user-error "No personalities found in %s"
+                          (expand-file-name iar-personalities-path user-emacs-directory))))
+         (name (completing-read "Switch personality: " names nil t)))
+    (iar-load-personality name)))
+
+(defun iar-personality-info ()
+  "Return a string describing the currently loaded personality.
+Used by iar-prompt-info to display personality in the prompt breakdown."
+  (or iar--current-personality
+      iar--current-agent-name
+      "none"))
 
 (with-eval-after-load 'gptel
-  (keymap-set gptel-mode-map iar-key-load-agent #'iar-load-agent))
+  (keymap-set gptel-mode-map iar-key-load-agent #'iar-load-agent)
+  (keymap-set gptel-mode-map iar-key-load-personality #'iar-load-personality-interactive))
 
 (provide 'iar-agent-loader)

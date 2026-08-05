@@ -10,6 +10,7 @@
 (require 'cl-lib)
 (require 'subr-x)
 (require 'iar-delegate-tool)
+(require 'iar-prompt-assembly)
 
 ;;; --- Validation tests ---
 
@@ -29,15 +30,12 @@
 
 (ert-deftest test-delegate-validates-agent-name-traversal ()
   "delegate tool should reject agent names with path traversal characters.
-The error from iar--load-agent-profile propagates through the callback."
+The error from assembly (iar--read-personality) is caught and returned via callback."
   (dolist (bad-name '("../etc" "foo/bar" "foo;bar" "foo bar"))
-    (condition-case err
-        (iar--tool-delegate (lambda (_r)) bad-name "task" "ctx")
-      (error
-       (should (string-match-p "Invalid agent name"
-                               (error-message-string err))))
-      (:success
-       (ert-fail (format "Expected error for agent name: %s" bad-name))))))
+    (let ((result nil))
+      (iar--tool-delegate (lambda (r) (setq result r)) bad-name "task" "ctx")
+      (should result)
+      (should (string-match-p "error" result)))))
 
 ;;; --- Depth tracking tests ---
 
@@ -67,9 +65,9 @@ The error from iar--load-agent-profile propagates through the callback."
 ;;; --- Profile loading tests ---
 
 (ert-deftest test-delegate-load-profile-validates-name ()
-  "iar--load-agent-profile should reject path traversal in agent name."
+  "iar--validate-agent-name should reject path traversal in agent name."
   (condition-case err
-      (iar--load-agent-profile "../../etc/passwd")
+      (iar--validate-agent-name "../../etc/passwd")
     (error
      (should (string-match-p "Invalid agent name" (error-message-string err))))
     (:success
@@ -77,13 +75,13 @@ The error from iar--load-agent-profile propagates through the callback."
 
 (ert-deftest test-delegate-load-profile-finds-real-agent ()
   "iar--load-agent-profile should load a real agent profile."
-  (let ((profile (iar--load-agent-profile "darwin")))
+  (let ((profile (iar--read-personality "darwin")))
     (should (stringp profile))
-    (should (string-match-p "darwin" profile))))
+    (should (string-match-p "Darwin" profile))))
 
 (ert-deftest test-delegate-load-profile-returns-nil-for-missing ()
-  "iar--load-agent-profile should return nil for nonexistent agent."
-  (should (null (iar--load-agent-profile "nonexistent_xyzzy_agent"))))
+  "iar--read-personality should error for nonexistent personality."
+  (should-error (iar--read-personality "nonexistent_xyzzy_agent")))
 
 ;;; --- Timeout parsing tests ---
 
@@ -91,7 +89,7 @@ The error from iar--load-agent-profile propagates through the callback."
   "delegate tool should accept integer timeout and pass it to spawn."
   (let ((captured-timeout nil))
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
-               (lambda (_cb _agent _task _ctx timeout-secs _profile)
+               (lambda (_cb _agent _task _ctx timeout-secs _profile _tools)
                  (setq captured-timeout timeout-secs))))
       (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" 30))
     (should (= captured-timeout 30))))
@@ -100,7 +98,7 @@ The error from iar--load-agent-profile propagates through the callback."
   "delegate tool should convert string timeout to integer."
   (let ((captured-timeout nil))
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
-               (lambda (_cb _agent _task _ctx timeout-secs _profile)
+               (lambda (_cb _agent _task _ctx timeout-secs _profile _tools)
                  (setq captured-timeout timeout-secs))))
       (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" "30"))
     (should (= captured-timeout 30))))
@@ -109,7 +107,7 @@ The error from iar--load-agent-profile propagates through the callback."
   "delegate tool should default timeout to 600 when nil."
   (let ((captured-timeout nil))
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
-               (lambda (_cb _agent _task _ctx timeout-secs _profile)
+               (lambda (_cb _agent _task _ctx timeout-secs _profile _tools)
                  (setq captured-timeout timeout-secs))))
       (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" nil))
     (should (= captured-timeout 600))))
@@ -123,7 +121,7 @@ The error from iar--load-agent-profile propagates through the callback."
   "delegate tool should clamp negative timeout to 1 second."
   (let ((captured-timeout nil))
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
-               (lambda (_cb _agent _task _ctx timeout-secs _profile)
+               (lambda (_cb _agent _task _ctx timeout-secs _profile _tools)
                  (setq captured-timeout timeout-secs))))
       (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" -5))
     (should (= captured-timeout 1))))
@@ -132,7 +130,7 @@ The error from iar--load-agent-profile propagates through the callback."
   "delegate tool should clamp zero timeout to 1 second."
   (let ((captured-timeout nil))
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
-               (lambda (_cb _agent _task _ctx timeout-secs _profile)
+               (lambda (_cb _agent _task _ctx timeout-secs _profile _tools)
                  (setq captured-timeout timeout-secs))))
       (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" 0))
     (should (= captured-timeout 1))))
@@ -141,7 +139,7 @@ The error from iar--load-agent-profile propagates through the callback."
   "delegate tool should floor float timeout to integer."
   (let ((captured-timeout nil))
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
-               (lambda (_cb _agent _task _ctx timeout-secs _profile)
+               (lambda (_cb _agent _task _ctx timeout-secs _profile _tools)
                  (setq captured-timeout timeout-secs))))
       (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" 30.7))
     (should (= captured-timeout 30))))
@@ -309,7 +307,7 @@ The error from iar--load-agent-profile propagates through the callback."
            (progn
              (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "do something" "ctx" 30
-                        "You are a test agent."))
+                        "You are a test agent." nil))
              (should (buffer-live-p buf))
              (should (string-match-p "gptel-delegate" (buffer-name buf))))
         (when (buffer-live-p buf) (kill-buffer buf))))))
@@ -322,7 +320,7 @@ The error from iar--load-agent-profile propagates through the callback."
            (progn
              (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "do something" "ctx" 30
-                        "You are a test agent."))
+                        "You are a test agent." nil))
              (with-current-buffer buf
                (should (= iar--delegate-depth 1))))
         (when (buffer-live-p buf) (kill-buffer buf))))))
@@ -337,7 +335,7 @@ The error from iar--load-agent-profile propagates through the callback."
              (progn
                (setq buf (iar--spawn-async-delegate
                           (lambda (_r)) "testagent" "do something" "ctx" 30
-                          "You are a test agent."))
+                          "You are a test agent." nil))
                (with-current-buffer buf
                  (should (= iar--delegate-depth 3))))
           (when (buffer-live-p buf) (kill-buffer buf)))))))
@@ -350,7 +348,7 @@ The error from iar--load-agent-profile propagates through the callback."
            (progn
              (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "review the code" "some context" 30
-                        "You are a test agent."))
+                        "You are a test agent." nil))
              (with-current-buffer buf
                (should (string-match-p "DELEGATED TASK" (buffer-string)))
                (should (string-match-p "review the code" (buffer-string)))
@@ -365,7 +363,7 @@ The error from iar--load-agent-profile propagates through the callback."
            (progn
              (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "task" "ctx" 30
-                        "You are a test agent profile."))
+                        "You are a test agent profile." nil))
              (with-current-buffer buf
                (should (string= gptel-system-prompt "You are a test agent profile."))))
         (when (buffer-live-p buf) (kill-buffer buf))))))
@@ -378,7 +376,7 @@ The error from iar--load-agent-profile propagates through the callback."
            (progn
              (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "task" "ctx" 30
-                        "You are a test agent."))
+                        "You are a test agent." nil))
              (with-current-buffer buf
                (should (> (length (if (boundp 'iar-gptel-post-response-functions)
                                       iar-gptel-post-response-functions
@@ -393,7 +391,7 @@ The error from iar--load-agent-profile propagates through the callback."
            (progn
              (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "task" "ctx" 30
-                        "You are a test agent."))
+                        "You are a test agent." nil))
              (with-current-buffer buf
                (should (> (length (if (boundp 'iar-gptel-pre-tool-call-functions)
                                       iar-gptel-pre-tool-call-functions
@@ -411,7 +409,7 @@ The error from iar--load-agent-profile propagates through the callback."
              (progn
                (setq buf (iar--spawn-async-delegate
                           (lambda (_r)) "testagent" "task" "ctx" 30
-                          "You are a test agent."))
+                          "You are a test agent." nil))
                (with-current-buffer buf
                  (should (= iar--delegate-depth iar-delegate-max-depth))
                  (let ((has-delegate
@@ -430,7 +428,7 @@ The error from iar--load-agent-profile propagates through the callback."
            (progn
              (setq buf (iar--spawn-async-delegate
                         (lambda (_r)) "testagent" "task" "ctx" 30
-                        "You are a test agent."))
+                        "You are a test agent." nil))
              (with-current-buffer buf
                (should (< iar--delegate-depth iar-delegate-max-depth))
                (let ((has-delegate
@@ -599,7 +597,7 @@ negatives, but this is defense-in-depth at the consumer level."
              (progn
                (setq buf (iar--spawn-async-delegate
                           (lambda (_r)) "testagent" "do something" "ctx" 30
-                          "You are a test agent."))
+                          "You are a test agent." nil))
                (with-current-buffer buf
                  ;; Depth should be 1 (0 + 1), not -99 (-100 + 1)
                  (should (= iar--delegate-depth 1))))

@@ -66,19 +66,19 @@ prefix, not the filename)."
       (should (member name registered-names)))))
 
 (ert-deftest smoke-agent-directories-exist ()
-  "Expected agent directories should exist under agents.d/."
+  "Expected personality files should exist under agents.d/personalities/."
   :tags '(smoke)
-  (let ((agents-dir (expand-file-name "agents.d/agents" user-emacs-directory))
-        (expected-agents '("colin" "darwin" "davinci"
-                           "gardener" "librarian" "mirror")))
-    (dolist (agent expected-agents)
-      (let ((prompt-path (expand-file-name (format "%s/prompt.org" agent) agents-dir)))
-        (should (file-exists-p prompt-path))))))
+  (let ((pers-dir (expand-file-name "agents.d/personalities" user-emacs-directory))
+        (expected-personalities '("colin" "darwin" "davinci"
+                                  "gardener" "librarian" "mirror")))
+    (dolist (pers expected-personalities)
+      (let ((pers-path (expand-file-name (format "%s.org" pers) pers-dir)))
+        (should (file-exists-p pers-path))))))
 
 (ert-deftest smoke-base-context-exists ()
   "base_context.org should exist at agents.d/."
   :tags '(smoke)
-  (should (file-exists-p (expand-file-name "agents.d/agents/../base_context.org"
+  (should (file-exists-p (expand-file-name "agents.d/base_context.org"
                                            user-emacs-directory))))
 
 (provide 'test-smoke)

@@ -19,13 +19,12 @@ A response with two or more tool calls is a BUG that will hang the system.
 
 ** On Each Tick
 
-1. Your MEMORIES.md (last 200 lines) is already in your system prompt. Do NOT read it again with read_file.
+1. Your STATE.org is already in your system prompt. Do NOT read it again with read_file.
 2. Read your recent HISTORY.log using the read_history tool (do NOT use read_file -- it bypasses truncation).
-3. Read your state file: read_file on /root/.emacs.d/audit/<agent-name>/STATE.org. This contains your last-known state from the previous tick.
-4. Do your agent-specific work as defined in your protocol above.
-5. **MANDATORY:** Log to your HISTORY.log using append_file on /root/.emacs.d/audit/<agent-name>/HISTORY.log. Format: [TIMESTAMP] tick: <what you observed and did>
-6. **MANDATORY:** Update your STATE.org with the current state. Use write_file or replace_in_file on /root/.emacs.d/audit/<agent-name>/STATE.org.
-7. **MANDATORY:** End with the exact text LOOP_COMPLETE on its own line. This tells the runner your tick is done.
+3. Do your agent-specific work as defined in your protocol above.
+4. **MANDATORY:** Log to your HISTORY.log using append_file on /root/.emacs.d/audit/<agent-name>/HISTORY.log. Format: [TIMESTAMP] tick: <what you observed and did>
+5. **MANDATORY:** Update your STATE.org with the current state. Use write_file on /root/.emacs.d/audit/<agent-name>/STATE.org.
+6. **MANDATORY:** End with the exact text LOOP_COMPLETE on its own line. This tells the runner your tick is done.
 
 ** Rules
 
