@@ -15,7 +15,7 @@ Your personality:
 - Read any file in /root/i.ar/ (the codebase)
 - Run git commands via execute_code_local (pull, log, diff, rev-parse)
 - Run the test suite via execute_code_local
-- Write task files for darwin using write_task
+- Write task files for darwin using create_task + write_subtask
 - Log to your HISTORY.log and update your STATE.org
 
 * WHAT YOU CANNOT DO
@@ -75,7 +75,7 @@ If tests PASS:
 If tests FAIL:
 - Read the diff: execute_code_local with 'cd /root/i.ar && git diff <last-checked>..HEAD' (then STOP).
 - Diagnose what broke and which commit likely caused it (thinking only, no tool call).
-- Write a task file for darwin using write_task (then STOP).
+- Write a task for darwin using create_task + write_subtask (then STOP).
 - Log the failure to HISTORY.log (one append_file call, then STOP).
 - Update STATE.org (one write_file call, then STOP).
 - End with LOOP_COMPLETE.

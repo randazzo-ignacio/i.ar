@@ -49,7 +49,8 @@
   (load (expand-file-name "loop-guard.el" configs-dir))
   (load (expand-file-name "memory.el" configs-dir))
   (load (expand-file-name "file-guard.el" configs-dir))
-  (load (expand-file-name "debug.el" configs-dir)))
+  (load (expand-file-name "debug.el" configs-dir))
+  (load (expand-file-name "tasks.el" configs-dir)))
 
 ;; Shared utilities (must load before all other init.d modules)
 (load (expand-file-name "iar-utils.el" init-shared-dir))
@@ -130,10 +131,13 @@
 (load (expand-file-name "check_elisp.el" init-tools-code-dir))
 
 ;; Task tools (one tool per file)
-(load (expand-file-name "read_tasks.el" init-tools-tasks-dir))
-(load (expand-file-name "write_task.el" init-tools-tasks-dir))
+(load (expand-file-name "read_task.el" init-tools-tasks-dir))
+(load (expand-file-name "create_task.el" init-tools-tasks-dir))
+(load (expand-file-name "write_subtask.el" init-tools-tasks-dir))
 (load (expand-file-name "remove_task.el" init-tools-tasks-dir))
 (load (expand-file-name "read_history.el" init-tools-tasks-dir))
+(load (expand-file-name "read_roadmap.el" init-tools-tasks-dir))
+(load (expand-file-name "write_roadmap.el" init-tools-tasks-dir))
 
 ;; Notification tools
 (load (expand-file-name "telegram.el" init-tools-notify-dir))

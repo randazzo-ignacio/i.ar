@@ -418,9 +418,9 @@ summarizer.  TODO.md and IDEAS.md are freely writable."
 The 6 conditional entries are: init.el, init.d/*.el, Containerfile,
 emacboros.sh, containers/, .git/hooks/ (each as separate entry)."
   (with-fg-fixture
-    (should (= (length (iar--guard--active-patterns)) 11)))
+    (should (= (length (iar--guard--active-patterns)) 12)))
   (with-fg-self-mod
-    (should (= (length (iar--guard--active-patterns)) 5))))
+    (should (= (length (iar--guard--active-patterns)) 6))))
 
 (ert-deftest test-fg-guard-reasons-are-descriptive ()
   "Guard check returns should include human-readable reason strings."

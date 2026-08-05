@@ -100,7 +100,8 @@
   (load (expand-file-name "loop-guard.el" configs-dir))
   (load (expand-file-name "memory.el" configs-dir))
   (load (expand-file-name "file-guard.el" configs-dir))
-  (load (expand-file-name "debug.el" configs-dir)))
+  (load (expand-file-name "debug.el" configs-dir))
+  (load (expand-file-name "tasks.el" configs-dir)))
 
 ;; --- Load shared utilities (must be before all other init.d modules) ---
 

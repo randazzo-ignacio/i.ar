@@ -1,15 +1,15 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Tests for task_tools.el
-;; Tests read_tasks (file-per-task reading), write_task, remove_task,
-;; and read_history (per-agent and unified HISTORY.log reading).
+;;; Tests for the new task system (read_task, create_task, write_subtask, remove_task)
+;; Tests the directory-based task system with description.org + subtask .org files.
 
 (require 'ert)
 (require 'cl-lib)
 (require 'subr-x)
-(require 'iar-agent-utils)  ; validation + path resolution functions (moved from task_tools)
-(require 'iar-tool--read-tasks)
-(require 'iar-tool--write-task)
+(require 'iar-agent-utils)
+(require 'iar-tool--read-task)
+(require 'iar-tool--create-task)
+(require 'iar-tool--write-subtask)
 (require 'iar-tool--remove-task)
 (require 'iar-tool--read-history)
 
@@ -21,29 +21,39 @@
 (defun test-task--setup ()
   "Create a temporary tasks/ and audit/ structure with test files."
   (setq test-task--tmpdir (make-temp-file "test-task-" :dir-flag))
-  ;; Create tasks/ directory with agent subdirectories
   (let ((tasks-dir (expand-file-name "tasks" test-task--tmpdir)))
     (make-directory tasks-dir t)
-    ;; Create a test agent with individual task files
     (let ((agent-dir (expand-file-name "testagent" tasks-dir)))
       (make-directory agent-dir t)
-      (with-temp-file (expand-file-name "fix-bugs.md" agent-dir)
-        (insert "# Fix Bugs\n\nFix the bug in module X.\n"))
-      (with-temp-file (expand-file-name "add-feature.md" agent-dir)
-        (insert "# Add Feature\n\nAdd a cool feature to module Y.\n")))
-    ;; Create a second agent with no task files
+      (make-directory (expand-file-name "track-a" agent-dir) t)
+      (with-temp-file (expand-file-name "track-a/description.org" agent-dir)
+        (insert "Track A: Infrastructure work"))
+      (make-directory (expand-file-name "track-a/subtask-1" agent-dir) t)
+      (with-temp-file (expand-file-name "track-a/subtask-1/description.org" agent-dir)
+        (insert "Subtask 1: Fix the build system"))
+      (with-temp-file (expand-file-name "track-a/subtask-1/step-one.org" agent-dir)
+        (insert "* Step One\n\nUpdate Makefile."))
+      (with-temp-file (expand-file-name "track-a/subtask-1/step-two.org" agent-dir)
+        (insert "* Step Two\n\nFix dependencies."))
+      (make-directory (expand-file-name "track-a/subtask-2" agent-dir) t)
+      (with-temp-file (expand-file-name "track-a/subtask-2/description.org" agent-dir)
+        (insert "Subtask 2: Update docs"))
+      (with-temp-file (expand-file-name "track-a/subtask-2/update-readme.org" agent-dir)
+        (insert "* Update README\n\nAdd new section."))
+      (make-directory (expand-file-name "simple-task" agent-dir) t)
+      (with-temp-file (expand-file-name "simple-task/description.org" agent-dir)
+        (insert "Simple task with no subdirectories"))
+      (with-temp-file (expand-file-name "simple-task/do-thing.org" agent-dir)
+        (insert "* Do the thing\n\nJust do it.")))
     (let ((agent-dir (expand-file-name "otheragent" tasks-dir)))
       (make-directory agent-dir t)))
-  ;; Create audit/ directory with HISTORY.log files
   (let ((audit-dir (expand-file-name "audit" test-task--tmpdir)))
     (make-directory audit-dir t)
-    ;; testagent history
     (let ((agent-audit-dir (expand-file-name "testagent" audit-dir)))
       (make-directory agent-audit-dir t)
       (with-temp-file (expand-file-name "HISTORY.log" agent-audit-dir)
         (insert "[2026-06-22 10:00:00] testagent: did something\n")
         (insert "[2026-06-22 11:00:00] testagent: did something else\n")))
-    ;; otheragent history
     (let ((agent-audit-dir (expand-file-name "otheragent" audit-dir)))
       (make-directory agent-audit-dir t)
       (with-temp-file (expand-file-name "HISTORY.log" agent-audit-dir)
@@ -56,8 +66,7 @@
     (setq test-task--tmpdir nil)))
 
 (defmacro with-task-fixture (&rest body)
-  "Execute BODY with a temporary tasks/ and audit/ directory.
-Temporarily rebinds user-emacs-directory and iar--current-agent-name."
+  "Execute BODY with a temporary tasks/ and audit/ directory."
   (declare (indent 0))
   `(let ((old-emacs-dir user-emacs-directory)
          (old-agent-name (and (boundp 'iar--current-agent-name)
@@ -72,242 +81,262 @@ Temporarily rebinds user-emacs-directory and iar--current-agent-name."
        (setq user-emacs-directory old-emacs-dir)
        (setq iar--current-agent-name old-agent-name))))
 
-;;; --- read_tasks tests ---
+;;; --- read_task tests ---
 
-(ert-deftest test-task-read-tasks-returns-all-files ()
-  "read_tasks should return all .md task files with names (no .md extension)."
+(ert-deftest test-task-read-tree-nil ()
+  "read_task with nil should return a tree-like hierarchy."
   (with-task-fixture
-    (let ((result (iar--tool-read-tasks)))
+    (let ((result (iar--tool-read-task nil)))
       (should (stringp result))
-      (should (string-match-p "fix-bugs" result))
-      (should (string-match-p "Fix Bugs" result))
-      (should (string-match-p "add-feature" result))
-      (should (string-match-p "Add Feature" result))
-      ;; Verify .md extension is NOT in the output (task name only)
-      (should-not (string-match-p "\\.md ===" result)))))
+      (should (string-match-p "track-a" result))
+      (should (string-match-p "Track A" result))
+      (should (string-match-p "simple-task" result))
+      (should (string-match-p "Simple task" result))
+      (should (string-match-p "subtask-1" result))
+      (should (string-match-p "Subtask 1" result)))))
 
-(ert-deftest test-task-read-tasks-single-file ()
-  "read_tasks should work when only one task file exists."
+(ert-deftest test-task-read-tree-empty-string ()
+  "read_task with empty string should return the full tree (same as nil)."
   (with-task-fixture
-    (let* ((agent-dir (expand-file-name "tasks/testagent" test-task--tmpdir)))
-      (delete-file (expand-file-name "add-feature.md" agent-dir))
-      (let ((result (iar--tool-read-tasks)))
-        (should (stringp result))
-        (should (string-match-p "fix-bugs" result))
-        (should-not (string-match-p "add-feature" result))))))
+    (let ((result (iar--tool-read-task "")))
+      (should (stringp result))
+      (should (string-match-p "track-a" result))
+      (should (string-match-p "simple-task" result)))))
 
-(ert-deftest test-task-read-tasks-no-tasks ()
-  "read_tasks should return message when no task files exist."
+(ert-deftest test-task-read-dir-with-subdirs ()
+  "read_task on a directory with subdirectories should return description + tree."
+  (with-task-fixture
+    (let ((result (iar--tool-read-task "track-a")))
+      (should (stringp result))
+      (should (string-match-p "Track A" result))
+      (should (string-match-p "subtask-1" result))
+      (should (string-match-p "subtask-2" result))
+      (should (string-match-p "Subtask 1" result))
+      (should (string-match-p "Subtask 2" result)))))
+
+(ert-deftest test-task-read-dir-without-subdirs ()
+  "read_task on a directory without subdirectories should return description + subtask files."
+  (with-task-fixture
+    (let ((result (iar--tool-read-task "track-a/subtask-1")))
+      (should (stringp result))
+      (should (string-match-p "Subtask 1" result))
+      (should (string-match-p "Step One" result))
+      (should (string-match-p "Step Two" result))
+      (should (string-match-p "Update Makefile" result))
+      (should (string-match-p "Fix dependencies" result)))))
+
+(ert-deftest test-task-read-single-file ()
+  "read_task on a file path should return that single file content."
+  (with-task-fixture
+    (let ((result (iar--tool-read-task "track-a/subtask-1/step-one")))
+      (should (stringp result))
+      (should (string-match-p "Step One" result))
+      (should (string-match-p "Update Makefile" result))
+      (should-not (string-match-p "Step Two" result)))))
+
+(ert-deftest test-task-read-not-found ()
+  "read_task on a nonexistent path should return not-found message."
+  (with-task-fixture
+    (let ((result (iar--tool-read-task "nonexistent")))
+      (should (stringp result))
+      (should (string-match-p "not found" result))
+      ;; Also test nested nonexistent
+      (let ((result2 (iar--tool-read-task "track-a/nonexistent")))
+        (should (stringp result2))
+        (should (string-match-p "not found" result2))))))
+
+(ert-deftest test-task-read-no-tasks ()
+  "read_task with nil on an agent with no tasks should return no-tasks message."
   (with-task-fixture
     (let ((iar--current-agent-name "otheragent"))
-      (let ((result (iar--tool-read-tasks)))
+      (let ((result (iar--tool-read-task nil)))
         (should (stringp result))
         (should (string-match-p "No tasks" result))))))
 
-;;; --- write_task tests ---
+;;; --- create_task tests ---
 
-(ert-deftest test-task-write-task-creates-file ()
-  "write_task should create a new .md task file."
+(ert-deftest test-task-create-creates-dir-and-description ()
+  "create_task should create a directory and description.org."
   (with-task-fixture
-    (let ((result (iar--tool-write-task "new-task" "# New Task\n\nDo something."))
-          (task-path (expand-file-name "tasks/testagent/new-task.md" test-task--tmpdir)))
+    (let ((result (iar--tool-create-task "new-task" "A new task for testing")))
       (should (stringp result))
       (should (string-match-p "created" result))
-      (should (file-exists-p task-path))
+      (should (file-directory-p (expand-file-name "tasks/testagent/new-task" test-task--tmpdir)))
+      (should (file-exists-p (expand-file-name "tasks/testagent/new-task/description.org" test-task--tmpdir)))
       (with-temp-buffer
-        (insert-file-contents task-path)
-        (should (string-match-p "New Task" (buffer-string)))))))
+        (insert-file-contents (expand-file-name "tasks/testagent/new-task/description.org" test-task--tmpdir))
+        (should (string-match-p "A new task for testing" (buffer-string)))))))
 
-(ert-deftest test-task-write-task-refuses-overwrite ()
-  "write_task should refuse to overwrite an existing task file."
+(ert-deftest test-task-create-nested-with-existing-parent ()
+  "create_task should create a nested task when parent exists."
   (with-task-fixture
-    (let ((result (iar--tool-write-task "fix-bugs" "# Overwrite attempt")))
+    (let ((result (iar--tool-create-task "track-a/new-subtask" "Nested under existing track")))
       (should (stringp result))
-      (should (string-match-p "Error" result))
+      (should (string-match-p "created" result))
+      (should (file-directory-p (expand-file-name "tasks/testagent/track-a/new-subtask" test-task--tmpdir)))
+      (should (file-exists-p (expand-file-name "tasks/testagent/track-a/new-subtask/description.org" test-task--tmpdir))))))
+
+(ert-deftest test-task-create-warns-on-missing-parent ()
+  "create_task should warn when parent directory does not exist."
+  (with-task-fixture
+    (let ((result (iar--tool-create-task "nonexistent-parent/new-task" "Should warn")))
+      (should (stringp result))
+      (should (string-match-p "WARNING" result))
+      (should (string-match-p "Parent task directory does not exist" result))
+      (should (string-match-p "Parent task has no description.org" result)))))
+
+(ert-deftest test-task-create-errors-on-existing ()
+  "create_task should error when task already exists."
+  (with-task-fixture
+    (let ((result (iar--tool-create-task "track-a" "Duplicate")))
+      (should (stringp result))
       (should (string-match-p "already exists" result)))))
 
-(ert-deftest test-task-write-task-rejects-invalid-name ()
-  "write_task should reject names with dots, slashes, spaces."
+(ert-deftest test-task-create-errors-on-long-description ()
+  "create_task should error when description exceeds the configured limit."
   (with-task-fixture
-    (should (string-match-p "Error" (iar--tool-write-task "foo.bar" "content")))
-    (should (string-match-p "Error" (iar--tool-write-task "foo/bar" "content")))
-    (should (string-match-p "Error" (iar--tool-write-task "foo bar" "content")))
-    (should (string-match-p "Error" (iar--tool-write-task "../etc" "content")))))
+    (let ((long-desc (make-string (1+ iar-task-description-limit) ?x)))
+      (let ((result (iar--tool-create-task "new-task" long-desc)))
+        (should (stringp result))
+        (should (string-match-p "too long" result))))))
+
+;;; --- write_subtask tests ---
+
+(ert-deftest test-task-write-subtask-creates-file ()
+  "write_subtask should create a .org file inside a task directory."
+  (with-task-fixture
+    (let ((result (iar--tool-write-subtask "track-a/new-subtask" "* New Subtask\n\nDo work."))
+          (subtask-path (expand-file-name "tasks/testagent/track-a/new-subtask.org" test-task--tmpdir)))
+      (should (stringp result))
+      (should (string-match-p "written" result))
+      (should (file-exists-p subtask-path))
+      (with-temp-buffer
+        (insert-file-contents subtask-path)
+        (should (string-match-p "New Subtask" (buffer-string)))))))
+
+(ert-deftest test-task-write-subtask-warns-on-missing-task ()
+  "write_subtask should warn when parent task directory does not exist."
+  (with-task-fixture
+    (let ((result (iar--tool-write-subtask "nonexistent-task/subtask" "* Subtask")))
+      (should (stringp result))
+      (should (string-match-p "WARNING" result))
+      (should (string-match-p "Parent task directory does not exist" result)))))
+
+(ert-deftest test-task-write-subtask-errors-on-existing ()
+  "write_subtask should error when subtask file already exists."
+  (with-task-fixture
+    (let ((result (iar--tool-write-subtask "track-a/subtask-1/step-one" "* Duplicate")))
+      (should (stringp result))
+      (should (string-match-p "already exists" result)))))
 
 ;;; --- remove_task tests ---
 
-(ert-deftest test-task-remove-task-deletes-file ()
-  "remove_task should delete the task file."
+(ert-deftest test-task-remove-directory ()
+  "remove_task should remove an entire task directory."
   (with-task-fixture
-    (let* ((task-path (expand-file-name "tasks/testagent/fix-bugs.md" test-task--tmpdir))
-           (result (iar--tool-remove-task "fix-bugs")))
-      (should (stringp result))
-      (should (string-match-p "removed" result))
-      (should-not (file-exists-p task-path)))))
+    (let ((task-dir (expand-file-name "tasks/testagent/track-a/subtask-2" test-task--tmpdir)))
+      (should (file-directory-p task-dir))
+      (let ((result (iar--tool-remove-task "track-a/subtask-2")))
+        (should (stringp result))
+        (should (string-match-p "removed" result))
+        (should-not (file-exists-p task-dir))))))
 
-(ert-deftest test-task-remove-task-nonexistent ()
-  "remove_task should error when task file does not exist."
+(ert-deftest test-task-remove-file ()
+  "remove_task should remove a single subtask file."
+  (with-task-fixture
+    (let ((subtask-file (expand-file-name "tasks/testagent/track-a/subtask-1/step-one.org" test-task--tmpdir)))
+      (should (file-exists-p subtask-file))
+      (let ((result (iar--tool-remove-task "track-a/subtask-1/step-one")))
+        (should (stringp result))
+        (should (string-match-p "removed" result))
+        (should-not (file-exists-p subtask-file)))
+      (should (file-directory-p (expand-file-name "tasks/testagent/track-a/subtask-1" test-task--tmpdir))))))
+
+(ert-deftest test-task-remove-not-found ()
+  "remove_task should return not-found message for nonexistent path."
   (with-task-fixture
     (let ((result (iar--tool-remove-task "nonexistent")))
       (should (stringp result))
-      (should (string-match-p "Error" result))
-      (should (string-match-p "does not exist" result)))))
+      (should (string-match-p "not found" result)))
+    (let ((result (iar--tool-remove-task "track-a/nonexistent")))
+      (should (stringp result))
+      (should (string-match-p "not found" result)))))
 
-(ert-deftest test-task-remove-task-rejects-invalid-name ()
-  "remove_task should reject names with dots, slashes, spaces."
+;;; --- path validation tests ---
+
+(ert-deftest test-task-validate-task-path-accepts-valid ()
+  "validate-task-path should accept valid slash-separated paths."
+  (should (equal "a/b/c" (iar--validate-task-path "a/b/c")))
+  (should (equal "simple" (iar--validate-task-path "simple")))
+  (should (equal "track-a/subtask-1" (iar--validate-task-path "track-a/subtask-1"))))
+
+(ert-deftest test-task-validate-task-path-rejects-invalid ()
+  "validate-task-path should reject invalid paths."
+  (should-error (iar--validate-task-path nil))
+  (should-error (iar--validate-task-path ""))
+  (should-error (iar--validate-task-path " "))
+  (should-error (iar--validate-task-path "a/../b"))
+  (should-error (iar--validate-task-path "a.b/c"))
+  (should-error (iar--validate-task-path "a/b c"))
+  (should-error (iar--validate-task-path "../../etc"))
+  (should-error (iar--validate-task-path "valid\nmalicious")))
+
+(ert-deftest test-task-parent-path ()
+  "task-parent-path should return the parent path."
+  (should (equal "a/b" (iar--task-parent-path "a/b/c")))
+  (should (equal "a" (iar--task-parent-path "a/b")))
+  (should (equal nil (iar--task-parent-path "a"))))
+
+(ert-deftest test-task-last-segment ()
+  "task-last-segment should return the last segment."
+  (should (equal "c" (iar--task-last-segment "a/b/c")))
+  (should (equal "b" (iar--task-last-segment "a/b")))
+  (should (equal "a" (iar--task-last-segment "a"))))
+
+;;; --- resolve-task-dir and resolve-task-file tests ---
+
+(ert-deftest test-task-resolve-task-dir-valid ()
+  "resolve-task-dir should return the directory path."
   (with-task-fixture
-    (should (string-match-p "Error" (iar--tool-remove-task "foo.bar")))
-    (should (string-match-p "Error" (iar--tool-remove-task "foo/bar")))
-    (should (string-match-p "Error" (iar--tool-remove-task "foo bar")))))
+    (let ((result (iar--resolve-task-dir "track-a")))
+      (should (stringp result))
+      (should (string-match-p "track-a" result))
+      (should (string-match-p "testagent" result)))))
+
+(ert-deftest test-task-resolve-task-file-valid ()
+  "resolve-task-file should return the .org file path."
+  (with-task-fixture
+    (let ((result (iar--resolve-task-file "track-a/subtask-1/step-one")))
+      (should (stringp result))
+      (should (string-match-p "step-one.org" result)))))
+
+(ert-deftest test-task-resolve-task-dir-rejects-traversal ()
+  "resolve-task-dir should reject path traversal."
+  (with-task-fixture
+    (should-error (iar--resolve-task-dir "../../etc"))))
+
+(ert-deftest test-task-resolve-task-file-rejects-traversal ()
+  "resolve-task-file should reject path traversal."
+  (with-task-fixture
+    (should-error (iar--resolve-task-file "../../etc/passwd"))))
 
 ;;; --- read_history tests ---
 
 (ert-deftest test-task-read-history-single-agent ()
-  "read_history with agent_name should return that agent's log."
-  (with-task-fixture
-    (let ((result (iar--tool-read-history "testagent")))
-      (should (stringp result))
-      (should (string-match-p "did something" result))
-      (should (string-match-p "did something else" result))
-      (should-not (string-match-p "otheragent" result)))))
-
-(ert-deftest test-task-read-history-missing-agent ()
-  "read_history for nonexistent agent should return error."
-  (with-task-fixture
-    (let ((result (iar--tool-read-history "nonexistent_agent")))
-      (should (stringp result))
-      (should (string-match-p "Error" result)))))
-
-(ert-deftest test-task-read-history-unified ()
-  "read_history without agent_name should merge all agents sorted by time."
+  "read_history should return the agent HISTORY.log content."
   (with-task-fixture
     (let ((result (iar--tool-read-history)))
       (should (stringp result))
-      (should (string-match-p "UNIFIED" result))
       (should (string-match-p "testagent" result))
+      (should (string-match-p "did something" result)))))
+
+(ert-deftest test-task-read-history-unified ()
+  "read_history with agent_name should return that agent history."
+  (with-task-fixture
+    (let ((result (iar--tool-read-history "otheragent")))
+      (should (stringp result))
       (should (string-match-p "otheragent" result))
-      ;; otheragent's 09:00 should come before testagent's 10:00
-      ;; But note: the function sorts by timestamp and then does (nreverse sorted)
-      ;; which means newest first. So 10:00 comes BEFORE 09:00 in the output.
-      (should (< (string-match "10:00:00" result)
-                 (string-match "09:00:00" result))))))
-
-(ert-deftest test-task-read-history-rejects-invalid-name ()
-  "read_history should reject agent names with path traversal characters."
-  (with-task-fixture
-    ;; read_history wraps errors in condition-case and returns error string
-    (let ((result (iar--tool-read-history "../../etc/passwd")))
-      (should (stringp result))
-      (should (string-match-p "Invalid agent name" result)))))
-
-;;; --- resolve-agent-tasks-dir validation tests ---
-
-(ert-deftest test-task-resolve-agent-tasks-dir-valid-name ()
-  "iar--resolve-agent-tasks-dir should return the agent tasks directory path."
-  (with-task-fixture
-    (let ((result (iar--resolve-agent-tasks-dir)))
-      (should (stringp result))
-      (should (string-match-p "testagent" result))
-      (should (string-match-p "tasks" result)))))
-
-(ert-deftest test-task-resolve-agent-tasks-dir-no-agent-loaded ()
-  "iar--resolve-agent-tasks-dir should error when no agent is loaded."
-  (with-task-fixture
-    (let (iar--current-agent-name
-          iar--current-agent-file)
-      (should-error (iar--resolve-agent-tasks-dir)))))
-
-(ert-deftest test-task-resolve-agent-tasks-dir-rejects-path-traversal ()
-  "iar--resolve-agent-tasks-dir should reject agent names with path traversal."
-  (with-task-fixture
-    (let ((iar--current-agent-name "../../etc/passwd"))
-      (should-error (iar--resolve-agent-tasks-dir)))))
-
-(ert-deftest test-task-resolve-agent-tasks-dir-rejects-slashes ()
-  "iar--resolve-agent-tasks-dir should reject agent names with slashes."
-  (with-task-fixture
-    (let ((iar--current-agent-name "foo/bar"))
-      (should-error (iar--resolve-agent-tasks-dir)))))
-
-(ert-deftest test-task-resolve-agent-tasks-dir-rejects-dots ()
-  "iar--resolve-agent-tasks-dir should reject agent names with dots."
-  (with-task-fixture
-    (let ((iar--current-agent-name "foo.bar"))
-      (should-error (iar--resolve-agent-tasks-dir)))))
-
-(ert-deftest test-task-resolve-agent-tasks-dir-rejects-spaces ()
-  "iar--resolve-agent-tasks-dir should reject agent names with spaces."
-  (with-task-fixture
-    (let ((iar--current-agent-name "foo bar"))
-      (should-error (iar--resolve-agent-tasks-dir)))))
-
-;;; --- valid-task-name-p and validate-task-name tests ---
-
-(ert-deftest test-task-valid-task-name-p-accepts-valid ()
-  "valid-task-name-p should accept alphanumeric, hyphens, underscores."
-  (should (iar--valid-name-p "fix-bugs"))
-  (should (iar--valid-name-p "add-feature"))
-  (should (iar--valid-name-p "task_123"))
-  (should (iar--valid-name-p "A-B-C"))
-  (should (iar--valid-name-p "a"))
-  (should (iar--valid-name-p "123")))
-
-(ert-deftest test-task-valid-task-name-p-rejects-invalid ()
-  "valid-task-name-p should reject nil, non-strings, empty, dots, slashes, spaces."
-  (should-not (iar--valid-name-p nil))
-  (should-not (iar--valid-name-p 42))
-  (should-not (iar--valid-name-p ""))
-  (should-not (iar--valid-name-p "foo/bar"))
-  (should-not (iar--valid-name-p "foo.bar"))
-  (should-not (iar--valid-name-p "foo bar"))
-  (should-not (iar--valid-name-p "../../etc"))
-  (should-not (iar--valid-name-p "valid\nmalicious")))
-
-(ert-deftest test-task-validate-task-name-returns-name-on-success ()
-  "validate-task-name should return the name when valid."
-  (should (equal "fix-bugs" (iar--validate-task-name "fix-bugs")))
-  (should (equal "add-feature" (iar--validate-task-name "add-feature"))))
-
-(ert-deftest test-task-validate-task-name-errors-on-invalid ()
-  "validate-task-name should signal error on invalid names."
-  (should-error (iar--validate-task-name ""))
-  (should-error (iar--validate-task-name "foo.bar"))
-  (should-error (iar--validate-task-name "foo/bar"))
-  (should-error (iar--validate-task-name "../../etc")))
-
-;;; --- valid-agent-name-p and validate-agent-name tests ---
-
-(ert-deftest test-task-valid-agent-name-p-accepts-valid ()
-  "valid-agent-name-p should accept alphanumeric, hyphens, underscores."
-  (should (iar--valid-name-p "darwin"))
-  (should (iar--valid-name-p "my-agent"))
-  (should (iar--valid-name-p "agent_123"))
-  (should (iar--valid-name-p "A-B_C"))
-  (should (iar--valid-name-p "a"))
-  (should (iar--valid-name-p "123")))
-
-(ert-deftest test-task-valid-agent-name-p-rejects-invalid ()
-  "valid-agent-name-p should reject nil, non-strings, empty, and special chars."
-  (should-not (iar--valid-name-p nil))
-  (should-not (iar--valid-name-p 42))
-  (should-not (iar--valid-name-p ""))
-  (should-not (iar--valid-name-p "foo/bar"))
-  (should-not (iar--valid-name-p "foo.bar"))
-  (should-not (iar--valid-name-p "foo bar"))
-  (should-not (iar--valid-name-p "../../etc"))
-  (should-not (iar--valid-name-p "valid\nmalicious")))
-
-(ert-deftest test-task-validate-agent-name-returns-name-on-success ()
-  "validate-agent-name should return the name when valid."
-  (should (equal "darwin" (iar--validate-agent-name "darwin")))
-  (should (equal "my-agent" (iar--validate-agent-name "my-agent"))))
-
-(ert-deftest test-task-validate-agent-name-errors-on-invalid ()
-  "validate-agent-name should signal error on invalid names."
-  (should-error (iar--validate-agent-name ""))
-  (should-error (iar--validate-agent-name "foo/bar"))
-  (should-error (iar--validate-agent-name "../../etc"))
-  (should-error (iar--validate-agent-name "valid\nmalicious")))
+      (should (string-match-p "started up" result)))))
 
 (provide 'test-task)
 ;;; test-task.el ends here

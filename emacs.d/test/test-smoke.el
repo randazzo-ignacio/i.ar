@@ -58,7 +58,7 @@ prefix, not the filename)."
   :tags '(smoke)
   (let* ((expected-names '("list_directory" "read_file" "write_file" "append_file"
                            "execute_code_local" "check_elisp"
-                           "read_tasks" "write_task" "remove_task" "read_history"
+                           "read_task" "create_task" "write_subtask" "remove_task" "read_history"
                            "send_telegram" "git_commit"
                            "delegate" "reload_os" "reload_agent"))
          (registered-names (mapcar #'gptel-tool-name (default-value 'gptel-tools))))

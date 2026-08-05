@@ -32,6 +32,9 @@
      t)
     ("/LOGS\\.md\\'"
      "LOGS.md files can only be appended to, not overwritten or modified via replace."
+     t)
+    ("/ROADMAP\\.org\\'"
+     "ROADMAP.org files can only be appended to, not overwritten or modified via replace. Use write_roadmap tool to update."
      t))
   "List of always-active protected path patterns.
 Each entry is (regex reason append-allowed).
