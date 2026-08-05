@@ -312,10 +312,7 @@ fi
 # =============================================================================
 # Parse project config for mounts
 # =============================================================================
-PROJECT_FILE="${PERSONALIZATION_DIR}/../agents.d/projects/${PROJECT_NAME}.org"
-# agents.d is in the prompts/ dir of the repo, not personalization.
-# Find it relative to the repo.
-PROJECT_FILE="${REPO_DIR}/prompts/projects/${PROJECT_NAME}.org"
+PROJECT_FILE="${PERSONALIZATION_DIR}/projects/${PROJECT_NAME}.org"
 PROJECT_MOUNT_ARGS=()
 PROJECT_MOUNT_RO_ARGS=()
 

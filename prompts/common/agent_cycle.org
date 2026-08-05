@@ -15,9 +15,8 @@ You are waking up for a new cycle. Follow your cycle protocol:
 7. If tests fail, revert your change with git: execute_code_local with 'cd /root/i.ar && git checkout -- .'
 8. If tests pass, commit: execute_code_local with 'cd /root/i.ar && git add -A && git commit -m "<agent-name>: <description>"'
    You MUST commit. Do not skip this step. If git fails with "not a git repository", run: cd /root/i.ar && git init first, then retry.
-9. Log to your HISTORY.log using append_file on /root/personalization/audit/<agent-name>/HISTORY.log.
-   You MUST write to your history. Format: [TIMESTAMP] cycle: <what you did and why>
-10. Update your STATE.org with what you learned (use write_file on /root/personalization/audit/<agent-name>/STATE.org).
+9. Log to your HISTORY.log using append_file. Format: [TIMESTAMP] cycle: <what you did and why>
+10. Update your STATE.org with what you learned (use write_file).
     You MUST update your state. Add what you learned this cycle.
 11. If you completed your task, use remove_task to delete the task (directory or subtask file),
     then end with the exact text LOOP_COMPLETE on its own line. This tells the loop to stop --

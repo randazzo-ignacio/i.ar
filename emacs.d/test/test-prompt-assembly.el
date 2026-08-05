@@ -123,12 +123,12 @@
     ;; Check assembly order using delimiter strings (not generic words
     ;; that might appear in knowledge content)
     (let ((prompt (plist-get result :prompt)))
-      (should (string-match-p "CONTEXT" prompt))
+      (should (string-match-p "ENVIRONMENT" prompt))
       (should (string-match-p "=== ARCHETYPE" prompt))
       (should (string-match-p "=== PERSONALITY" prompt))
       (should (string-match-p "=== PROJECT OBJECTIVE" prompt))
-      ;; base_context (CONTEXT) should come before archetype delimiter
-      (should (< (string-match "CONTEXT" prompt)
+      ;; base_context (ENVIRONMENT) should come before archetype delimiter
+      (should (< (string-match "ENVIRONMENT" prompt)
                  (string-match "=== ARCHETYPE" prompt)))
       ;; archetype delimiter should come before personality delimiter
       (should (< (string-match "=== ARCHETYPE" prompt)

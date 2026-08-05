@@ -89,4 +89,4 @@ Month 6 is the proof point. If the vertical slice proves systemic branching work
 4. Design the state tracking system data model
 
 * KNOWLEDGE LOADING
-Load the game's GDD and design documents via C-c k when available. The project knowledge base will be built as the project develops.
+Your project configuration auto-loads documentation into your system prompt. Use C-c k to load additional knowledge bases on top of what is already injected. The game's GDD and design documents will be built as the project develops.

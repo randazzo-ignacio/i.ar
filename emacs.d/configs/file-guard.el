@@ -18,8 +18,14 @@
 ;; the EMACBOROS_SELF_MODIFICATION environment variable).
 
 (defcustom iar-guard-always-protected
-  '(("/agents\\.d/agents/[^/]+/prompt\\.org\\'"
-     "Agent prompt files are protected. Agents cannot modify their own or other agents' prompts."
+  '(("/agents\\.d/archetypes/[^/]+\\.org\\'"
+     "Archetype files are protected. Agents cannot modify behavioral mode definitions."
+     nil)
+    ("/agents\\.d/personalities/[^/]+\\.org\\'"
+     "Personality files are protected. Agents cannot modify their own or other agents' personalities."
+     nil)
+    ("/agents\\.d/cycles/[^/]+\\.org\\'"
+     "Cycle prompt files are protected. Agents cannot modify cycle definitions."
      nil)
     ("/agents\\.d/base_context\\.org\\'"
      "Shared context file (base_context.org) is protected. Agents cannot modify the shared context."

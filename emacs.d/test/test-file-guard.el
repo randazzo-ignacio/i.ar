@@ -7,14 +7,15 @@
 ;; via write_file, replace_in_file, and append_file tools.
 ;;
 ;; Test coverage:
-;; - Always-protected paths (prompt.org, base_context.org, HISTORY.log)
+;; - Always-protected paths (archetypes, personalities, cycles, base_context,
+;;   common templates, HISTORY.log, LOGS.md, ROADMAP.org)
 ;; - Conditionally-protected paths (init.el, init.d/*.el, Containerfile,
 ;;   emacboros.sh, containers/, git hooks)
 ;; - Self-modification mode toggle (relaxes conditional protections)
 ;; - Append exception for HISTORY.log (append is the intended operation)
 ;; - Non-protected paths are always allowed
 ;; - Edge cases (path matching regardless of parent dir, relative paths,
-;;   non-prompt .org files allowed, active-patterns count, descriptive
+;;   non-protected .org files allowed, active-patterns count, descriptive
 ;;   reasons, symlink/truename resolution)
 
 (require 'ert)
@@ -36,39 +37,63 @@
   `(let ((iar-guard-allow-self-modification t))
      ,@body))
 
-;;; --- Always-protected paths: agent prompt files ---
+;;; --- Always-protected paths: personality files ---
 
 (ert-deftest test-fg-write-blocks-agent-prompt ()
-  "write_file should be blocked for any agent's prompt.org."
+  "write_file should be blocked for any personality .org file."
   (with-fg-fixture
     (should (stringp (iar--guard-check-write
-                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))
+                      "/root/.emacs.d/agents.d/personalities/darwin.org")))
     (should (stringp (iar--guard-check-write
-                      "/root/.emacs.d/agents.d/agents/reviewer/prompt.org")))
+                      "/root/.emacs.d/agents.d/personalities/reviewer.org")))
     (should (stringp (iar--guard-check-write
-                      "/root/.emacs.d/agents.d/agents/mccarthy/prompt.org")))))
+                      "/root/.emacs.d/agents.d/personalities/mccarthy.org")))))
 
 (ert-deftest test-fg-replace-blocks-agent-prompt ()
-  "replace_in_file should be blocked for any agent's prompt.org."
+  "replace_in_file should be blocked for any personality .org file."
   (with-fg-fixture
     (should (stringp (iar--guard-check-replace
-                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))))
+                      "/root/.emacs.d/agents.d/personalities/darwin.org")))))
 
 (ert-deftest test-fg-append-blocks-agent-prompt ()
-  "append_file should be blocked for any agent's prompt.org."
+  "append_file should be blocked for any personality .org file."
   (with-fg-fixture
     (should (stringp (iar--guard-check-append
-                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))))
+                      "/root/.emacs.d/agents.d/personalities/darwin.org")))))
 
 (ert-deftest test-fg-prompt-blocked-even-with-self-mod ()
-  "Agent prompt files should remain protected even with self-modification on."
+  "Personality files should remain protected even with self-modification on."
   (with-fg-self-mod
     (should (stringp (iar--guard-check-write
-                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))
+                      "/root/.emacs.d/agents.d/personalities/darwin.org")))
     (should (stringp (iar--guard-check-replace
-                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))
+                      "/root/.emacs.d/agents.d/personalities/darwin.org")))
     (should (stringp (iar--guard-check-append
-                      "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))))
+                      "/root/.emacs.d/agents.d/personalities/darwin.org")))))
+
+;;; --- Always-protected paths: archetype files ---
+
+(ert-deftest test-fg-write-blocks-archetype ()
+  "write_file should be blocked for archetype .org files."
+  (with-fg-fixture
+    (should (stringp (iar--guard-check-write
+                      "/root/.emacs.d/agents.d/archetypes/interactive.org")))
+    (should (stringp (iar--guard-check-write
+                      "/root/.emacs.d/agents.d/archetypes/autonomous.org")))))
+
+(ert-deftest test-fg-append-blocks-archetype ()
+  "append_file should be blocked for archetype .org files."
+  (with-fg-fixture
+    (should (stringp (iar--guard-check-append
+                      "/root/.emacs.d/agents.d/archetypes/interactive.org")))))
+
+;;; --- Always-protected paths: cycle files ---
+
+(ert-deftest test-fg-write-blocks-cycle ()
+  "write_file should be blocked for cycle .org files."
+  (with-fg-fixture
+    (should (stringp (iar--guard-check-write
+                      "/root/.emacs.d/agents.d/cycles/self_modification.org")))))
 
 ;;; --- Always-protected paths: base_context.org ---
 
@@ -106,49 +131,49 @@
   "write_file should be blocked for HISTORY.log files."
   (with-fg-fixture
     (should (stringp (iar--guard-check-write
-                      "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log")))
+                      "/root/personalization/audit/iar/darwin/HISTORY.log")))
     (should (stringp (iar--guard-check-write
-                      "/root/.emacs.d/agents.d/agents/reviewer/HISTORY.log")))))
+                      "/root/personalization/audit/iar/reviewer/HISTORY.log")))))
 
 (ert-deftest test-fg-replace-blocks-history-log ()
   "replace_in_file should be blocked for HISTORY.log files."
   (with-fg-fixture
     (should (stringp (iar--guard-check-replace
-                      "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log")))))
+                      "/root/personalization/audit/iar/darwin/HISTORY.log")))))
 
 (ert-deftest test-fg-append-allows-history-log ()
   "append_file should be ALLOWED for HISTORY.log files (append is intended use)."
   (with-fg-fixture
     (should-not (iar--guard-check-append
-                 "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log"))
+                 "/root/personalization/audit/iar/darwin/HISTORY.log"))
     (should-not (iar--guard-check-append
-                 "/root/.emacs.d/agents.d/agents/reviewer/HISTORY.log"))))
+                 "/root/personalization/audit/iar/reviewer/HISTORY.log"))))
 
 (ert-deftest test-fg-append-allows-logs-md ()
   "append_file should be ALLOWED for LOGS.md files (append is intended use)."
   (with-fg-fixture
     (should-not (iar--guard-check-append
-                 "/root/.emacs.d/agents.d/agents/darwin/LOGS.md"))
+                 "/root/personalization/audit/iar/darwin/LOGS.md"))
     (should-not (iar--guard-check-append
-                 "/root/.emacs.d/agents.d/agents/reviewer/LOGS.md"))))
+                 "/root/personalization/audit/iar/reviewer/LOGS.md"))))
 
 (ert-deftest test-fg-append-allows-history-log-with-self-mod ()
   "append_file should still allow HISTORY.log with self-modification on."
   (with-fg-self-mod
     (should-not (iar--guard-check-append
-                 "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log"))))
+                 "/root/personalization/audit/iar/darwin/HISTORY.log"))))
 
 (ert-deftest test-fg-write-blocks-history-log-with-self-mod ()
   "write_file should still block HISTORY.log with self-modification on."
   (with-fg-self-mod
     (should (stringp (iar--guard-check-write
-                      "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log")))))
+                      "/root/personalization/audit/iar/darwin/HISTORY.log")))))
 
 (ert-deftest test-fg-replace-blocks-history-log-with-self-mod ()
   "replace_in_file should still block HISTORY.log with self-modification on."
   (with-fg-self-mod
     (should (stringp (iar--guard-check-replace
-                      "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log")))))
+                      "/root/personalization/audit/iar/darwin/HISTORY.log")))))
 
 ;;; --- Conditionally-protected paths: init.el ---
 
@@ -374,33 +399,33 @@
                       "/home/user/emacs/init.d/evil_mode.el")))))
 
 (ert-deftest test-fg-write-blocks-prompt-org-anywhere ()
-  "Guard should match prompt.org under any agents.d directory."
+  "Guard should match personality .org files under any agents.d directory."
   (with-fg-fixture
     (should (stringp (iar--guard-check-write
-                      "/some/path/agents.d/agents/custom-agent/prompt.org")))))
+                      "/some/path/agents.d/personalities/custom-agent.org")))))
 
 (ert-deftest test-fg-write-allows-non-prompt-org ()
-  "Guard should NOT block .org files that are not prompt.org, base_context.org,
-or common prompt templates.  LOGS.md is append-only (blocked for write,
-allowed for append -- tested separately).  TODO.md and IDEAS.md are freely writable."
+  "Guard should NOT block .org files that are not personality/archetype/cycle/base_context/common templates.
+LOGS.md is append-only (blocked for write, allowed for append -- tested separately).
+TODO.md and IDEAS.md are freely writable."
   (with-fg-fixture
     ;; TODO.md and IDEAS.md are freely writable
     (should-not (iar--guard-check-write
-                 "/root/.emacs.d/agents.d/agents/darwin/TODO.md"))
+                 "/root/personalization/audit/iar/darwin/TODO.md"))
     (should-not (iar--guard-check-write
-                 "/root/.emacs.d/agents.d/agents/darwin/IDEAS.md"))))
+                 "/root/personalization/audit/iar/darwin/IDEAS.md"))))
 
 (ert-deftest test-fg-write-blocks-logs-md ()
   "write_file should be blocked for LOGS.md files (append-only)."
   (with-fg-fixture
     (should (stringp (iar--guard-check-write
-                      "/root/.emacs.d/agents.d/agents/darwin/LOGS.md")))))
+                      "/root/personalization/audit/iar/darwin/LOGS.md")))))
 
 (ert-deftest test-fg-replace-blocks-logs-md ()
   "replace_in_file should be blocked for LOGS.md files (append-only)."
   (with-fg-fixture
     (should (stringp (iar--guard-check-replace
-                      "/root/.emacs.d/agents.d/agents/darwin/LOGS.md")))))
+                      "/root/personalization/audit/iar/darwin/LOGS.md")))))
 
 (ert-deftest test-fg-write-blocks-history-log-anywhere ()
   "Guard should match HISTORY.log regardless of parent directory path."
@@ -409,23 +434,24 @@ allowed for append -- tested separately).  TODO.md and IDEAS.md are freely writa
                       "/some/other/path/HISTORY.log")))))
 
 (ert-deftest test-fg-active-patterns-count ()
-  "Active patterns should return 5 with self-mod, 11 without.
-5 always-protected + 6 conditional = 11 total.
-The 6 conditional entries are: init.el, init.d/*.el, Containerfile,
-emacboros.sh, containers/, .git/hooks/ (each as separate entry)."
+  "Active patterns should return 8 with self-mod, 14 without.
+8 always-protected + 6 conditional = 14 total.
+Always-protected: archetypes, personalities, cycles, base_context, common,
+HISTORY.log, LOGS.md, ROADMAP.org (8 entries).
+Conditional: init.el, init.d/*.el, Containerfile, emacboros.sh, containers/, .git/hooks/ (6 entries)."
   (with-fg-fixture
-    (should (= (length (iar--guard--active-patterns)) 12)))
+    (should (= (length (iar--guard--active-patterns)) 14)))
   (with-fg-self-mod
-    (should (= (length (iar--guard--active-patterns)) 6))))
+    (should (= (length (iar--guard--active-patterns)) 8))))
 
 (ert-deftest test-fg-guard-reasons-are-descriptive ()
   "Guard check returns should include human-readable reason strings."
   (with-fg-fixture
     (let ((reason (iar--guard-check-write
-                   "/root/.emacs.d/agents.d/agents/darwin/prompt.org")))
+                   "/root/.emacs.d/agents.d/personalities/darwin.org")))
       (should (stringp reason))
       (should (> (length reason) 10))
-      (should (string-match-p "prompt" reason)))
+      (should (string-match-p "personalit\\|Personality" reason)))
     (let ((reason (iar--guard-check-write
                    "/root/.emacs.d/init.el")))
       (should (stringp reason))
@@ -435,7 +461,7 @@ emacboros.sh, containers/, .git/hooks/ (each as separate entry)."
       (should (stringp reason))
       (should (string-match-p "context\\|base_context" reason)))
     (let ((reason (iar--guard-check-write
-                   "/root/.emacs.d/agents.d/agents/darwin/HISTORY.log")))
+                   "/root/personalization/audit/iar/darwin/HISTORY.log")))
       (should (stringp reason))
       (should (string-match-p "HISTORY\\|history" reason)))
     (let ((reason (iar--guard-check-write

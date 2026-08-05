@@ -5,7 +5,7 @@
 ;; Assembles a complete system prompt from three primitives:
 ;; 1. Archetype (behavioral mode) -- from agents.d/archetypes/<name>.org
 ;; 2. Personality (voice/character) -- from agents.d/personalities/<name>.org
-;; 3. Project (knowledge + tools + objective) -- from agents.d/projects/<name>.org
+;; 3. Project (knowledge + tools + objective) -- from personalization/projects/<name>.org
 ;;
 ;; Assembly order (top to bottom of prompt):
 ;; 1. base_context.org (expanded #+INCLUDE)
