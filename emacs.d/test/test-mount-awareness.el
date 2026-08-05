@@ -60,10 +60,17 @@
 
 ;;; --- Prompt string tests ---
 
-(ert-deftest test-mount-prompt-string-no-mounts ()
-  "iar--extra-mounts-prompt-string should return empty string when no mounts."
+(ert-deftest test-mount-prompt-string-no-extra-mounts ()
+  "iar--extra-mounts-prompt-string should return standard mounts when no extra mounts.
+With no extra mounts, the function still reports docs/ and knowledge/
+standard mounts if those directories exist."
   (cl-letf (((symbol-value 'iar--extra-mounts) nil))
-    (should (string= "" (iar--extra-mounts-prompt-string)))))
+    (let ((result (iar--extra-mounts-prompt-string)))
+      (should (stringp result))
+      (when (file-directory-p (expand-file-name iar-docs-path user-emacs-directory))
+        (should (string-match-p "docs" result)))
+      (when (file-directory-p (expand-file-name iar-knowledge-base-path user-emacs-directory))
+        (should (string-match-p "knowledge" result))))))
 
 (ert-deftest test-mount-prompt-string-with-mounts ()
   "iar--extra-mounts-prompt-string should return non-empty string with mounts."

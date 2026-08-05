@@ -3,8 +3,9 @@
 - Host OS: Fedora Silverblue (Immutable, SELinux, Podman).
 - Container OS: Fedora Minimal (quay.io/fedora/fedora-minimal) with full toolset.
 - Local Path: Emacs runs in Podman container at `/root/.emacs.d/`.
-- Agent structure: Each agent has a `prompt.org` in `agents.d/agents/<name>/` (the agent personality, no personal data). Personal files (TODO.md, IDEAS.md, LOGS.md, SUMMARY.md, MEMORIES.md) live in the tasks mount at `tasks/<name>/`. History logs (HISTORY.log) live in the audit mount at `audit/<name>/`. The global audit log is at `audit/audit.log`. These mounts are configured by `--personalization` in emacboros.sh.
+- Agent structure: Each agent has a `prompt.org` in `agents.d/agents/<name>/` (the agent personality, no personal data). Personal files (TODO.md, IDEAS.md, LOGS.md, SUMMARY.md, MEMORIES.md) live in the tasks mount at `tasks/<name>/`. History logs (HISTORY.log) live in the audit mount at `audit/<name>/`. The global audit log is at `audit/audit.log`. These mounts are configured by `--personalization` in iar.sh.
 - Shared files: `agents.d/base_context.org` (inherited by all agents via #+INCLUDE) and `agents.d/common/` (prompt templates loaded by code). Personal files are injected programmatically by agent_loader.el from the tasks mount, NOT via #+INCLUDE.
+- Documentation: Project documentation (iar/, infra/, user/) lives in `docs/` at `/root/.emacs.d/docs/`. Injected into agent prompts via C-c k. Concept knowledge bases live in `knowledge/` at `/root/.emacs.d/knowledge/`. Browsed via the `read_knowledge` tool.
 
 * TOOL DIRECTIVES
 - `execute_code_local`: Local bash in Emacs container (filesystem access). The container is Fedora-based with: bash, dig, nmap, openssl, python3, jq, whois, traceroute, tcpdump, ripgrep (rg), git, curl, find, gawk, sed, grep, gcc, make, tar, gzip, unzip.

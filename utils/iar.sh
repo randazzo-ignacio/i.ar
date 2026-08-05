@@ -45,11 +45,13 @@ Usage: iar.sh --personalization PATH [OPTIONS]
 Required:
   --personalization PATH
                        Mount a personalization directory into the container.
-                       The directory must contain three subdirectories:
-                         knowledge/  -- injectable knowledge bases
+                       The directory must contain four subdirectories:
+                         docs/      -- injectable project documentation
+                         knowledge/  -- concept knowledge bases (agent-queryable)
                          tasks/      -- per-agent personal files
                          audit/      -- per-agent history logs and global audit log
                        These are mounted at:
+                         /root/.emacs.d/docs
                          /root/.emacs.d/knowledge
                          /root/.emacs.d/tasks
                          /root/.emacs.d/audit
@@ -85,7 +87,7 @@ Options (both modes):
                        via HTTPS).
   --memory LIMIT       Podman memory limit (default: 8g). Caps container
                        memory to prevent host OOM kills on long sessions.
-  --knowledge LABEL    Knowledge directory label to load (default: iar/).
+  --knowledge LABEL    Documentation directory label to load (default: iar/).
                        Can be specified multiple times to load multiple bases.
   --cycle-prompt NAME  Override cycle prompt file (e.g. matrix_turn).
                        Loads from agents.d/common/<NAME>.org instead of
@@ -168,7 +170,7 @@ while [[ $# -gt 0 ]]; do
             [[ $# -lt 2 ]] && error "--personalization requires a path argument" && exit 1
             PERSONALIZATION_DIR="$(realpath "$2")"
             [[ ! -d "${PERSONALIZATION_DIR}" ]] && error "--personalization: directory does not exist: ${PERSONALIZATION_DIR}" && exit 1
-            for subdir in knowledge tasks audit; do
+            for subdir in docs knowledge tasks audit; do
                 [[ ! -d "${PERSONALIZATION_DIR}/${subdir}" ]] && \
                     error "--personalization: missing required subdirectory: ${PERSONALIZATION_DIR}/${subdir}" && exit 1
             done
@@ -475,7 +477,7 @@ fi
 # =============================================================================
 # Personalization repo mount (for git operations)
 # =============================================================================
-# The personalization subdirectories (knowledge/, tasks/, audit/) are mounted
+# The personalization subdirectories (docs/, knowledge/, tasks/, audit/) are mounted
 # individually above. But git operations need the repo root with .git/.
 # Mount the entire personalization dir at a separate path so agents can
 # commit changes to knowledge files.
@@ -534,6 +536,7 @@ build_podman_args() {
         -v "${REPO_DIR}/emacs.d:/root/.emacs.d:z" \
         -v "${REPO_DIR}/metaconfig:/root/.emacs.d/metaconfig:z" \
         -v "${REPO_DIR}/prompts:/root/.emacs.d/agents.d:z" \
+        -v "${PERSONALIZATION_DIR}/docs:/root/.emacs.d/docs:z" \
         -v "${PERSONALIZATION_DIR}/knowledge:/root/.emacs.d/knowledge:z" \
         -v "${PERSONALIZATION_DIR}/tasks:/root/.emacs.d/tasks:z" \
         -v "${PERSONALIZATION_DIR}/audit:/root/.emacs.d/audit:z" \
@@ -627,9 +630,9 @@ else
 fi
 info "  Log: ${LOG_FILE}"
 if [[ ${#KNOWLEDGE_LABELS[@]} -gt 0 ]]; then
-    info "  Knowledge: ${KNOWLEDGE_LABELS[*]}"
+    info "  Docs: ${KNOWLEDGE_LABELS[*]}"
 else
-    info "  Knowledge: iar/ (default)"
+    info "  Docs: iar/ (default)"
 fi
 info "=========================================="
 
