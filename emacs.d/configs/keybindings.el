@@ -9,16 +9,21 @@
 ;; variables. Change a binding here and reload to rebind.
 
 (defcustom iar-key-load-agent "C-c a"
-  "Keybinding to load an agent personality."
+  "Keybinding to load an agent archetype."
   :type 'key
   :group 'iar)
 
 (defcustom iar-key-load-knowledge "C-c k"
-  "Keybinding to load a knowledge base folder."
+  "Keybinding to load a documentation folder."
   :type 'key
   :group 'iar)
 
-(defcustom iar-key-prompt-info "C-c p"
+(defcustom iar-key-load-personality "C-c p"
+  "Keybinding to load a personality into the current agent."
+  :type 'key
+  :group 'iar)
+
+(defcustom iar-key-prompt-info "C-c i"
   "Keybinding to display prompt size info."
   :type 'key
   :group 'iar)
