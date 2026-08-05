@@ -1,1 +1,0 @@
-You are waking up for a new monitoring tick. Follow your tick protocol.

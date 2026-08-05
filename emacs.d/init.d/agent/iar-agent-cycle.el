@@ -35,7 +35,16 @@
 (defvar iar-cycle-max-turns nil
   "Maximum number of LLM response turns before forcing cycle end.")
 
+(defconst iar-personality-cycle-map
+  '(("darwin" . "self_modification")
+    ("gardener" . "monitoring")
+    ("librarian" . "documentation_sync"))
+  "Mapping from personality names to default cycle files.
+Used when :cycle is not explicitly provided to iar-run-cycle.")
+
 ;; Forward-declared: owned by configs/paths.el.
+(defvar iar-cycles-path nil
+  "Relative path to cycle definition files.")
 (defvar iar-audit-path nil
   "Relative path to audit log directory.")
 
@@ -82,12 +91,22 @@ Creates the log file if it does not exist.  Prepends a timestamp."
 ;;; Cycle prompt loading
 ;;; ---------------------------------------------------------
 
-(defun iar--cycle-load-cycle-prompt (agent-name)
-  "Load the cycle prompt for AGENT-NAME.
-Tries agents.d/common/<agent-name>_cycle.org first, then falls back to
-agents.d/common/agent_cycle.org."
-  (or (ignore-errors (iar--load-prompt (format "%s_cycle" agent-name)))
-      (iar--load-prompt "agent_cycle")))
+(defun iar--cycle-load-cycle-prompt (cycle-name)
+  "Load a cycle prompt from agents.d/cycles/<cycle-name>.org.
+CYCLE-NAME is the cycle file name without extension (e.g., "self_modification").
+Signals an error if the cycle file is not found."
+  (let* ((cycles-dir (expand-file-name iar-cycles-path user-emacs-directory))
+         (cycle-path (expand-file-name (format "%s.org" cycle-name) cycles-dir)))
+    (unless (file-exists-p cycle-path)
+      (error "Cycle \'%s\' not found at %s" cycle-name cycle-path))
+    (with-temp-buffer
+      (insert-file-contents cycle-path)
+      (string-trim (buffer-string)))))
+
+(defun iar--cycle-for-personality (personality-name)
+  "Return the default cycle name for PERSONALITY-NAME.
+Looks up `iar-personality-cycle-map'. Returns nil if not in the map."
+  (cdr (assoc personality-name iar-personality-cycle-map)))
 
 (defun iar--cycle-load-continue-prompt (_agent-name)
   "Load the shared continue prompt from agents.d/common/agent_cycle_continue.org.
@@ -215,7 +234,8 @@ Keywords args:
   :agent NAME       -- personality name (default: \"darwin\")
   :timeout SECONDS  -- override iar-cycle-timeout
   :prompt STRING    -- override the cycle prompt (inline string)
-  :cycle-prompt NAME -- override cycle prompt file (loads agents.d/common/<NAME>.org)
+  :cycle NAME       -- cycle name (loads agents.d/cycles/<NAME>.org). Defaults to
+                       the personality's mapped cycle (e.g., darwin -> self_modification).
   :self-modification BOOL -- enable self-modification in cycle buffer (default: nil)
 
 The archetype is determined by the personality-to-archetype map.
@@ -229,11 +249,10 @@ Tools are gated by the project's #+TOOLS metadata."
          (timeout (if (and (integerp raw-timeout) (> raw-timeout 0))
                       raw-timeout
                     7200))
+         (cycle-name (or (plist-get args :cycle)
+                         (iar--cycle-for-personality agent-name)))
          (prompt (or (plist-get args :prompt)
-                     (let ((cp (plist-get args :cycle-prompt)))
-                       (if cp
-                           (iar--load-prompt cp)
-                         (iar--cycle-load-cycle-prompt agent-name)))))
+                     (iar--cycle-load-cycle-prompt cycle-name)))
          (continue-prompt (iar--cycle-load-continue-prompt agent-name))
          (archetype (iar--archetype-for-personality agent-name))
          (project (iar--project-for-personality agent-name))
@@ -244,8 +263,8 @@ Tools are gated by the project's #+TOOLS metadata."
                              (> iar-cycle-max-turns 0))
                         iar-cycle-max-turns
                       40)))
-    (message "[%s] Starting cycle with %ds timeout (archetype: %s, project: %s)"
-             agent-name timeout archetype project)
+    (message "[%s] Starting cycle with %ds timeout (archetype: %s, project: %s, cycle: %s)"
+             agent-name timeout archetype project cycle-name)
     (iar--usage-reset)
     (setq iar--cycle-state (iar--cycle-make-state agent-name cycle-buf continue-prompt max-turns))
     (with-current-buffer cycle-buf

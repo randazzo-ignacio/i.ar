@@ -38,11 +38,6 @@
   :type 'key
   :group 'iar)
 
-(defcustom iar-key-summarize "C-c m"
-  "Keybinding to summarize the session to SUMMARY.md."
-  :type 'key
-  :group 'iar)
-
 (defcustom iar-key-quit "C-x C-c"
   "Keybinding for session-aware quit (summarize then kill Emacs)."
   :type 'key

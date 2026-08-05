@@ -91,7 +91,7 @@ Tasks live in the tasks mount at /root/.emacs.d/tasks/<agent-name>/."
 
 (defun iar--resolve-agent-audit-dir ()
   "Return the audit directory path for the currently loaded agent.
-Memory files (LOGS.md, SUMMARY.md, MEMORIES.md) live in the audit mount
+Memory files (LOGS.md, STATE.org) live in the audit mount
 at /root/.emacs.d/audit/<agent-name>/.  Used by iar-memory-tools.el via alias."
   (iar--resolve-agent-dir "audit"))
 

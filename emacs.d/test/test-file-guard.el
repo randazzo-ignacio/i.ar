@@ -382,12 +382,8 @@
 (ert-deftest test-fg-write-allows-non-prompt-org ()
   "Guard should NOT block .org files that are not prompt.org, base_context.org,
 or common prompt templates.  LOGS.md is append-only (blocked for write,
-allowed for append -- tested separately).  SUMMARY.md is writable by the
-summarizer.  TODO.md and IDEAS.md are freely writable."
+allowed for append -- tested separately).  TODO.md and IDEAS.md are freely writable."
   (with-fg-fixture
-    ;; SUMMARY.md is writable (summarizer rewrites it)
-    (should-not (iar--guard-check-write
-                 "/root/.emacs.d/agents.d/agents/darwin/SUMMARY.md"))
     ;; TODO.md and IDEAS.md are freely writable
     (should-not (iar--guard-check-write
                  "/root/.emacs.d/agents.d/agents/darwin/TODO.md"))

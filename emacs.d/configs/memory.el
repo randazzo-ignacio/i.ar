@@ -37,8 +37,8 @@ exceed API limits. 100000 chars is roughly 25K tokens."
 ;; =============================================================================
 
 (defcustom iar-personal-file-max-lines 200
-  "Maximum number of lines to inject from personal files (LOGS.md, SUMMARY.md,
-MEMORIES.md) into an agent's system prompt.
+  "Maximum number of lines to inject from memory files (LOGS.md for interactive,
+STATE.org for autonomous/continuous) into an agent's system prompt.
 When a personal file exceeds this many lines, only the last N lines are
 injected (most recent content), with a truncation notice prepended.
 The full file remains on disk for reference -- this only affects what

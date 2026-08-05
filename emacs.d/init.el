@@ -184,9 +184,6 @@
   (load (expand-file-name "reload_os.el" tools-agent-dir))
   (load (expand-file-name "reload_agent.el" tools-agent-dir)))
 
-;; Memory summarization tool (C-c m in gptel-mode)
-(load (expand-file-name "iar-memory-tools.el" init-agent-dir))
-
 ;; Agent autonomous cycle runner (darwin and other orchestrator agents)
 (load (expand-file-name "iar-agent-cycle.el" init-agent-dir))
 

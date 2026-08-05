@@ -32,6 +32,14 @@ Personalities are the user-selected component of the three-axis model."
   :type 'string
   :group 'iar)
 
+(defcustom iar-cycles-path "agents.d/cycles"
+  "Relative path to cycle definition files.
+Each .org file defines a cycle protocol (self_modification, monitoring,
+documentation_sync, etc.). Cycles are decoupled from personalities --
+any personality can run with any cycle."
+  :type 'string
+  :group 'iar)
+
 (defcustom iar-projects-path "agents.d/projects"
   "Relative path to project definition files.
 Each .org file defines a project with #+KNOWLEDGE, #+TOOLS, and
