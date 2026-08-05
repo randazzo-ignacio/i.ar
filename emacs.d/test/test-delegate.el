@@ -23,7 +23,7 @@
 (ert-deftest test-delegate-validates-task ()
   "delegate tool should reject empty or whitespace-only task strings."
   (let ((result nil))
-    (iar--tool-delegate (lambda (r) (setq result r)) "coder" "" "context")
+    (iar--tool-delegate (lambda (r) (setq result r)) "mirror" "" "context")
     (should result)
     (should (string-match-p "task" result))))
 
@@ -77,9 +77,9 @@ The error from iar--load-agent-profile propagates through the callback."
 
 (ert-deftest test-delegate-load-profile-finds-real-agent ()
   "iar--load-agent-profile should load a real agent profile."
-  (let ((profile (iar--load-agent-profile "reviewer")))
+  (let ((profile (iar--load-agent-profile "darwin")))
     (should (stringp profile))
-    (should (string-match-p "reviewer" profile))))
+    (should (string-match-p "darwin" profile))))
 
 (ert-deftest test-delegate-load-profile-returns-nil-for-missing ()
   "iar--load-agent-profile should return nil for nonexistent agent."
@@ -93,7 +93,7 @@ The error from iar--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (iar--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 30))
+      (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" 30))
     (should (= captured-timeout 30))))
 
 (ert-deftest test-delegate-timeout-string-converted ()
@@ -102,7 +102,7 @@ The error from iar--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (iar--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" "30"))
+      (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" "30"))
     (should (= captured-timeout 30))))
 
 (ert-deftest test-delegate-timeout-default-when-nil ()
@@ -111,7 +111,7 @@ The error from iar--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (iar--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" nil))
+      (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" nil))
     (should (= captured-timeout 600))))
 
 ;;; --- Timeout edge case tests ---
@@ -125,7 +125,7 @@ The error from iar--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (iar--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" -5))
+      (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" -5))
     (should (= captured-timeout 1))))
 
 (ert-deftest test-delegate-timeout-zero-clamped-to-1 ()
@@ -134,7 +134,7 @@ The error from iar--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (iar--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 0))
+      (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" 0))
     (should (= captured-timeout 1))))
 
 (ert-deftest test-delegate-timeout-float-floored ()
@@ -143,7 +143,7 @@ The error from iar--load-agent-profile propagates through the callback."
     (cl-letf (((symbol-function 'iar--spawn-async-delegate)
                (lambda (_cb _agent _task _ctx timeout-secs _profile)
                  (setq captured-timeout timeout-secs))))
-      (iar--tool-delegate (lambda (_r)) "reviewer" "task" "ctx" 30.7))
+      (iar--tool-delegate (lambda (_r)) "darwin" "task" "ctx" 30.7))
     (should (= captured-timeout 30))))
 
 ;;; --- Timeout handler tests ---

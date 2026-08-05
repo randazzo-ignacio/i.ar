@@ -26,10 +26,10 @@
 (ert-deftest test-reload-agent-with-specific-name ()
   "reload_agent should reload a specific agent by name."
   :tags '(integration)
-  (let ((result (iar--tool-reload-agent "reviewer")))
+  (let ((result (iar--tool-reload-agent "mirror")))
     (should (stringp result))
     (should (string-match-p "Success" result))
-    (should (equal iar--current-agent-name "reviewer"))))
+    (should (equal iar--current-agent-name "mirror"))))
 
 (ert-deftest test-reload-agent-rejects-invalid-name ()
   "reload_agent should reject agent names with special characters."
@@ -47,9 +47,9 @@
   "reload_agent should set iar--current-agent-name in current buffer."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "mirror")))
       (should (string-match-p "Success" result))
-      (should (equal iar--current-agent-name "reviewer")))))
+      (should (equal iar--current-agent-name "mirror")))))
 
 ;;; --- reload_os tests ---
 
@@ -112,21 +112,21 @@ is loaded."
   "reload_agent should set iar--current-agent-file on success."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "mirror")))
       (should (string-match-p "Success" result))
       (should (stringp iar--current-agent-file))
-      (should (string-match-p "reviewer" iar--current-agent-file))
+      (should (string-match-p "mirror" iar--current-agent-file))
       (should (string-match-p "prompt\\.org" iar--current-agent-file)))))
 
 (ert-deftest test-reload-agent-success-sets-system-prompt ()
   "reload_agent should update gptel-system-prompt on success."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "mirror")))
       (should (string-match-p "Success" result))
       (should (stringp gptel-system-prompt))
       (should (> (length gptel-system-prompt) 0))
-      (should (string-match-p "Reviewer" gptel-system-prompt)))))
+      (should (string-match-p "mirror" gptel-system-prompt)))))
 
 (ert-deftest test-reload-agent-rejects-special-chars-comprehensive ()
   "reload_agent should reject agent names with various special characters.
@@ -144,16 +144,16 @@ should also echo the offending name for debugging."
   "reload_agent success message should contain the agent name."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "mirror")))
       (should (string-match-p "Success" result))
-      (should (string-match-p "reviewer" result)))))
+      (should (string-match-p "mirror" result)))))
 
 (ert-deftest test-reload-agent-success-message-contains-char-count ()
   "reload_agent success message should include profile character count.
 The count should be at least 1 (non-empty profile)."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "mirror")))
       (should (string-match-p "Success" result))
       (should (string-match-p "[1-9][0-9]* chars" result)))))
 
@@ -167,15 +167,15 @@ The count should be at least 1 (non-empty profile)."
       (should (stringp gptel-system-prompt))
       (should (string-match-p "Darwin" gptel-system-prompt)))))
 
-(ert-deftest test-reload-agent-reviewer-loads ()
-  "reload_agent should successfully load the reviewer agent profile."
+(ert-deftest test-reload-agent-mirror-loads ()
+  "reload_agent should successfully load the mirror agent profile."
   :tags '(integration)
   (with-temp-buffer
-    (let ((result (iar--tool-reload-agent "reviewer")))
+    (let ((result (iar--tool-reload-agent "mirror")))
       (should (string-match-p "Success" result))
-      (should (equal iar--current-agent-name "reviewer"))
+      (should (equal iar--current-agent-name "mirror"))
       (should (stringp gptel-system-prompt))
-      (should (string-match-p "reviewer" gptel-system-prompt)))))
+      (should (string-match-p "mirror" gptel-system-prompt)))))
 
 ;;; --- reload_os expanded tests ---
 

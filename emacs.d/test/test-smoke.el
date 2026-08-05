@@ -69,9 +69,8 @@ prefix, not the filename)."
   "Expected agent directories should exist under agents.d/."
   :tags '(smoke)
   (let ((agents-dir (expand-file-name "agents.d/agents" user-emacs-directory))
-        (expected-agents '("actor" "auditor" "coder" "ctfwizard"
-                           "darwin" "mirror" "reader" "researcher"
-                           "reviewer")))
+        (expected-agents '("colin" "darwin" "davinci"
+                           "gardener" "librarian" "mirror")))
     (dolist (agent expected-agents)
       (let ((prompt-path (expand-file-name (format "%s/prompt.org" agent) agents-dir)))
         (should (file-exists-p prompt-path))))))

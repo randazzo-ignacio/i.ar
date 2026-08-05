@@ -134,9 +134,9 @@ Temporarily binds `user-emacs-directory' to the temp dir."
 
 (ert-deftest test-agent-load-profile-finds-real-agent ()
   "iar--load-agent-profile should find a real agent in agents.d/."
-  (let ((result (iar--load-agent-profile "reviewer")))
+  (let ((result (iar--load-agent-profile "mirror")))
     (should (stringp result))
-    (should (string-match-p "reviewer" result))))
+    (should (string-match-p "mirror" result))))
 
 ;;; --- iar-load-agent tests ---
 
