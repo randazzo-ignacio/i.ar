@@ -1,6 +1,6 @@
 ;; -*- lexical-binding: t; -*-
 
-;;; Project Parser -- Parse project.org files from agents.d/projects/
+;;; Project Parser -- Parse project.org files from personalization/projects/
 ;;
 ;; A project defines:
 ;; - #+KNOWLEDGE: which doc labels to auto-load (subdirs of docs/)
@@ -24,9 +24,13 @@
 (defvar iar-projects-path nil
   "Relative path to project definition files.")
 
+;; Forward-declared: owned by configs/paths.el.
+(defvar iar-personalization-path nil
+  "Absolute path to the personalization mount point.")
+
 (defun iar--projects-dir ()
   "Return the absolute path to the projects directory."
-  (expand-file-name iar-projects-path user-emacs-directory))
+  (expand-file-name iar-projects-path iar-personalization-path))
 
 (defun iar--project-candidates ()
   "Build a list of selectable project candidates.
@@ -95,7 +99,7 @@ Signals an error if the file does not exist."
     (plist-put metadata :name name)))
 
 (defun iar--load-project (name)
-  "Load a project by name from agents.d/projects/<name>.org.
+  "Load a project by name from personalization/projects/<name>.org.
 Returns a plist with keys :name, :knowledge, :tools, :mounts, :objective.
 Signals an error if the project is not found."
   (let* ((candidates (iar--project-candidates))
@@ -106,7 +110,7 @@ Signals an error if the project is not found."
       (iar--parse-project path))))
 
 (defun iar--create-project (name)
-  "Create a new project file at agents.d/projects/<name>.org.
+  "Create a new project file at personalization/projects/<name>.org.
 Creates the projects directory if it does not exist.
 Writes a minimal template with all tools, no mounts, placeholder objective.
 Returns the plist from parsing the newly created file."

@@ -39,8 +39,9 @@ DEPRECATED: Being replaced by the three-axis assembly model."
   :type 'string
   :group 'iar)
 
-(defcustom iar-projects-path "agents.d/projects"
-  "Relative path to project definition files."
+(defcustom iar-projects-path "projects"
+  "Relative path to project definition files (under personalization).
+Agents access projects at /root/personalization/projects/."
   :type 'string
   :group 'iar)
 

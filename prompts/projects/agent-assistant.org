@@ -1,3 +1,0 @@
-#+KNOWLEDGE: iar/
-#+TOOLS: delegate read_file list_directory execute_code_local
-#+OBJECTIVE: Sub-orchestration. Interpret delegated task, plan work, delegate to implementer/reviewer, coordinate correction loop, return final result. Ephemeral -- no persistent state, no task management, no file writing.

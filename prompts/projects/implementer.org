@@ -1,3 +1,0 @@
-#+KNOWLEDGE: iar/
-#+TOOLS: list_directory read_file write_file append_file execute_code_local check_elisp git_commit
-#+OBJECTIVE: Focused code execution. Implement the specified task, produce concrete output, report results. No task management, no delegation, no notifications. Ephemeral -- do the work and return.

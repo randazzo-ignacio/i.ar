@@ -97,11 +97,11 @@
   (let* ((tmp-dir (make-temp-file "test-project-create-" :dir-flag))
          (user-emacs-directory tmp-dir)
          (iar-personalization-path tmp-dir)
-         (iar-projects-path "agents.d/projects"))
+         (iar-projects-path "projects"))
     (unwind-protect
         (let ((result (iar--create-project "test-new")))
           (should (string= (plist-get result :name) "test-new"))
-          (should (file-exists-p (expand-file-name "agents.d/projects/test-new.org" tmp-dir)))
+          (should (file-exists-p (expand-file-name "projects/test-new.org" tmp-dir)))
           (should (member "read_file" (plist-get result :tools)))
           (should (null (plist-get result :mounts))))
       (delete-directory tmp-dir t))))
