@@ -117,9 +117,16 @@ or -1 if the command was killed due to timeout."
 ;;; ---------------------------------------------------------
 
 (defun iar--audit-log-setup ()
-  "Create the audit log directory at load time."
-  (let ((log-dir (file-name-directory iar--audit-log-path)))
-    (unless (file-exists-p log-dir)
-      (make-directory log-dir t))))
+  "Create the audit log directory at load time.
+Wrapped in condition-case so a missing or read-only personalization
+mount does not crash init.el. The audit log write function also
+handles errors gracefully."
+  (condition-case err
+      (let ((log-dir (file-name-directory iar--audit-log-path)))
+        (unless (file-exists-p log-dir)
+          (make-directory log-dir t)))
+    (error
+     (message "Warning: audit log setup failed: %s"
+              (error-message-string err)))))
 
 (iar--audit-log-setup)
