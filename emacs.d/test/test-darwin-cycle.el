@@ -187,7 +187,8 @@
          (iar-audit-path "audit")
          (user-emacs-directory test-dir)
          (iar--current-agent-name "testagent")
-         (iar--current-project "testagent"))
+         (iar--current-project "testagent")
+         (iar-personalization-path test-dir))
     (unwind-protect
         (with-temp-buffer
           (insert "Test response text")

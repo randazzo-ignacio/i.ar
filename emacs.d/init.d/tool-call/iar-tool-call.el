@@ -37,6 +37,12 @@
 (require 'iar-utils)
 (require 'iar-audit-log)
 
+;; Forward-declared: owned by configs/paths.el.
+(defvar iar-personalization-path nil
+  "Absolute path to the personalization mount point.")
+(defvar iar-audit-path nil
+  "Relative path to the audit log directory.")
+
 ;; Forward-declared: owned by configs/debug.el.
 ;; Declared here so truncation can reference it before configs load.
 (defvar iar-tool-result-max-chars nil
@@ -212,7 +218,7 @@ Best-effort: errors are demoted to messages."
                           "nil"))
              (log-dir (expand-file-name
                        (format "%s/%s" project agent)
-                       (expand-file-name iar-audit-path user-emacs-directory)))
+                       (expand-file-name iar-audit-path iar-personalization-path)))
              (log-path (expand-file-name "USAGE.log" log-dir)))
         (make-directory log-dir t)
         (let ((totals (iar--usage-totals)))

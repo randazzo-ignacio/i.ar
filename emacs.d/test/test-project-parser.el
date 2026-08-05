@@ -96,6 +96,7 @@
   "Creating a new project writes a file and returns parsed metadata."
   (let* ((tmp-dir (make-temp-file "test-project-create-" :dir-flag))
          (user-emacs-directory tmp-dir)
+         (iar-personalization-path tmp-dir)
          (iar-projects-path "agents.d/projects"))
     (unwind-protect
         (let ((result (iar--create-project "test-new")))

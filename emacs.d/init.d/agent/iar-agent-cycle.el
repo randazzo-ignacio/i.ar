@@ -45,6 +45,9 @@ Used when :cycle is not explicitly provided to iar-run-cycle.")
 ;; Forward-declared: owned by configs/paths.el.
 (defvar iar-cycles-path nil
   "Relative path to cycle definition files.")
+;; Forward-declared: owned by configs/paths.el.
+(defvar iar-personalization-path nil
+  "Absolute path to the personalization mount point.")
 (defvar iar-audit-path nil
   "Relative path to audit log directory.")
 
@@ -76,7 +79,7 @@ Creates the log file if it does not exist.  Prepends a timestamp."
                           "iar"))
            (log-path (expand-file-name
                       (format "%s/%s/cycle.log" project agent-name)
-                      (expand-file-name iar-audit-path user-emacs-directory)))
+                      (expand-file-name iar-audit-path iar-personalization-path)))
            (timestamp (format-time-string "[%Y-%m-%d %H:%M:%S]"))
            (response (with-current-buffer (current-buffer)
                        (save-restriction

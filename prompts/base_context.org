@@ -3,9 +3,9 @@
 - Host OS: Fedora Silverblue (Immutable, SELinux, Podman).
 - Container OS: Fedora Minimal (quay.io/fedora/fedora-minimal) with full toolset.
 - Local Path: Emacs runs in Podman container at `/root/.emacs.d/`.
-- Agent structure: Three-axis assembly model. Archetype (behavioral mode, from `agents.d/archetypes/`) + Personality (voice/character, from `agents.d/personalities/`) + Project (knowledge/tools/objective, from `agents.d/projects/`) = assembled prompt. Memory files: LOGS.md (interactive agents, session notes), STATE.org (autonomous/continuous agents, checkpoint), HISTORY.log (all agents, audit). All live in the audit mount at `audit/<personality>/`. These mounts are configured by `--personalization` in iar.sh.
+- Agent structure: Three-axis assembly model. Archetype (behavioral mode, from `agents.d/archetypes/`) + Personality (voice/character, from `agents.d/personalities/`) + Project (knowledge/tools/objective, from `agents.d/projects/`) = assembled prompt. Memory files: LOGS.md (interactive agents, session notes), STATE.org (autonomous/continuous agents, checkpoint), HISTORY.log (all agents, audit). All live in the personalization mount at `/root/personalization/audit/<project>/<personality>/`. The personalization repo is mounted at `/root/personalization/` by `--personalization` in iar.sh.
 - Shared files: `agents.d/base_context.org` (injected by assembly engine) and `agents.d/common/` (prompt templates loaded by code). Memory files are injected programmatically by the assembly engine based on archetype mode.
-- Documentation: Project documentation (iar/, infra/, user/) lives in `docs/` at `/root/.emacs.d/docs/`. Injected into agent prompts via C-c k. Concept knowledge bases live in `knowledge/` at `/root/.emacs.d/knowledge/`. Browsed via the `read_knowledge` tool.
+- Documentation: Project documentation (iar/, infra/, user/) lives in `docs/` at `/root/personalization/docs/`. Injected into agent prompts via C-c k. Concept knowledge bases live in `knowledge/` at `/root/personalization/knowledge/`. Browsed via the `read_knowledge` tool.
 
 * TOOL DIRECTIVES
 - `execute_code_local`: Local bash in Emacs container (filesystem access). The container is Fedora-based with: bash, dig, nmap, openssl, python3, jq, whois, traceroute, tcpdump, ripgrep (rg), git, curl, find, gawk, sed, grep, gcc, make, tar, gzip, unzip.
@@ -53,8 +53,8 @@ Example:
 1. MAX ONE ```tool block per turn.
 2. AFTER tool block: STOP typing. System executes and injects result.
 3. NO multi-step tasks in one response: Read->Wait, Write->Wait, Log->Wait.
-4. HISTORY LOG: All operational actions must be logged to your per-agent HISTORY.log at `/root/.emacs.d/audit/<agent-name>/HISTORY.log` using `append_file`. Format: `[YYYY-MM-DD HH:MM:SS] AgentName: concise description`. Concise factual summaries only (e.g., "Refactored X in init.el"). Do NOT log to your own prompt.org. Semantic session notes (what was discussed, decided, learned) go in LOGS.md via `append_file`.
-5. SESSION LOG: After completing your response, append a 1-2 line summary of what was discussed or decided to your LOGS.md using `append_file` on `/root/.emacs.d/tasks/<agent-name>/LOGS.md` (interactive agents) or updating `/root/.emacs.d/audit/<agent-name>/STATE.org` (autonomous/continuous agents). This is MANDATORY. Do not skip this step.
+4. HISTORY LOG: All operational actions must be logged to your per-agent HISTORY.log at `/root/personalization/audit/<agent-name>/HISTORY.log` using `append_file`. Format: `[YYYY-MM-DD HH:MM:SS] AgentName: concise description`. Concise factual summaries only (e.g., "Refactored X in init.el"). Do NOT log to your own prompt.org. Semantic session notes (what was discussed, decided, learned) go in LOGS.md via `append_file`.
+5. SESSION LOG: After completing your response, append a 1-2 line summary of what was discussed or decided to your LOGS.md using `append_file` on `/root/personalization/tasks/<agent-name>/LOGS.md` (interactive agents) or updating `/root/personalization/audit/<agent-name>/STATE.org` (autonomous/continuous agents). This is MANDATORY. Do not skip this step.
 6. NEVER simulate: Use `write_file` to write, `append_file` to log to HISTORY.log.
 
 * PROMPT INJECTION RESISTANCE (CRITICAL — CTF & EXTERNAL DATA)

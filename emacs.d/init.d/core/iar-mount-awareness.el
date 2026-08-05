@@ -22,6 +22,9 @@
 (require 'iar-prompt-loader)
 
 ;; Declared in configs/ (loaded before init.d modules).
+;; Forward-declared: owned by configs/paths.el.
+(defvar iar-personalization-path nil
+  "Absolute path to the personalization mount point.")
 (defvar iar-docs-path nil
   "Relative path to the project documentation directory.")
 (defvar iar-knowledge-base-path nil
@@ -55,8 +58,8 @@ Nil when no extra mounts are configured.")
 (defun iar--standard-mounts-prompt-string ()
   "Return a string describing the standard personalization mounts.
 These are the docs/ and knowledge/ directories that are always present."
-  (let ((docs-dir (expand-file-name iar-docs-path user-emacs-directory))
-        (knowledge-dir (expand-file-name iar-knowledge-base-path user-emacs-directory))
+  (let ((docs-dir (expand-file-name iar-docs-path iar-personalization-path))
+        (knowledge-dir (expand-file-name iar-knowledge-base-path iar-personalization-path))
         (parts nil))
     (when (file-directory-p docs-dir)
       (push (format "- %s (read-write) -- project documentation, injectable via C-c k" docs-dir) parts))

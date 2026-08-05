@@ -1,4 +1,4 @@
 #+KNOWLEDGE: iar/
 #+TOOLS: list_directory read_file write_file append_file execute_code_local check_elisp read_task create_task write_subtask remove_task read_history git_commit read_roadmap write_roadmap
-#+MOUNTS: /var/home/nacho/repos/i.ar:rw /var/home/nacho/repos/iar-personalization:rw
+#+MOUNTS: /var/home/nacho/repos/i.ar:rw
 #+OBJECTIVE: Autonomous code evolution. Read code, make one small change per cycle, test, commit, log. No delegate, no reload, no telegram, no send_matrix. Focused on self-modification within the test suite boundary.

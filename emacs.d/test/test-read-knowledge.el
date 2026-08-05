@@ -61,14 +61,18 @@
   "Execute BODY with a temporary knowledge base directory."
   (declare (indent 0))
   `(let ((old-emacs-dir user-emacs-directory)
-         (old-kb-path iar-knowledge-base-path))
+         (old-kb-path iar-knowledge-base-path)
+         (old-pers-path (and (boundp 'iar-personalization-path)
+                            iar-personalization-path)))
      (unwind-protect
          (progn
            (test-rk--setup)
-           (let ((user-emacs-directory test-rk--tmpdir))
+           (let ((user-emacs-directory test-rk--tmpdir)
+                 (iar-personalization-path test-rk--tmpdir))
              ,@body))
        (test-rk--teardown)
        (setq user-emacs-directory old-emacs-dir
+             iar-personalization-path old-pers-path
              iar-knowledge-base-path old-kb-path))))
 
 ;;; --- Tree tests (nil path) ---
@@ -94,7 +98,8 @@
 (ert-deftest test-rk-nil-empty-when-no-dir ()
   "read_knowledge with nil should report when knowledge dir doesn't exist."
   (with-read-knowledge-fixture
-    (let ((user-emacs-directory "/nonexistent/path/xyzzy"))
+    (let ((user-emacs-directory "/nonexistent/path/xyzzy")
+            (iar-personalization-path "/nonexistent/path/xyzzy"))
       (let ((result (iar--tool-read-knowledge nil)))
         (should (stringp result))
         (should (string-match-p "No knowledge base directory" result))))))

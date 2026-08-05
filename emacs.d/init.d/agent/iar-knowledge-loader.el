@@ -24,6 +24,9 @@
 (require 'iar-utils)
 
 ;; Declared in configs/ (split parameter files) (loaded before init.d modules).
+;; Forward-declared: owned by configs/paths.el.
+(defvar iar-personalization-path nil
+  "Absolute path to the personalization mount point.")
 (defvar iar-docs-path nil
   "Relative path to the project documentation directory.")
 (defvar iar-key-load-knowledge nil
@@ -62,7 +65,7 @@ Each entry is (LABEL . CONTENT-STRING).")
 
 (defun iar--knowledge-dir ()
   "Return the path to the documentation directory."
-  (expand-file-name iar-docs-path user-emacs-directory))
+  (expand-file-name iar-docs-path iar-personalization-path))
 
 (defun iar--knowledge-candidates ()
   "Build a list of selectable knowledge candidates.

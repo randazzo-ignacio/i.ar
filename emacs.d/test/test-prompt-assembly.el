@@ -10,6 +10,7 @@
 (require 'iar-utils)
 (require 'iar-project-parser)
 (require 'iar-prompt-assembly)
+(defvar iar-personalization-path nil)
 
 ;; Configs must be loaded
 (defvar iar-archetypes-path nil)

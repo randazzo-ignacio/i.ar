@@ -45,17 +45,21 @@ Temporarily rebinds user-emacs-directory and knowledge config vars."
          (old-docs-path iar-docs-path)
          (old-open iar-knowledge-open-delimiter)
          (old-close iar-knowledge-close-delimiter)
-         (old-sep iar-knowledge-file-separator))
+         (old-sep iar-knowledge-file-separator)
+         (old-pers-path (and (boundp 'iar-personalization-path)
+                            iar-personalization-path)))
      (unwind-protect
          (progn
            (test-knowledge--setup)
            (let ((user-emacs-directory test-knowledge--tmpdir)
+                 (iar-personalization-path test-knowledge--tmpdir)
                  (iar-knowledge-open-delimiter "--- BEGIN KNOWLEDGE: %s ---")
                  (iar-knowledge-close-delimiter "--- END KNOWLEDGE ---")
                  (iar-knowledge-file-separator "=== FILE: %s ==="))
              ,@body))
        (test-knowledge--teardown)
        (setq user-emacs-directory old-emacs-dir
+             iar-personalization-path old-pers-path
              iar-docs-path old-docs-path
              iar-knowledge-open-delimiter old-open
              iar-knowledge-close-delimiter old-close
@@ -74,7 +78,8 @@ Temporarily rebinds user-emacs-directory and knowledge config vars."
 (ert-deftest test-knowledge-candidates-empty-when-no-dir ()
   "iar--knowledge-candidates should return nil when knowledge dir doesn't exist."
   (with-knowledge-fixture
-    (let ((user-emacs-directory "/nonexistent/path/xyzzy"))
+    (let ((user-emacs-directory "/nonexistent/path/xyzzy")
+            (iar-personalization-path "/nonexistent/path/xyzzy"))
       (should (null (iar--knowledge-candidates))))))
 
 ;;; --- File reading tests ---

@@ -25,6 +25,9 @@
 (require 'iar-agent-utils)
 
 ;; Declared in configs/ (loaded before init.d modules).
+;; Forward-declared: owned by configs/paths.el.
+(defvar iar-personalization-path nil
+  "Absolute path to the personalization mount point.")
 (defvar iar-knowledge-base-path nil
   "Relative path to the concept knowledge base directory.")
 
@@ -32,7 +35,7 @@
 
 (defun iar--knowledge-base-dir ()
   "Return the absolute path to the knowledge base directory."
-  (expand-file-name iar-knowledge-base-path user-emacs-directory))
+  (expand-file-name iar-knowledge-base-path iar-personalization-path))
 
 (defun iar--knowledge-base-entries ()
   "Return a list of subdirectory paths in the knowledge base dir.

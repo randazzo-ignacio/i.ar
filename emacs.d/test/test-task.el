@@ -72,18 +72,22 @@
          (old-agent-name (and (boundp 'iar--current-agent-name)
                               iar--current-agent-name))
          (old-project (and (boundp 'iar--current-project)
-                           iar--current-project)))
+                           iar--current-project))
+         (old-pers-path (and (boundp 'iar-personalization-path)
+                            iar-personalization-path)))
      (unwind-protect
          (progn
            (test-task--setup)
            (let ((user-emacs-directory test-task--tmpdir))
              (setq iar--current-agent-name "testagent")
              (setq iar--current-project "testagent")
+             (setq iar-personalization-path test-task--tmpdir)
              ,@body))
        (test-task--teardown)
        (setq user-emacs-directory old-emacs-dir)
        (setq iar--current-agent-name old-agent-name)
-       (setq iar--current-project old-project))))
+       (setq iar--current-project old-project)
+       (setq iar-personalization-path old-pers-path))))
 
 ;;; --- read_task tests ---
 

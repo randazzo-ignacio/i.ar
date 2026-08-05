@@ -4,7 +4,7 @@
 ;; Appends timestamped entries to a central audit log for every
 ;; write_file, replace_in_file, and execute_code_local call.
 ;;
-;; Log location: /root/.emacs.d/audit/audit.log
+;; Log location: /root/personalization/audit/audit.log
 ;; Format: [YYYY-MM-DD HH:MM:SS] AGENT | TOOL | detail
 ;;
 ;; This is append-only. The audit log is not protected by iar-file-guard

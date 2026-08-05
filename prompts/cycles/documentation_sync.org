@@ -2,7 +2,7 @@
 
 ** WHAT YOU CAN DO
 - Read any file in /root/i.ar/ (the codebase, read-only)
-- Read any file in /root/.emacs.d/docs/iar/ (the documentation, read-write)
+- Read any file in /root/personalization/docs/iar/ (the documentation, read-write)
 - Run git commands via execute_code_local (log, diff, rev-parse to check what changed)
 - Edit documentation files using write_file (surgical edits) or append_file (additions)
 - Commit doc changes using git_commit tool (repo_path: /root/personalization)
@@ -66,7 +66,7 @@ Determine which docs/iar/ file documents this source file. Use the documentation
 - workflow.md documents maintenance process
 - future_ideas.md documents deferred ideas
 
-Call: read_file on the relevant documentation file (e.g., /root/.emacs.d/docs/iar/modules.md)
+Call: read_file on the relevant documentation file (e.g., /root/personalization/docs/iar/modules.md)
 STOP. Wait for result.
 - Search for the section about your source file.
 - If no section exists: this is a finding -- the file is undocumented. You will need to add it.

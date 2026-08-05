@@ -36,6 +36,9 @@
   "Relative path to archetype definition files.")
 (defvar iar-personalities-path nil
   "Relative path to personality definition files.")
+;; Forward-declared: owned by configs/paths.el.
+(defvar iar-personalization-path nil
+  "Absolute path to the personalization mount point.")
 (defvar iar-docs-path nil
   "Relative path to the project documentation directory.")
 (defvar iar-audit-path nil
@@ -110,7 +113,7 @@ not expanded -- base_context.org is a leaf file with no includes."
 FILENAME is the base name (e.g., \"LOGS.md\", \"STATE.org\").
 Returns the file content string, or empty string if not found.
 Truncates to last N lines if iar-personal-file-max-lines is set."
-  (let* ((audit-base (expand-file-name iar-audit-path user-emacs-directory))
+  (let* ((audit-base (expand-file-name iar-audit-path iar-personalization-path))
          (filepath (expand-file-name (format "%s/%s" personality-name filename) audit-base)))
     (if (file-exists-p filepath)
         (with-temp-buffer
@@ -159,7 +162,7 @@ Returns a string with delimited knowledge blocks, or empty string if
 LABELS is nil or empty."
   (if (or (null labels) (not labels))
       ""
-    (let ((docs-dir (expand-file-name iar-docs-path user-emacs-directory))
+    (let ((docs-dir (expand-file-name iar-docs-path iar-personalization-path))
           (parts nil))
       (dolist (label labels)
         (let* ((clean-label (string-trim label))

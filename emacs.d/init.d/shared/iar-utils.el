@@ -17,6 +17,9 @@
 (require 'subr-x)
 
 ;; Declared in configs/ (split parameter files) (loaded before init.d modules).
+;; Forward-declared: owned by configs/paths.el.
+(defvar iar-personalization-path nil
+  "Absolute path to the personalization mount point.")
 (defvar iar-audit-path nil
   "Relative path to audit log directory.")
 
@@ -92,7 +95,7 @@ Returns 0 for nil, negative, or zero input."
 
 (defconst iar--audit-log-path
   (expand-file-name "audit.log"
-                    (expand-file-name iar-audit-path user-emacs-directory))
+                    (expand-file-name iar-audit-path iar-personalization-path))
   "Path to the central audit log for all agent file operations.")
 
 ;;; --- Save hook suppression ---

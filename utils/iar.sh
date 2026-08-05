@@ -50,11 +50,8 @@ Required:
                          knowledge/  -- concept knowledge bases (agent-queryable)
                          tasks/      -- per-agent personal files
                          audit/      -- per-agent history logs and global audit log
-                       These are mounted at:
-                         /root/.emacs.d/docs
-                         /root/.emacs.d/knowledge
-                         /root/.emacs.d/tasks
-                         /root/.emacs.d/audit
+                       Mounted at /root/personalization/ (single mount).
+                       Agents access subdirs at /root/personalization/{docs,knowledge,tasks,audit}.
 
 Mode:
   --loop               Run in autonomous loop mode (requires --agent).
@@ -173,7 +170,7 @@ while [[ $# -gt 0 ]]; do
             [[ ! -d "${PERSONALIZATION_DIR}" ]] && error "--personalization: directory does not exist: ${PERSONALIZATION_DIR}" && exit 1
             for subdir in docs knowledge tasks audit; do
                 [[ ! -d "${PERSONALIZATION_DIR}/${subdir}" ]] && \
-                    error "--personalization: missing required subdirectory: ${PERSONALIZATION_DIR}/${subdir}" && exit 1
+                    warn "--personalization: missing subdirectory: ${PERSONALIZATION_DIR}/${subdir} (will be empty)"
             done
             shift 2
             ;;
@@ -538,12 +535,12 @@ else
 fi
 
 # =============================================================================
-# Personalization repo mount (for git operations)
+# Personalization repo mount
 # =============================================================================
-# The personalization subdirectories (docs/, knowledge/, tasks/, audit/) are mounted
-# individually above. But git operations need the repo root with .git/.
-# Mount the entire personalization dir at a separate path so agents can
-# commit changes to knowledge files.
+# Mount the entire personalization dir at /root/personalization.
+# This is the single mount point for docs/, knowledge/, tasks/, audit/.
+# Agents access these at /root/personalization/docs, /root/personalization/knowledge, etc.
+# Git operations (git_commit) use /root/personalization as the repo root.
 PERSONALIZATION_MOUNT_OPTS=("-v" "${PERSONALIZATION_DIR}:/root/personalization:z")
 info "Personalization repo: ${PERSONALIZATION_DIR} -> /root/personalization (writable)"
 
@@ -600,10 +597,7 @@ build_podman_args() {
         -v "${REPO_DIR}/emacs.d:/root/.emacs.d:z" \
         -v "${REPO_DIR}/metaconfig:/root/.emacs.d/metaconfig:z" \
         -v "${REPO_DIR}/prompts:/root/.emacs.d/agents.d:z" \
-        -v "${PERSONALIZATION_DIR}/docs:/root/.emacs.d/docs:z" \
-        -v "${PERSONALIZATION_DIR}/knowledge:/root/.emacs.d/knowledge:z" \
-        -v "${PERSONALIZATION_DIR}/tasks:/root/.emacs.d/tasks:z" \
-        -v "${PERSONALIZATION_DIR}/audit:/root/.emacs.d/audit:z" \
+        # Personalization subdirs mounted via /root/personalization below
         "${IAR_MOUNT_OPTS[@]}" \
         "${SSH_MOUNT_OPTS[@]}" \
         "${DYNAMIC_MOUNT_OPTS[@]}" \

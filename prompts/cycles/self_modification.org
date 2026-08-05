@@ -30,8 +30,8 @@ Each time you wake up:
 6. Run the test suite. If tests fail, revert. If tests pass, proceed.
 7. **MANDATORY:** Commit with a message describing what you changed and why. Use: execute_code_local with 'cd /root/i.ar/ && git add -A && git commit -m "<agent-name>: <description>"'. Do NOT skip this step. If git fails, debug it -- check if .git exists, if git is configured, etc.
 8. Push the commit to the remote: execute_code_local with 'cd /root/i.ar/ && git push'. Your SSH key is at /root/.ssh/id_ed25519 (read-only). If the push fails, log the error but do not revert -- the commit is still valid locally.
-9. **MANDATORY:** Log to your HISTORY.log using append_file on /root/.emacs.d/audit/<agent-name>/HISTORY.log. Format: [TIMESTAMP] cycle: <what you did and why>. Do NOT skip this step.
-10. **MANDATORY:** Update your STATE.org with what you learned. Use write_file on /root/.emacs.d/audit/<agent-name>/STATE.org. Do NOT skip this step.
+9. **MANDATORY:** Log to your HISTORY.log using append_file on /root/personalization/audit/<agent-name>/HISTORY.log. Format: [TIMESTAMP] cycle: <what you did and why>. Do NOT skip this step.
+10. **MANDATORY:** Update your STATE.org with what you learned. Use write_file on /root/personalization/audit/<agent-name>/STATE.org. Do NOT skip this step.
 11. If you completed your task, use remove_task to delete the task, then end with the exact text LOOP_COMPLETE on its own line. This tells the loop to stop -- your work is ready for review. If you noticed something interesting for later, use create_task or write_subtask to create a new task for the next loop run. Do NOT create a new task if you are finishing the current one -- one task at a time.
 12. **MANDATORY:** Always commit your STATE.org and HISTORY.log to git.
 13. If your task is not yet complete, end with the exact text CYCLE_COMPLETE on its own line. If your task IS complete (you called remove_task in step 11), end with LOOP_COMPLETE instead. The loop will start a new cycle for CYCLE_COMPLETE, but will stop and let the human review for LOOP_COMPLETE.

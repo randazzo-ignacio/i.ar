@@ -16,6 +16,9 @@
 (require 'iar-utils)  ; iar--get-agent-name
 
 ;; Declared in configs/ (split parameter files) (loaded before init.d modules).
+;; Forward-declared: owned by configs/paths.el.
+(defvar iar-personalization-path nil
+  "Absolute path to the personalization mount point.")
 (defvar iar-tasks-path nil
   "Relative path to task files directory.")
 (defvar iar-audit-path nil
@@ -72,9 +75,9 @@ are rejected."
 
 (defun iar--resolve-project-tasks-dir ()
   "Return the tasks directory path for the current project.
-Tasks live at /root/.emacs.d/tasks/<project>/.
+Tasks live at /root/personalization/tasks/<project>/.
 Uses `iar--current-project' (set by iar.sh --project flag or C-c a)."
-  (let* ((base-path (expand-file-name iar-tasks-path user-emacs-directory))
+  (let* ((base-path (expand-file-name iar-tasks-path iar-personalization-path))
          (project (or (and (boundp 'iar--current-project) iar--current-project)
                       (getenv "IAR_PROJECT")
                       (error "No project set. Use --project flag or C-c a."))))
@@ -84,9 +87,9 @@ Uses `iar--current-project' (set by iar.sh --project flag or C-c a)."
 
 (defun iar--resolve-project-audit-dir ()
   "Return the audit directory path for the current project + personality.
-Audit files live at /root/.emacs.d/audit/<project>/<personality>/.
+Audit files live at /root/personalization/audit/<project>/<personality>/.
 Uses `iar--current-project' and `iar--current-personality'."
-  (let* ((base-path (expand-file-name iar-audit-path user-emacs-directory))
+  (let* ((base-path (expand-file-name iar-audit-path iar-personalization-path))
          (project (or (and (boundp 'iar--current-project) iar--current-project)
                       (getenv "IAR_PROJECT")
                       (error "No project set. Use --project flag or C-c a.")))

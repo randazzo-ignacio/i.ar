@@ -10,6 +10,9 @@
 (require 'iar-agent-utils)  ; validation
 
 ;; Declared in configs/ (split parameter files) (loaded before init.d modules).
+;; Forward-declared: owned by configs/paths.el.
+(defvar iar-personalization-path nil
+  "Absolute path to the personalization mount point.")
 (defvar iar-audit-path nil
   "Relative path to audit log directory.")
 
@@ -24,9 +27,9 @@ If omitted, merges all HISTORY.log files across all projects and
 personalities, sorted by timestamp.
 
 HISTORY.log files live in the audit mount at
-/root/.emacs.d/audit/<project>/<personality>/HISTORY.log."
+/root/personalization/audit/<project>/<personality>/HISTORY.log."
   (condition-case err
-      (let* ((audit-base (expand-file-name iar-audit-path user-emacs-directory)))
+      (let* ((audit-base (expand-file-name iar-audit-path iar-personalization-path)))
         (if (and agent-name (stringp agent-name) (iar--non-blank-p agent-name))
             ;; Read single agent's history
             (progn
