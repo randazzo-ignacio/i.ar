@@ -1,4 +1,4 @@
 #+KNOWLEDGE: iar/ infra/ user/
 #+TOOLS: list_directory read_file write_file append_file execute_code_local check_elisp read_task create_task write_subtask remove_task read_history send_telegram git_commit delegate reload_os reload_agent read_knowledge read_roadmap write_roadmap
-#+MOUNTS: /var/home/nacho/repos/i.ar:rw /var/home/nacho/repos/iar-personalization:rw /var/home/nacho/repos/iar-infrastructure:ro
+#+MOUNTS: /var/home/nacho/repos/iar-infrastructure:ro
 #+OBJECTIVE: General-purpose i.ar development, infrastructure management, and security research. Full tool access for interactive development sessions.
