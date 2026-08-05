@@ -193,12 +193,20 @@ loaded is a no-op."
 (defun iar-prompt-info ()
   "Display the current system prompt size and composition.
 Shows total prompt size in chars and approximate tokens, with a
-breakdown of personality vs injected knowledge."
+breakdown of personality vs injected knowledge.
+
+When knowledge is auto-loaded (from project #+KNOWLEDGE), labels are
+shown but the size breakdown includes knowledge in the personality
+total (auto-loaded knowledge is baked into the assembled prompt, not
+tracked separately via iar--knowledge-base-prompt)."
   (interactive)
   (let* ((total (length (or gptel-system-prompt "")))
-         (personality (length (or iar--knowledge-base-prompt
-                                  gptel-system-prompt)))
-         (knowledge-chars (if iar--knowledge-base-prompt
+         (has-manual-knowledge (and iar--knowledge-base-prompt
+                                    (> (length iar--knowledge-base-prompt) 0)))
+         (personality (if has-manual-knowledge
+                          (length iar--knowledge-base-prompt)
+                        total))
+         (knowledge-chars (if has-manual-knowledge
                               (- total personality)
                             0))
          (knowledge-label (if iar--knowledge-loaded-labels
@@ -211,9 +219,12 @@ breakdown of personality vs injected knowledge."
              agent-name
              knowledge-label
              (iar--format-size personality)
-             (if (> knowledge-chars 0)
-                 (iar--format-size knowledge-chars)
-               "not loaded")
+             (cond
+              ((> knowledge-chars 0)
+               (iar--format-size knowledge-chars))
+              (iar--knowledge-loaded-labels
+               "auto-loaded (included in personality)")
+              (t "not loaded"))
              (iar--format-size total))))
 
 (with-eval-after-load 'gptel

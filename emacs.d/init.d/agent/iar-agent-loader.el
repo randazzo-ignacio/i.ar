@@ -131,8 +131,9 @@ Returns the assembled plist."
       (setq-local iar--current-agent-file pers-path)
       (setq iar--current-agent-file pers-path))
     ;; Reset knowledge state (manual C-c k loads stack on top)
+    ;; Set loaded labels from auto-loaded knowledge so C-c i can report them
     (setq-local iar--knowledge-base-prompt nil)
-    (setq-local iar--knowledge-loaded-labels nil)
+    (setq-local iar--knowledge-loaded-labels (plist-get result :knowledge-labels))
     (setq-local iar--knowledge-blocks nil)
     result))
 

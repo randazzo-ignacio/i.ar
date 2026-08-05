@@ -158,12 +158,14 @@ Truncates to last N lines if iar-personal-file-max-lines is set."
 
 (defun iar--auto-load-knowledge (labels)
   "Read and format knowledge from LABELS (a list of doc subdirectory names).
-Returns a string with delimited knowledge blocks, or empty string if
-LABELS is nil or empty."
+Returns a cons cell (CONTENT . LOADED-LABELS) where CONTENT is a string
+with delimited knowledge blocks (or empty string) and LOADED-LABELS is
+a list of label strings that were successfully loaded."
   (if (or (null labels) (not labels))
-      ""
+      (cons "" nil)
     (let ((docs-dir (expand-file-name iar-docs-path iar-personalization-path))
-          (parts nil))
+          (parts nil)
+          (loaded-labels nil))
       (dolist (label labels)
         (let* ((clean-label (string-trim label))
                (dir-path (expand-file-name clean-label docs-dir)))
@@ -174,10 +176,12 @@ LABELS is nil or empty."
                               (format iar-knowledge-open-delimiter clean-label)
                               content
                               iar-knowledge-close-delimiter)
-                      parts))))))
+                      parts)
+                (push clean-label loaded-labels))))))
       (if parts
-          (mapconcat #'identity (nreverse parts) "")
-        ""))))
+          (cons (mapconcat #'identity (nreverse parts) "")
+                (nreverse loaded-labels))
+        (cons "" nil)))))
 
 ;;; --- Tool filtering ---
 
@@ -207,7 +211,8 @@ Returns a plist with keys:
   :mode -- the mode symbol (interactive, autonomous, etc.)
   :archetype -- the archetype name string
   :personality -- the personality name string
-  :project -- the project name string"
+  :project -- the project name string
+  :knowledge-labels -- list of auto-loaded knowledge label strings"
   (let* ((archetype-content (iar--read-archetype archetype-name))
          (mode (iar--parse-mode archetype-content))
          (personality-content (iar--read-personality personality-name))
@@ -216,7 +221,9 @@ Returns a plist with keys:
          (project-tools (plist-get project :tools))
          (project-objective (plist-get project :objective))
          (base-context (iar--read-base-context))
-         (knowledge-block (iar--auto-load-knowledge project-knowledge))
+         (knowledge-result (iar--auto-load-knowledge project-knowledge))
+         (knowledge-block (car knowledge-result))
+         (knowledge-labels (cdr knowledge-result))
          (memory-block (iar--inject-memory mode personality-name))
          (mount-info (if (fboundp 'iar--extra-mounts-prompt-string)
                          (iar--extra-mounts-prompt-string)
@@ -246,6 +253,7 @@ Returns a plist with keys:
             :mode mode
             :archetype archetype-name
             :personality personality-name
-            :project project-name))))
+            :project project-name
+            :knowledge-labels knowledge-labels))))
 
 (provide 'iar-prompt-assembly)
