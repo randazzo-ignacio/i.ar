@@ -597,7 +597,6 @@ build_podman_args() {
         -v "${REPO_DIR}/emacs.d:/root/.emacs.d:z" \
         -v "${REPO_DIR}/metaconfig:/root/.emacs.d/metaconfig:z" \
         -v "${REPO_DIR}/prompts:/root/.emacs.d/agents.d:z" \
-        # Personalization subdirs mounted via /root/personalization below
         "${IAR_MOUNT_OPTS[@]}" \
         "${SSH_MOUNT_OPTS[@]}" \
         "${DYNAMIC_MOUNT_OPTS[@]}" \
