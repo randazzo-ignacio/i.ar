@@ -1,3 +1,7 @@
 workspace/
 logs/
 utils/matrix.sh
+emacs.d/elpa/
+emacs.d/eln-cache/
+emacs.d/org-persist/
+emacs.d/auto-save-list/
