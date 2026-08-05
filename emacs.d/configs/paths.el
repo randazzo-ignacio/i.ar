@@ -22,9 +22,19 @@ cycle prompts, memory summarization, etc."
   :type 'string
   :group 'iar)
 
-(defcustom iar-knowledge-path "knowledge"
-  "Relative path to the knowledge base directory.
-Each subdirectory is a loadable knowledge folder (via C-c k)."
+(defcustom iar-docs-path "docs"
+  "Relative path to the project documentation directory.
+Each subdirectory is a loadable documentation folder (via C-c k).
+This holds project docs (iar/, infra/, user/) that get injected into
+the agent's system prompt as context."
+  :type 'string
+  :group 'iar)
+
+(defcustom iar-knowledge-base-path "knowledge"
+  "Relative path to the concept knowledge base directory.
+Each subdirectory is a knowledge base browsable via the read_knowledge
+tool. This holds reusable concept knowledge (linux/, future concepts)
+that agents query on demand, not injected into prompts."
   :type 'string
   :group 'iar)
 

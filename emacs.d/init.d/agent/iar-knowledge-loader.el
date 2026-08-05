@@ -2,32 +2,32 @@
 
 ;;; Knowledge Loader for gptel
 ;; Allows the user to inject curated knowledge files (.md/.org) from
-;; knowledge/<folder>/ into the current agent's system prompt.
+;; docs/<folder>/ into the current agent's system prompt.
 ;;
 ;; This separates agent PERSONALITY (prompt.org) from agent KNOWLEDGE
-;; (knowledge files).  An agent's prompt.org defines who it is; the
-;; knowledge files define what it knows about a specific subject.
+;; (documentation files).  An agent's prompt.org defines who it is; the
+;; documentation files define what it knows about a specific subject.
 ;;
-;; Usage: C-c k in gptel-mode.  Select a knowledge folder.  All .md and
+;; Usage: C-c k in gptel-mode.  Select a documentation folder.  All .md and
 ;; .org files in that folder are read and appended to the system prompt
 ;; with clear delimiters so the LLM can distinguish personality from
-;; knowledge.
+;; documentation.
 ;;
-;; Multiple C-c k calls stack: you can load linux/ then iar/ then
-;; personal-infra/ and all three knowledge bases will be present in
-;; the system prompt simultaneously.
+;; Multiple C-c k calls stack: you can load linux/ then iar/ then infra/
+;; and all three documentation bases will be present in the system prompt
+;; simultaneously.
 ;;
-;; Keybindings: C-c k (load knowledge), C-c p (prompt info)
+;; Keybindings: C-c k (load documentation), C-c p (prompt info)
 
 (require 'cl-lib)
 (require 'subr-x)
 (require 'iar-utils)
 
 ;; Declared in configs/ (split parameter files) (loaded before init.d modules).
-(defvar iar-knowledge-path nil
-  "Relative path to the knowledge base directory.")
+(defvar iar-docs-path nil
+  "Relative path to the project documentation directory.")
 (defvar iar-key-load-knowledge nil
-  "Keybinding to load a knowledge base folder.")
+  "Keybinding to load a documentation folder.")
 (defvar iar-key-prompt-info nil
   "Keybinding to display prompt size info.")
 (defvar iar-key-view-prompt nil
@@ -61,8 +61,8 @@ Each entry is (LABEL . CONTENT-STRING).")
 ;;; --- Knowledge directory ---
 
 (defun iar--knowledge-dir ()
-  "Return the path to the knowledge directory."
-  (expand-file-name iar-knowledge-path user-emacs-directory))
+  "Return the path to the documentation directory."
+  (expand-file-name iar-docs-path user-emacs-directory))
 
 (defun iar--knowledge-candidates ()
   "Build a list of selectable knowledge candidates.
@@ -71,7 +71,7 @@ Returns a list of cons cells (DISPLAY . PATH) where:
   (let ((kdir (iar--knowledge-dir))
         candidates)
     (when (file-directory-p kdir)
-      ;; List subdirectories (knowledge folders) only
+      ;; List subdirectories (documentation folders) only
       (dolist (entry (directory-files kdir nil "\\`[a-zA-Z0-9_-]+\\'" t))
         (let ((full-path (expand-file-name entry kdir)))
           (when (file-directory-p full-path)
@@ -120,8 +120,8 @@ Uses `iar--knowledge-base-prompt' as the personality and
     prompt))
 
 (defun iar-load-knowledge-dir (label)
-  "Non-interactively load a knowledge directory into the current buffer.
-LABEL is a string like \"iar/\" matching a subdirectory of the knowledge dir.
+  "Non-interactively load a documentation directory into the current buffer.
+LABEL is a string like \"iar/\" matching a subdirectory of the docs dir.
 Returns t if loaded, nil if not found or already loaded.
 Safe for batch/non-interactive use -- no completing-read, no user-error."
   (let* ((candidates (iar--knowledge-candidates))
@@ -156,22 +156,22 @@ Safe for batch/non-interactive use -- no completing-read, no user-error."
           t))))))
 
 (defun iar-load-knowledge ()
-  "Prompt user to select a knowledge folder and inject it
+  "Prompt user to select a documentation folder and inject it
 into the current agent's system prompt.  All .md and .org files in
 the selected folder are read and appended after the agent's
 personality prompt with clear delimiters.
 
-Multiple C-c k calls stack: each new knowledge base is added on top
-of the previous ones.  Selecting a knowledge base that is already
+Multiple C-c k calls stack: each new documentation base is added on top
+of the previous ones.  Selecting a documentation base that is already
 loaded is a no-op."
   (interactive)
   (unless (bound-and-true-p gptel-mode)
     (gptel-mode 1))
   (let* ((candidates (iar--knowledge-candidates))
          (_ (unless candidates
-              (user-error "No knowledge folders found in %s"
+              (user-error "No documentation folders found in %s"
                           (iar--knowledge-dir))))
-         (display (completing-read "Load knowledge: " candidates nil t))
+         (display (completing-read "Load documentation: " candidates nil t))
          (path (cdr (assoc display candidates)))
          (label (iar--knowledge-label display path)))
     (unless path

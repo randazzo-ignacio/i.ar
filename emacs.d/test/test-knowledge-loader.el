@@ -17,7 +17,7 @@
 (defun test-knowledge--setup ()
   "Create a temporary knowledge directory with test folders."
   (setq test-knowledge--tmpdir (make-temp-file "test-knowledge-" :dir-flag))
-  (let ((kbase (expand-file-name "knowledge" test-knowledge--tmpdir)))
+  (let ((kbase (expand-file-name "docs" test-knowledge--tmpdir)))
     (make-directory kbase t)
     (let ((linux-dir (expand-file-name "linux" kbase)))
       (make-directory linux-dir t)
@@ -29,7 +29,7 @@
       (make-directory empty-dir t)
       (with-temp-file (expand-file-name "notes.txt" empty-dir)
         (insert "This should be ignored.\n"))))
-  (setq iar-knowledge-path "knowledge"))
+  (setq iar-docs-path "docs"))
 
 (defun test-knowledge--teardown ()
   "Remove the temporary directory."
@@ -42,7 +42,7 @@
 Temporarily rebinds user-emacs-directory and knowledge config vars."
   (declare (indent 0))
   `(let ((old-emacs-dir user-emacs-directory)
-         (old-knowledge-path iar-knowledge-path)
+         (old-docs-path iar-docs-path)
          (old-open iar-knowledge-open-delimiter)
          (old-close iar-knowledge-close-delimiter)
          (old-sep iar-knowledge-file-separator))
@@ -56,7 +56,7 @@ Temporarily rebinds user-emacs-directory and knowledge config vars."
              ,@body))
        (test-knowledge--teardown)
        (setq user-emacs-directory old-emacs-dir
-             iar-knowledge-path old-knowledge-path
+             iar-docs-path old-docs-path
              iar-knowledge-open-delimiter old-open
              iar-knowledge-close-delimiter old-close
              iar-knowledge-file-separator old-sep))))
@@ -82,7 +82,7 @@ Temporarily rebinds user-emacs-directory and knowledge config vars."
 (ert-deftest test-knowledge-read-files-returns-content ()
   "iar--read-knowledge-files should read .md and .org files as a string."
   (with-knowledge-fixture
-    (let* ((kbase (expand-file-name "knowledge" test-knowledge--tmpdir))
+    (let* ((kbase (expand-file-name "docs" test-knowledge--tmpdir))
            (linux-dir (expand-file-name "linux" kbase))
            (result (iar--read-knowledge-files linux-dir)))
       (should (stringp result))
@@ -94,7 +94,7 @@ Temporarily rebinds user-emacs-directory and knowledge config vars."
 (ert-deftest test-knowledge-read-files-returns-nil-for-empty-dir ()
   "iar--read-knowledge-files should return nil when no .md/.org files found."
   (with-knowledge-fixture
-    (let* ((kbase (expand-file-name "knowledge" test-knowledge--tmpdir))
+    (let* ((kbase (expand-file-name "docs" test-knowledge--tmpdir))
            (empty-dir (expand-file-name "empty" kbase))
            (result (iar--read-knowledge-files empty-dir)))
       (should (null result)))))
@@ -133,7 +133,7 @@ Temporarily rebinds user-emacs-directory and knowledge config vars."
   (with-knowledge-fixture
     (let ((gptel-system-prompt "Personality."))
       (iar-load-knowledge-dir "linux/")
-      (let* ((kbase (expand-file-name "knowledge" test-knowledge--tmpdir))
+      (let* ((kbase (expand-file-name "docs" test-knowledge--tmpdir))
              (second-dir (expand-file-name "second" kbase)))
         (make-directory second-dir t)
         (with-temp-file (expand-file-name "info.md" second-dir)
