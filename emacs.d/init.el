@@ -163,6 +163,9 @@
 ;; Dynamic knowledge loader
 (load (expand-file-name "iar-knowledge-loader.el" init-agent-dir))
 
+;; Personality loader -- inject personality into agent prompt (C-c p)
+(load (expand-file-name "iar-personality-loader.el" init-agent-dir))
+
 ;; Buffer info (C-c b, C-c v) -- split from knowledge-loader
 (load (expand-file-name "iar-buffer-info.el" init-agent-dir))
 

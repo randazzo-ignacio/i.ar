@@ -31,6 +31,17 @@
   :type 'string
   :group 'iar)
 
+(defcustom iar-personality-open-delimiter "=== PERSONALITY [%s] ==="
+  "Format string for the opening delimiter of injected personality.
+%s is replaced with the personality name (e.g., \"mirror\")."
+  :type 'string
+  :group 'iar)
+
+(defcustom iar-personality-close-delimiter "=== END PERSONALITY ==="
+  "Closing delimiter for injected personality blocks."
+  :type 'string
+  :group 'iar)
+
 (defcustom iar-sanitized-open "[SANITIZED EXTERNAL DATA -- control sequences stripped, injection patterns flagged]"
   "Prefix wrapper for sanitized external data."
   :type 'string
