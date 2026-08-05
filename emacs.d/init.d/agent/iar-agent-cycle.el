@@ -71,8 +71,11 @@ Returns empty string if usage tracking is not available."
 START and END are buffer positions delimiting the new response text.
 Creates the log file if it does not exist.  Prepends a timestamp."
   (when (and (integerp start) (integerp end) (< start end))
-    (let* ((log-path (expand-file-name
-                      (format "%s/cycle.log" agent-name)
+    (let* ((project (or (and (boundp 'iar--current-project) iar--current-project)
+                          (getenv "IAR_PROJECT")
+                          "iar"))
+           (log-path (expand-file-name
+                      (format "%s/%s/cycle.log" project agent-name)
                       (expand-file-name iar-audit-path user-emacs-directory)))
            (timestamp (format-time-string "[%Y-%m-%d %H:%M:%S]"))
            (response (with-current-buffer (current-buffer)

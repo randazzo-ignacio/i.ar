@@ -2,10 +2,14 @@
 
 ;;; Shared Agent Utilities
 ;; Validation and path resolution functions used across multiple modules.
-;; Extracted from task_tools.el during Layer 2.1 refactor.
 ;;
-;; These functions are consumed by: task_tools (tool definitions),
-;; iar-agent-loader, iar-delegate-tool, iar-reload-tools, iar-memory-tools.
+;; Path resolution is per-project:
+;; - Tasks: tasks/<project>/
+;; - Audit: audit/<project>/<personality>/
+;;
+;; The current project is set by iar.sh --project flag (via IAR_PROJECT env var)
+;; and stored in iar--current-project. The current personality is set by
+;; iar-load-agent (C-c a) and stored in iar--current-personality.
 
 (require 'cl-lib)
 (require 'subr-x)
@@ -19,18 +23,20 @@
 
 ;; Declared in configs/tasks.el
 (defvar iar-task-description-limit nil
-  "Maximum character length for a task description in create_task.
-Loaded from configs/tasks.el as a defcustom.")
+  "Maximum character length for a task description in create_task.")
+
+;; Declared in iar-agent-loader.el
+(defvar iar--current-project nil
+  "Name of the currently loaded project.")
+(defvar iar--current-personality nil
+  "Name of the currently loaded personality.")
 
 ;;; --- Validation helpers ---
 
 (defun iar--valid-name-p (name)
   "Return non-nil if NAME is a valid agent or task name.
 Valid names consist only of alphanumeric characters, hyphens, and
-underscores, with at least one character.  Uses string anchors
-to prevent multi-line bypass (line anchors match at each newline
-boundary, so a string like \"valid\\n../../etc\" would pass
-^...$ but is correctly rejected by \\`...\\')."
+underscores, with at least one character."
   (and (stringp name)
        (string-match-p "\\`[a-zA-Z0-9_-]+\\'" name)))
 
@@ -62,68 +68,86 @@ are rejected."
         (error "Invalid task path segment: '%s'. Only letters, digits, hyphens, and underscores allowed." seg)))
     path))
 
-;;; --- Path resolution ---
+;;; --- Path resolution (per-project) ---
 
-(defun iar--resolve-agent-dir (base)
-  "Resolve a per-agent directory under BASE for the currently loaded agent.
-BASE is \"tasks\" or \"audit\" (a subdirectory of user-emacs-directory).
-Validates the agent name and checks for path traversal.
-Returns the resolved directory path, or signals an error if no agent
-is loaded or if the agent name is nil."
-  (let* ((base-path (expand-file-name
-                     (if (equal base "tasks") iar-tasks-path
-                       (if (equal base "audit") iar-audit-path
-                         base))
-                     user-emacs-directory))
-         (agent-name (iar--get-agent-name)))
-    (unless agent-name
-      (error "No agent loaded. Load one with C-c a first."))
-    (unless (member base '("tasks" "audit"))
-      (error "Unrecognized base directory: '%s'. Only \"tasks\" and \"audit\" are supported." base))
-    (iar--validate-agent-name agent-name)
-    (let ((resolved (expand-file-name agent-name base-path)))
+(defun iar--resolve-project-tasks-dir ()
+  "Return the tasks directory path for the current project.
+Tasks live at /root/.emacs.d/tasks/<project>/.
+Uses `iar--current-project' (set by iar.sh --project flag or C-c a)."
+  (let* ((base-path (expand-file-name iar-tasks-path user-emacs-directory))
+         (project (or (and (boundp 'iar--current-project) iar--current-project)
+                      (getenv "IAR_PROJECT")
+                      (error "No project set. Use --project flag or C-c a."))))
+    (iar--validate-agent-name project)
+    (let ((resolved (expand-file-name project base-path)))
       (iar--path-traversal-check resolved base-path))))
 
+(defun iar--resolve-project-audit-dir ()
+  "Return the audit directory path for the current project + personality.
+Audit files live at /root/.emacs.d/audit/<project>/<personality>/.
+Uses `iar--current-project' and `iar--current-personality'."
+  (let* ((base-path (expand-file-name iar-audit-path user-emacs-directory))
+         (project (or (and (boundp 'iar--current-project) iar--current-project)
+                      (getenv "IAR_PROJECT")
+                      (error "No project set. Use --project flag or C-c a.")))
+         (personality (or (and (boundp 'iar--current-personality) iar--current-personality)
+                          (iar--get-agent-name)
+                          (error "No personality loaded. Use C-c a first."))))
+    (iar--validate-agent-name project)
+    (iar--validate-agent-name personality)
+    (let ((resolved (expand-file-name (format "%s/%s" project personality) base-path)))
+      (iar--path-traversal-check resolved base-path))))
+
+;;; --- Backward compat aliases ---
+
 (defun iar--resolve-agent-tasks-dir ()
-  "Return the tasks directory path for the currently loaded agent.
-Tasks live in the tasks mount at /root/.emacs.d/tasks/<agent-name>/."
-  (iar--resolve-agent-dir "tasks"))
+  "Backward compat alias for `iar--resolve-project-tasks-dir'."
+  (iar--resolve-project-tasks-dir))
 
 (defun iar--resolve-agent-audit-dir ()
-  "Return the audit directory path for the currently loaded agent.
-Memory files (LOGS.md, STATE.org) live in the audit mount
-at /root/.emacs.d/audit/<agent-name>/.  Used by iar-memory-tools.el via alias."
-  (iar--resolve-agent-dir "audit"))
+  "Backward compat alias for `iar--resolve-project-audit-dir'."
+  (iar--resolve-project-audit-dir))
+
+(defun iar--resolve-agent-dir (base)
+  "Backward compat: resolve per-agent directory.
+BASE is \"tasks\" or \"audit\". Delegates to project-based resolution."
+  (if (equal base "tasks")
+      (iar--resolve-project-tasks-dir)
+    (if (equal base "audit")
+        (iar--resolve-project-audit-dir)
+      (error "Unrecognized base directory: '%s'" base))))
+
+;;; --- Task path resolution ---
 
 (defun iar--resolve-task-path (task-name)
-  "Resolve TASK-NAME to a full path within the current agent's tasks dir.
+  "Resolve TASK-NAME to a full path within the current project's tasks dir.
 Adds the .md extension.  Validates the task name and checks for
 path traversal.  Kept for backward compatibility."
   (iar--validate-task-name task-name)
-  (let* ((agent-dir (iar--resolve-agent-tasks-dir))
+  (let* ((project-dir (iar--resolve-project-tasks-dir))
          (filename (concat task-name ".md"))
-         (full-path (expand-file-name filename agent-dir)))
-    (iar--path-traversal-check full-path agent-dir)))
+         (full-path (expand-file-name filename project-dir)))
+    (iar--path-traversal-check full-path project-dir)))
 
 (defun iar--resolve-task-dir (task-path)
-  "Resolve TASK-PATH to a directory within the current agent tasks dir.
+  "Resolve TASK-PATH to a directory within the current project's tasks dir.
 TASK-PATH is a slash-separated path like i-ar-expansion/one-shot-model.
 Returns the resolved directory path, or signals an error on invalid
 input or path traversal."
   (iar--validate-task-path task-path)
-  (let* ((agent-dir (iar--resolve-agent-tasks-dir))
-         (full-path (expand-file-name task-path agent-dir)))
-    (iar--path-traversal-check full-path agent-dir)))
+  (let* ((project-dir (iar--resolve-project-tasks-dir))
+         (full-path (expand-file-name task-path project-dir)))
+    (iar--path-traversal-check full-path project-dir)))
 
 (defun iar--resolve-task-file (task-path)
-  "Resolve TASK-PATH to a .org file within the current agent tasks dir.
+  "Resolve TASK-PATH to a .org file within the current project's tasks dir.
 TASK-PATH is a slash-separated path where the last segment is the filename.
 Returns the resolved file path with .org extension, or signals an error
 on invalid input or path traversal."
   (iar--validate-task-path task-path)
-  (let* ((agent-dir (iar--resolve-agent-tasks-dir))
-         (full-path (expand-file-name (concat task-path ".org") agent-dir)))
-    (iar--path-traversal-check full-path agent-dir)))
+  (let* ((project-dir (iar--resolve-project-tasks-dir))
+         (full-path (expand-file-name (concat task-path ".org") project-dir)))
+    (iar--path-traversal-check full-path project-dir)))
 
 (defun iar--task-parent-path (task-path)
   "Return the parent path of TASK-PATH.

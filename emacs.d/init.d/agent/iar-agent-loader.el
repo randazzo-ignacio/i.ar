@@ -105,7 +105,7 @@ Otherwise, use \"default\"."
                        (expand-file-name iar-projects-path user-emacs-directory))))
     (if (file-exists-p project-path)
         personality-name
-      "default")))
+      "iar")))
 
 ;;; --- Assembly and buffer setup ---
 
@@ -149,7 +149,7 @@ This is the primary entry point for interactive sessions (C-c a)."
                           (expand-file-name iar-personalities-path user-emacs-directory))))
          (chosen (completing-read "Select Personality: " names nil t))
          (archetype "interactive")
-         (project "default"))
+         (project "iar"))
     (unless (bound-and-true-p gptel-mode)
       (gptel-mode 1))
     (let ((result (iar--setup-assembled-buffer archetype chosen project)))
@@ -164,7 +164,7 @@ Re-assembles the prompt with the current archetype and project.
 Returns t if loaded, nil if personality not found."
   (let* ((names (iar--personality-names))
          (archetype (or iar--current-archetype "interactive"))
-         (project (or iar--current-project "default")))
+         (project (or iar--current-project "iar")))
     (if (not (member name names))
         (progn
           (message "[personality] '%s' not found" name)

@@ -186,12 +186,13 @@
   (let* ((test-dir (make-temp-file "test-cycle-log-" :dir-flag))
          (iar-audit-path "audit")
          (user-emacs-directory test-dir)
-         (iar--current-agent-name "testagent"))
+         (iar--current-agent-name "testagent")
+         (iar--current-project "testagent"))
     (unwind-protect
         (with-temp-buffer
           (insert "Test response text")
           (iar--cycle-log-append "testagent" (point-min) (point-max))
-          (let ((log-path (expand-file-name "testagent/cycle.log"
+          (let ((log-path (expand-file-name "testagent/testagent/cycle.log"
                                             (expand-file-name "audit" test-dir))))
             (should (file-exists-p log-path))
             (with-temp-buffer
@@ -210,7 +211,7 @@
           (insert "Test")
           (iar--cycle-log-append "testagent" 5 3)
           (iar--cycle-log-append "testagent" 5 5)
-          (let ((log-path (expand-file-name "testagent/cycle.log"
+          (let ((log-path (expand-file-name "testagent/testagent/cycle.log"
                                             (expand-file-name "audit" test-dir))))
             (should-not (file-exists-p log-path))))
       (delete-directory test-dir t))))

@@ -207,8 +207,11 @@ Also runs post-tool-call audit logging after the original function."
 Best-effort: errors are demoted to messages."
   (condition-case err
       (let* ((agent (or (iar--get-agent-name) "nil"))
+             (project (or (and (boundp 'iar--current-project) iar--current-project)
+                          (getenv "IAR_PROJECT")
+                          "nil"))
              (log-dir (expand-file-name
-                       (format "%s" agent)
+                       (format "%s/%s" project agent)
                        (expand-file-name iar-audit-path user-emacs-directory)))
              (log-path (expand-file-name "USAGE.log" log-dir)))
         (make-directory log-dir t)

@@ -30,7 +30,7 @@ Updates gptel-system-prompt and gptel-tools in the current buffer."
                                 (iar--get-agent-name)
                                 (error "No personality currently loaded. Pass agent_name to reload a specific one."))))
              (archetype (or iar--current-archetype "interactive"))
-             (project (or iar--current-project "default")))
+             (project (or iar--current-project "iar")))
         (let ((result (iar--setup-assembled-buffer archetype personality project)))
           (format "Success: Re-assembled prompt for personality '%s' (archetype: %s, project: %s). System message updated (%d chars)."
                   personality archetype project

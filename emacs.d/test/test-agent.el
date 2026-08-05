@@ -20,7 +20,7 @@
 
 (ert-deftest test-agent-read-profile-expands-includes ()
   "Assembly engine includes base_context in the assembled prompt."
-  (let ((result (iar--assemble-prompt "interactive" "mirror" "default")))
+  (let ((result (iar--assemble-prompt "interactive" "mirror" "iar")))
     (let ((prompt (plist-get result :prompt)))
       (should (string-match-p "CONTEXT" prompt))
       (should (string-match-p "ARCHETYPE" prompt))

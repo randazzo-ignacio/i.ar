@@ -37,16 +37,20 @@
   (declare (indent 0))
   `(let ((old-emacs-dir user-emacs-directory)
          (old-agent-name (and (boundp 'iar--current-agent-name)
-                              iar--current-agent-name)))
+                              iar--current-agent-name))
+         (old-project (and (boundp 'iar--current-project)
+                           iar--current-project)))
      (unwind-protect
          (progn
            (test-roadmap--setup)
            (let ((user-emacs-directory test-roadmap--tmpdir))
              (setq iar--current-agent-name "testagent")
+             (setq iar--current-project "testagent")
              ,@body))
        (test-roadmap--teardown)
        (setq user-emacs-directory old-emacs-dir)
-       (setq iar--current-agent-name old-agent-name))))
+       (setq iar--current-agent-name old-agent-name)
+       (setq iar--current-project old-project))))
 
 ;;; --- read_roadmap tests ---
 
@@ -62,19 +66,23 @@
   "read_roadmap should return a message when no roadmap exists."
   (let ((old-emacs-dir user-emacs-directory)
         (old-agent-name (and (boundp 'iar--current-agent-name)
-                             iar--current-agent-name)))
+                             iar--current-agent-name))
+         (old-project (and (boundp 'iar--current-project)
+                           iar--current-project)))
     (unwind-protect
         (progn
           (setq test-roadmap--tmpdir (make-temp-file "test-roadmap-" :dir-flag))
           (make-directory (expand-file-name "tasks/testagent" test-roadmap--tmpdir) t)
           (let ((user-emacs-directory test-roadmap--tmpdir))
             (setq iar--current-agent-name "testagent")
+            (setq iar--current-project "testagent")
             (let ((result (iar--tool-read-roadmap)))
               (should (stringp result))
               (should (string-match-p "No roadmap found" result)))))
       (test-roadmap--teardown)
       (setq user-emacs-directory old-emacs-dir)
-      (setq iar--current-agent-name old-agent-name))))
+      (setq iar--current-agent-name old-agent-name)
+       (setq iar--current-project old-project))))
 
 ;;; --- write_roadmap tests ---
 
@@ -82,13 +90,16 @@
   "write_roadmap should create a new ROADMAP.org."
   (let ((old-emacs-dir user-emacs-directory)
         (old-agent-name (and (boundp 'iar--current-agent-name)
-                             iar--current-agent-name)))
+                             iar--current-agent-name))
+         (old-project (and (boundp 'iar--current-project)
+                           iar--current-project)))
     (unwind-protect
         (progn
           (setq test-roadmap--tmpdir (make-temp-file "test-roadmap-" :dir-flag))
           (make-directory (expand-file-name "tasks/testagent" test-roadmap--tmpdir) t)
           (let ((user-emacs-directory test-roadmap--tmpdir))
             (setq iar--current-agent-name "testagent")
+            (setq iar--current-project "testagent")
             (let ((result (iar--tool-write-roadmap "* New Roadmap\n\nFresh content.")))
               (should (stringp result))
               (should (string-match-p "Success" result))
@@ -99,7 +110,8 @@
                   (should (string-match-p "New Roadmap" (buffer-string))))))))
       (test-roadmap--teardown)
       (setq user-emacs-directory old-emacs-dir)
-      (setq iar--current-agent-name old-agent-name))))
+      (setq iar--current-agent-name old-agent-name)
+       (setq iar--current-project old-project))))
 
 (ert-deftest test-roadmap-write-overwrite ()
   "write_roadmap should overwrite an existing ROADMAP.org."

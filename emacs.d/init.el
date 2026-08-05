@@ -67,6 +67,14 @@
 (when (string= (getenv "EMACBOROS_SELF_MODIFICATION") "1")
   (setq iar-guard-allow-self-modification t))
 
+;; Project -- controlled by IAR_PROJECT env var.
+;; Set by iar.sh --project flag. Determines task and audit paths.
+;; If not set, defaults to "iar" (for interactive sessions without --project).
+;; This is set before agent-loader loads so iar--current-project is available.
+(defvar iar--current-project nil
+  "Current project name. Set by IAR_PROJECT env var or C-c a.")
+(setq iar--current-project (or (getenv "IAR_PROJECT") "iar"))
+
 ;; ──────────────────────────────────────────────────────────
 ;; Core modules
 ;; ──────────────────────────────────────────────────────────

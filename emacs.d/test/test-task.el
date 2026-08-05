@@ -49,12 +49,12 @@
       (make-directory agent-dir t)))
   (let ((audit-dir (expand-file-name "audit" test-task--tmpdir)))
     (make-directory audit-dir t)
-    (let ((agent-audit-dir (expand-file-name "testagent" audit-dir)))
+    (let ((agent-audit-dir (expand-file-name "testagent/testagent" audit-dir)))
       (make-directory agent-audit-dir t)
       (with-temp-file (expand-file-name "HISTORY.log" agent-audit-dir)
         (insert "[2026-06-22 10:00:00] testagent: did something\n")
         (insert "[2026-06-22 11:00:00] testagent: did something else\n")))
-    (let ((agent-audit-dir (expand-file-name "otheragent" audit-dir)))
+    (let ((agent-audit-dir (expand-file-name "testagent/otheragent" audit-dir)))
       (make-directory agent-audit-dir t)
       (with-temp-file (expand-file-name "HISTORY.log" agent-audit-dir)
         (insert "[2026-06-22 09:00:00] otheragent: started up\n")))))
@@ -70,16 +70,20 @@
   (declare (indent 0))
   `(let ((old-emacs-dir user-emacs-directory)
          (old-agent-name (and (boundp 'iar--current-agent-name)
-                              iar--current-agent-name)))
+                              iar--current-agent-name))
+         (old-project (and (boundp 'iar--current-project)
+                           iar--current-project)))
      (unwind-protect
          (progn
            (test-task--setup)
            (let ((user-emacs-directory test-task--tmpdir))
              (setq iar--current-agent-name "testagent")
+             (setq iar--current-project "testagent")
              ,@body))
        (test-task--teardown)
        (setq user-emacs-directory old-emacs-dir)
-       (setq iar--current-agent-name old-agent-name))))
+       (setq iar--current-agent-name old-agent-name)
+       (setq iar--current-project old-project))))
 
 ;;; --- read_task tests ---
 
@@ -146,9 +150,10 @@
         (should (string-match-p "not found" result2))))))
 
 (ert-deftest test-task-read-no-tasks ()
-  "read_task with nil on an agent with no tasks should return no-tasks message."
+  "read_task with nil on a project with no tasks should return no-tasks message."
   (with-task-fixture
-    (let ((iar--current-agent-name "otheragent"))
+    (let ((iar--current-agent-name "otheragent")
+          (iar--current-project "emptyproject"))
       (let ((result (iar--tool-read-task nil)))
         (should (stringp result))
         (should (string-match-p "No tasks" result))))))

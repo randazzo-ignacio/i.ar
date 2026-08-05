@@ -111,26 +111,26 @@ Environment:
 
 Examples:
   # Interactive session with self-modification
-  iar.sh --self-modification --personalization ~/repos/iar-personalization --gptel-fork ~/repos/gptel
+  iar.sh --project iar --personalization ~/repos/iar-personalization --gptel-fork ~/repos/gptel
 
   # Interactive session (no self-modification)
-  iar.sh --personalization ~/repos/iar-personalization --gptel-fork ~/repos/gptel
+  iar.sh --project iar --personalization ~/repos/iar-personalization --gptel-fork ~/repos/gptel
 
   # Darwin autonomous loop
-  iar.sh --loop --self-modification --personalization ~/repos/iar-personalization \\
+  iar.sh --loop --project iar --self-modification --personalization ~/repos/iar-personalization \\
     --agent darwin --gptel-fork ~/repos/gptel --max-cycles 50
 
   # Gardener autonomous loop
-  iar.sh --loop --personalization ~/repos/iar-personalization \\
+  iar.sh --loop --project iar --personalization ~/repos/iar-personalization \\
     --agent gardener --gptel-fork ~/repos/gptel --max-cycles 10
 
   # Playground loop on GPU model (sophon)
-  iar.sh --loop --personalization ~/repos/iar-personalization \\
+  iar.sh --loop --project iar --personalization ~/repos/iar-personalization \\
     --agent playground --model nemotron-3-super:120b --ctx 131072 \\
     --ollama-host 10.66.0.5:11434 --max-cycles 999 --cooldown 300
 
   # Playground loop on CPU model (daftpunk)
-  iar.sh --loop --personalization ~/repos/iar-personalization \\
+  iar.sh --loop --project iar --personalization ~/repos/iar-personalization \\
     --agent playground --model granite4.1:30b --ctx 131072 \\
     --ollama-host 10.66.0.3:11434 --max-cycles 999 --cooldown 300
 EOF
@@ -150,6 +150,7 @@ OLLAMA_MODEL=""
 OLLAMA_CTX=""
 USE_LOCAL=false
 PERSONALIZATION_DIR=""
+PROJECT_NAME=""
 SSH_KEY_DIR="${HOME}/.ssh"
 SSH_KEY_NAME=""
 GPTEL_FORK_PATH=""
@@ -174,6 +175,11 @@ while [[ $# -gt 0 ]]; do
                 [[ ! -d "${PERSONALIZATION_DIR}/${subdir}" ]] && \
                     error "--personalization: missing required subdirectory: ${PERSONALIZATION_DIR}/${subdir}" && exit 1
             done
+            shift 2
+            ;;
+        --project)
+            [[ $# -lt 2 ]] && error "--project requires a name argument" && exit 1
+            PROJECT_NAME="$2"
             shift 2
             ;;
         --agent)
@@ -291,12 +297,60 @@ if [[ -z "${PERSONALIZATION_DIR}" ]]; then
     exit 1
 fi
 
+if [[ -z "${PROJECT_NAME}" ]]; then
+    error "--project is required. Specify a project name (e.g., iar, paranoia, pentesting)."
+    echo ""
+    usage
+    exit 1
+fi
+
 # Mode-specific validation
 if [[ "${MODE}" == "loop" && -z "${AGENT_NAME}" ]]; then
     error "--agent is required in --loop mode."
     echo ""
     usage
     exit 1
+fi
+
+# =============================================================================
+# Parse project config for mounts
+# =============================================================================
+PROJECT_FILE="${PERSONALIZATION_DIR}/../agents.d/projects/${PROJECT_NAME}.org"
+# agents.d is in the prompts/ dir of the repo, not personalization.
+# Find it relative to the repo.
+PROJECT_FILE="${REPO_DIR}/prompts/projects/${PROJECT_NAME}.org"
+PROJECT_MOUNT_ARGS=()
+PROJECT_MOUNT_RO_ARGS=()
+
+if [[ ! -f "${PROJECT_FILE}" ]]; then
+    info "Project file not found: ${PROJECT_FILE}"
+    info "Creating new project file for '${PROJECT_NAME}'..."
+    mkdir -p "$(dirname "${PROJECT_FILE}")"
+    cat > "${PROJECT_FILE}" <<EOF
+#+KNOWLEDGE: iar/
+#+TOOLS: list_directory read_file write_file append_file execute_code_local check_elisp read_task create_task write_subtask remove_task read_history send_telegram git_commit delegate reload_os reload_agent read_knowledge read_roadmap write_roadmap
+#+OBJECTIVE: New project '${PROJECT_NAME}'. Edit this file to configure.
+EOF
+    info "Created: ${PROJECT_FILE}"
+fi
+
+# Parse #+MOUNTS and #+MOUNTS_RO from project file
+if [[ -f "${PROJECT_FILE}" ]]; then
+    while IFS= read -r line; do
+        if [[ "${line}" =~ ^#\+MOUNTS:\ *(.*) ]]; then
+            for path in "${BASH_REMATCH[1]}"; do
+                if [[ -n "${path}" && -d "${path}" ]]; then
+                    PROJECT_MOUNT_ARGS+=("$(realpath "${path}")")
+                fi
+            done
+        elif [[ "${line}" =~ ^#\+MOUNTS_RO:\ *(.*) ]]; then
+            for path in "${BASH_REMATCH[1]}"; do
+                if [[ -n "${path}" && -d "${path}" ]]; then
+                    PROJECT_MOUNT_RO_ARGS+=("$(realpath "${path}")")
+                fi
+            done
+        fi
+    done < "${PROJECT_FILE}"
 fi
 
 # Warn about loop-only flags in interactive mode
@@ -528,6 +582,7 @@ build_podman_args() {
         -e "HUMAN_MATRIX_TOKEN=${HUMAN_MATRIX_TOKEN:-}" \
         $([[ -n "${GPTEL_FORK_PATH}" ]] && echo "-v ${GPTEL_FORK_PATH}:/root/.emacs.d/gptel-fork:z -e EMACBOROS_GPTEL_FORK_PATH=/root/.emacs.d/gptel-fork") \
         $([[ "${SELF_MODIFICATION:-0}" -eq 1 ]] && echo "-e EMACBOROS_SELF_MODIFICATION=1") \
+        -e "IAR_PROJECT=${PROJECT_NAME}" \
         $([[ -n "${EXTRA_MOUNTS_ENV}" ]] && echo "-e IAR_EXTRA_MOUNTS=${EXTRA_MOUNTS_ENV}") \
         -e "LANG=C.utf8" \
         --tmpfs /tmp:rw,size=256m \
@@ -544,6 +599,8 @@ build_podman_args() {
         "${SSH_MOUNT_OPTS[@]}" \
         "${DYNAMIC_MOUNT_OPTS[@]}" \
         "${PERSONALIZATION_MOUNT_OPTS[@]}" \
+        $([[ ${#PROJECT_MOUNT_ARGS[@]} -gt 0 ]] && for p in "${PROJECT_MOUNT_ARGS[@]}"; do echo "-v ${p}:${p}:z"; done) \
+        $([[ ${#PROJECT_MOUNT_RO_ARGS[@]} -gt 0 ]] && for p in "${PROJECT_MOUNT_RO_ARGS[@]}"; do echo "-v ${p}:${p}:ro,z"; done) \
         -e "GIT_AUTHOR_NAME=${GIT_AUTHOR_NAME}" \
         -e "GIT_AUTHOR_EMAIL=${GIT_AUTHOR_EMAIL}" \
         -e "GIT_COMMITTER_NAME=${GIT_AUTHOR_NAME}" \

@@ -111,14 +111,14 @@
 
 (ert-deftest test-assembly-assemble-full ()
   "Full assembly produces a prompt with all sections in correct order."
-  (let ((result (iar--assemble-prompt "interactive" "mirror" "default")))
+  (let ((result (iar--assemble-prompt "interactive" "mirror" "iar")))
     (should (plist-get result :prompt))
     (should (stringp (plist-get result :prompt)))
     (should (plist-get result :tools))
     (should (eq (plist-get result :mode) 'interactive))
     (should (string= (plist-get result :archetype) "interactive"))
     (should (string= (plist-get result :personality) "mirror"))
-    (should (string= (plist-get result :project) "default"))
+    (should (string= (plist-get result :project) "iar"))
     ;; Check assembly order using delimiter strings (not generic words
     ;; that might appear in knowledge content)
     (let ((prompt (plist-get result :prompt)))
