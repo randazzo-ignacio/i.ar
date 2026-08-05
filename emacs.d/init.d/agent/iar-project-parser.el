@@ -5,13 +5,16 @@
 ;; A project defines:
 ;; - #+KNOWLEDGE: which doc labels to auto-load (subdirs of docs/)
 ;; - #+TOOLS: which tools to register (tool name strings)
-;; - #+MOUNTS: host paths to mount read-write into the container
-;; - #+MOUNTS_RO: host paths to mount read-only into the container
+;; - #+MOUNTS: host paths to mount into the container, with optional :rw/:ro suffix
 ;; - #+OBJECTIVE: free-text scope/goal injected into the prompt
+;;
+;; #+MOUNTS format: space-separated list of path:mode pairs.
+;;   #+MOUNTS: /path/to/repo:rw /path/to/infra:ro
+;; If no :mode suffix, defaults to :rw.
 ;;
 ;; If #+TOOLS is absent, all tools are registered (backward compat).
 ;; If #+KNOWLEDGE is absent, no docs are auto-loaded.
-;; If #+MOUNTS/#+MOUNTS_RO are absent, no project-specific mounts.
+;; If #+MOUNTS is absent, no project-specific mounts.
 ;; If #+OBJECTIVE is absent, no objective text is injected.
 
 (require 'cl-lib)
@@ -39,18 +42,25 @@ name (file base name) and PATH is the full path to the .org file."
               (push (cons name full-path) candidates))))))
     (nreverse (sort candidates (lambda (a b) (string< (car a) (car b)))))))
 
+(defun iar--parse-mount-entry (entry)
+  "Parse a single mount entry like \"/path:rw\" or \"/path\".
+Returns a cons cell (PATH . MODE) where MODE is \"rw\" or \"ro\".
+Defaults to \"rw\" if no mode suffix is present."
+  (let* ((parts (split-string entry ":" t))
+         (path (car parts))
+         (mode (or (cadr parts) "rw")))
+    (cons path mode)))
+
 (defun iar--parse-project-metadata (content)
-  "Parse #+KNOWLEDGE, #+TOOLS, #+MOUNTS, #+MOUNTS_RO, and #+OBJECTIVE from CONTENT.
-Returns a plist with keys :knowledge, :tools, :mounts, :mounts-ro, :objective.
+  "Parse #+KNOWLEDGE, #+TOOLS, #+MOUNTS, and #+OBJECTIVE from CONTENT.
+Returns a plist with keys :knowledge, :tools, :mounts, :objective.
 :knowledge is a list of strings (doc labels) or nil.
 :tools is a list of strings (tool names) or nil (nil = all tools).
-:mounts is a list of host path strings (read-write) or nil.
-:mounts-ro is a list of host path strings (read-only) or nil.
+:mounts is a list of (PATH . MODE) cons cells or nil.
 :objective is a string or nil."
   (let ((knowledge nil)
         (tools nil)
         (mounts nil)
-        (mounts-ro nil)
         (objective nil))
     ;; Parse #+KNOWLEDGE: space-separated list
     (when (string-match "^#\\+KNOWLEDGE:\\s-*\\(.+\\)$" content)
@@ -60,24 +70,20 @@ Returns a plist with keys :knowledge, :tools, :mounts, :mounts-ro, :objective.
     (when (string-match "^#\\+TOOLS:\\s-*\\(.+\\)$" content)
       (let ((raw (match-string 1 content)))
         (setq tools (split-string raw "\\s-+" t))))
-    ;; Parse #+MOUNTS: space-separated list of host paths (read-write)
+    ;; Parse #+MOUNTS: space-separated list of path:mode pairs
     (when (string-match "^#\\+MOUNTS:\\s-*\\(.+\\)$" content)
       (let ((raw (match-string 1 content)))
-        (setq mounts (split-string raw "\\s-+" t))))
-    ;; Parse #+MOUNTS_RO: space-separated list of host paths (read-only)
-    (when (string-match "^#\\+MOUNTS_RO:\\s-*\\(.+\\)$" content)
-      (let ((raw (match-string 1 content)))
-        (setq mounts-ro (split-string raw "\\s-+" t))))
+        (setq mounts (mapcar #'iar--parse-mount-entry
+                             (split-string raw "\\s-+" t)))))
     ;; Parse #+OBJECTIVE: free text (rest of line)
     (when (string-match "^#\\+OBJECTIVE:\\s-*\\(.+\\)$" content)
       (setq objective (string-trim (match-string 1 content))))
     (list :knowledge knowledge :tools tools
-          :mounts mounts :mounts-ro mounts-ro
-          :objective objective)))
+          :mounts mounts :objective objective)))
 
 (defun iar--parse-project (path)
   "Parse a project.org file at PATH.
-Returns a plist with keys :name, :knowledge, :tools, :mounts, :mounts-ro, :objective.
+Returns a plist with keys :name, :knowledge, :tools, :mounts, :objective.
 Signals an error if the file does not exist."
   (unless (file-exists-p path)
     (error "Project file not found: %s" path))
@@ -90,7 +96,7 @@ Signals an error if the file does not exist."
 
 (defun iar--load-project (name)
   "Load a project by name from agents.d/projects/<name>.org.
-Returns a plist with keys :name, :knowledge, :tools, :mounts, :mounts-ro, :objective.
+Returns a plist with keys :name, :knowledge, :tools, :mounts, :objective.
 Signals an error if the project is not found."
   (let* ((candidates (iar--project-candidates))
          (entry (assoc name candidates))
@@ -109,9 +115,8 @@ Returns the plist from parsing the newly created file."
     (unless (file-directory-p projects-dir)
       (make-directory projects-dir t))
     (with-temp-file project-path
-      (insert (format "#+KNOWLEDGE: iar/\n"))
-      (insert (format "#+TOOLS: list_directory read_file write_file append_file execute_code_local check_elisp read_task create_task write_subtask remove_task read_history send_telegram git_commit delegate reload_os reload_agent read_knowledge read_roadmap write_roadmap\n"))
-      ;; No #+MOUNTS/#+MOUNTS_RO lines -- parser returns nil for absent fields
+      (insert "#+KNOWLEDGE: iar/\n")
+      (insert "#+TOOLS: list_directory read_file write_file append_file execute_code_local check_elisp read_task create_task write_subtask remove_task read_history send_telegram git_commit delegate reload_os reload_agent read_knowledge read_roadmap write_roadmap\n")
       (insert (format "#+OBJECTIVE: New project '%s'. Edit this file to configure.\n" name)))
     (message "[project] Created new project file at %s" project-path)
     (iar--parse-project project-path)))

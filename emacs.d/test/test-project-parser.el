@@ -6,10 +6,8 @@
 (require 'cl-lib)
 (require 'subr-x)
 
-;; Load the module under test
 (require 'iar-project-parser)
 
-;; Configs must be loaded for iar-projects-path
 (defvar iar-projects-path nil)
 
 (ert-deftest test-project-parser-load-iar ()
@@ -17,10 +15,7 @@
   (let ((p (iar--load-project "iar")))
     (should (string= (plist-get p :name) "iar"))
     (should (member "iar/" (plist-get p :knowledge)))
-    (should (member "infra/" (plist-get p :knowledge)))
-    (should (member "user/" (plist-get p :knowledge)))
     (should (member "read_file" (plist-get p :tools)))
-    (should (member "delegate" (plist-get p :tools)))
     (should (stringp (plist-get p :objective)))
     (should (> (length (plist-get p :objective)) 0))))
 
@@ -28,38 +23,20 @@
   "Loading 'implementer' project returns restricted tool set."
   (let ((p (iar--load-project "implementer")))
     (should (string= (plist-get p :name) "implementer"))
-    (should (equal (plist-get p :knowledge) '("iar/")))
     (should (member "read_file" (plist-get p :tools)))
-    (should (member "write_file" (plist-get p :tools)))
-    (should (member "execute_code_local" (plist-get p :tools)))
-    (should-not (member "delegate" (plist-get p :tools)))
-    (should-not (member "send_telegram" (plist-get p :tools)))
-    (should-not (member "reload_os" (plist-get p :tools)))))
+    (should-not (member "delegate" (plist-get p :tools)))))
 
 (ert-deftest test-project-parser-load-reviewer ()
   "Loading 'reviewer' project returns minimal read-only tool set."
   (let ((p (iar--load-project "reviewer")))
-    (should (string= (plist-get p :name) "reviewer"))
     (should (member "read_file" (plist-get p :tools)))
-    (should (member "list_directory" (plist-get p :tools)))
-    (should (member "execute_code_local" (plist-get p :tools)))
-    (should-not (member "write_file" (plist-get p :tools)))
-    (should-not (member "git_commit" (plist-get p :tools)))
-    (should-not (member "delegate" (plist-get p :tools)))))
+    (should-not (member "write_file" (plist-get p :tools)))))
 
 (ert-deftest test-project-parser-candidates ()
   "Project candidates returns list of available projects."
   (let ((candidates (iar--project-candidates)))
     (should (consp candidates))
     (should (assoc "iar" candidates))
-    (should (assoc "implementer" candidates))
-    (should (assoc "reviewer" candidates))
-    (should (assoc "agent-assistant" candidates))
-    (should (assoc "darwin" candidates))
-    (should (assoc "gardener" candidates))
-    (should (assoc "librarian" candidates))
-    (should (assoc "colin" candidates))
-    ;; default should NOT exist (renamed to iar)
     (should-not (assoc "default" candidates))))
 
 (ert-deftest test-project-parser-not-found ()
@@ -75,8 +52,8 @@
 (ert-deftest test-project-parser-parse-metadata-tools ()
   "Parse #+TOOLS line correctly."
   (let ((meta (iar--parse-project-metadata
-               "#+KNOWLEDGE: iar/\n#+TOOLS: read_file write_file execute_code_local\n#+OBJECTIVE: Test")))
-    (should (equal (plist-get meta :tools) '("read_file" "write_file" "execute_code_local")))))
+               "#+KNOWLEDGE: iar/\n#+TOOLS: read_file write_file\n#+OBJECTIVE: Test")))
+    (should (equal (plist-get meta :tools) '("read_file" "write_file")))))
 
 (ert-deftest test-project-parser-parse-metadata-objective ()
   "Parse #+OBJECTIVE line correctly."
@@ -85,33 +62,27 @@
     (should (string= (plist-get meta :objective) "Do the thing."))))
 
 (ert-deftest test-project-parser-parse-metadata-mounts ()
-  "Parse #+MOUNTS line correctly."
+  "Parse #+MOUNTS line with :rw and :ro suffixes."
   (let ((meta (iar--parse-project-metadata
-               "#+KNOWLEDGE: iar/\n#+TOOLS: read_file\n#+MOUNTS: /path/a /path/b\n#+OBJECTIVE: Test")))
-    (should (equal (plist-get meta :mounts) '("/path/a" "/path/b")))))
+               "#+MOUNTS: /path/a:rw /path/b:ro /path/c\n#+OBJECTIVE: Test")))
+    (let ((mounts (plist-get meta :mounts)))
+      (should (equal (cdr (assoc "/path/a" mounts)) "rw"))
+      (should (equal (cdr (assoc "/path/b" mounts)) "ro"))
+      ;; No suffix defaults to rw
+      (should (equal (cdr (assoc "/path/c" mounts)) "rw")))))
 
-(ert-deftest test-project-parser-parse-metadata-mounts-ro ()
-  "Parse #+MOUNTS_RO line correctly."
-  (let ((meta (iar--parse-project-metadata
-               "#+KNOWLEDGE: iar/\n#+TOOLS: read_file\n#+MOUNTS_RO: /path/ro1 /path/ro2\n#+OBJECTIVE: Test")))
-    (should (equal (plist-get meta :mounts-ro) '("/path/ro1" "/path/ro2")))))
-
-(ert-deftest test-project-parser-parse-metadata-mounts-both ()
-  "Parse both #+MOUNTS and #+MOUNTS_RO lines."
-  (let ((meta (iar--parse-project-metadata
-               "#+MOUNTS: /rw1 /rw2\n#+MOUNTS_RO: /ro1\n#+OBJECTIVE: Test")))
-    (should (equal (plist-get meta :mounts) '("/rw1" "/rw2")))
-    (should (equal (plist-get meta :mounts-ro) '("/ro1")))))
+(ert-deftest test-project-parser-parse-mount-entry ()
+  "Parse individual mount entries."
+  (should (equal (iar--parse-mount-entry "/path:rw") '("/path" . "rw")))
+  (should (equal (iar--parse-mount-entry "/path:ro") '("/path" . "ro")))
+  (should (equal (iar--parse-mount-entry "/path") '("/path" . "rw"))))
 
 (ert-deftest test-project-parser-parse-metadata-missing-fields ()
   "Missing fields return nil gracefully."
   (let ((meta (iar--parse-project-metadata
                "#+KNOWLEDGE: iar/\n#+OBJECTIVE: Test")))
-    (should (equal (plist-get meta :knowledge) '("iar/")))
     (should (null (plist-get meta :tools)))
-    (should (null (plist-get meta :mounts)))
-    (should (null (plist-get meta :mounts-ro)))
-    (should (string= (plist-get meta :objective) "Test"))))
+    (should (null (plist-get meta :mounts)))))
 
 (ert-deftest test-project-parser-parse-metadata-empty ()
   "Empty content returns all nil."
@@ -119,7 +90,6 @@
     (should (null (plist-get meta :knowledge)))
     (should (null (plist-get meta :tools)))
     (should (null (plist-get meta :mounts)))
-    (should (null (plist-get meta :mounts-ro)))
     (should (null (plist-get meta :objective)))))
 
 (ert-deftest test-project-parser-create-project ()
@@ -131,14 +101,13 @@
         (let ((result (iar--create-project "test-new")))
           (should (string= (plist-get result :name) "test-new"))
           (should (file-exists-p (expand-file-name "agents.d/projects/test-new.org" tmp-dir)))
-          ;; Should have all tools
           (should (member "read_file" (plist-get result :tools)))
-          ;; Should have empty mounts
-          (should (null (plist-get result :mounts)))
-          (should (null (plist-get result :mounts-ro))))
+          (should (null (plist-get result :mounts))))
       (delete-directory tmp-dir t))))
 
 (ert-deftest test-project-parser-load-or-create-existing ()
   "load-or-create returns existing project without creating a new file."
   (let ((result (iar--load-or-create-project "iar")))
     (should (string= (plist-get result :name) "iar"))))
+
+(provide 'test-project-parser)

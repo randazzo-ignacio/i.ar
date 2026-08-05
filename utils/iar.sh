@@ -334,19 +334,28 @@ EOF
     info "Created: ${PROJECT_FILE}"
 fi
 
-# Parse #+MOUNTS and #+MOUNTS_RO from project file
+# Parse #+MOUNTS from project file
+# Format: space-separated list of path:mode pairs (e.g., /path/to/dir:rw /other:ro)
+# :rw is default if no mode specified
 if [[ -f "${PROJECT_FILE}" ]]; then
     while IFS= read -r line; do
         if [[ "${line}" =~ ^#\+MOUNTS:\ *(.*) ]]; then
-            for path in "${BASH_REMATCH[1]}"; do
-                if [[ -n "${path}" && -d "${path}" ]]; then
-                    PROJECT_MOUNT_ARGS+=("$(realpath "${path}")")
-                fi
-            done
-        elif [[ "${line}" =~ ^#\+MOUNTS_RO:\ *(.*) ]]; then
-            for path in "${BASH_REMATCH[1]}"; do
-                if [[ -n "${path}" && -d "${path}" ]]; then
-                    PROJECT_MOUNT_RO_ARGS+=("$(realpath "${path}")")
+            for entry in ${BASH_REMATCH[1]}; do
+                # Split on : to get path and mode
+                mount_path="${entry%%:*}"
+                mount_mode="${entry##*:}"
+                # Default to rw if no mode specified
+                [[ "${mount_mode}" == "${mount_path}" ]] && mount_mode="rw"
+                if [[ -n "${mount_path}" && -d "${mount_path}" ]]; then
+                    real_path="$(realpath "${mount_path}")"
+                    if [[ "${mount_mode}" == "ro" ]]; then
+                        PROJECT_MOUNT_RO_ARGS+=("${real_path}")
+                    else
+                        PROJECT_MOUNT_ARGS+=("${real_path}")
+                    fi
+                    info "  Project mount: ${real_path} (${mount_mode})"
+                elif [[ -n "${mount_path}" ]]; then
+                    warn "  Project mount path does not exist: ${mount_path} (skipping)"
                 fi
             done
         fi

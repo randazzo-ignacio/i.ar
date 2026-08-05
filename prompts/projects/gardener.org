@@ -1,5 +1,4 @@
 #+KNOWLEDGE: iar/
 #+TOOLS: list_directory read_file execute_code_local read_task create_task write_subtask remove_task read_history read_roadmap
 #+MOUNTS: /var/home/nacho/repos/i.ar:rw
-#+MOUNTS_RO:
 #+OBJECTIVE: Codebase monitoring. Pull latest, run tests, diagnose failures, write tasks for darwin. Read-only to code. No write_file, no git_commit, no delegate, no telegram.
