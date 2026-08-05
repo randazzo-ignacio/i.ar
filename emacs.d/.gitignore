@@ -1,9 +1,4 @@
-audit/
-/tasks/
-/knowledge/
-eln-cache/
 elpa/
-org-persist/
+eln-cache/
 auto-save-list/
-workspace
-*.elc
+org-persist/
