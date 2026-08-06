@@ -71,3 +71,17 @@ Coupled with agents.d/common/delegated_task.org prompt template."
   :group 'iar)
 
 (provide 'iar-config-delimiters)
+(defcustom iar-one-shot-response-open "=== BEGIN FINAL RESPONSE ==="
+  "Opening delimiter for one-shot agent final response.
+The one-shot completion handler searches for this marker to detect
+that the agent has finished and to extract the content between this
+and `iar-one-shot-response-close' as the final output.
+Coupled with agents.d/archetypes/one-shot.org prompt."
+  :type 'string
+  :group 'iar)
+
+(defcustom iar-one-shot-response-close "=== END FINAL RESPONSE ==="
+  "Closing delimiter for one-shot agent final response.
+See `iar-one-shot-response-open' for details."
+  :type 'string
+  :group 'iar)

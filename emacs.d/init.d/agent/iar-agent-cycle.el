@@ -329,3 +329,189 @@ Tools are gated by the project's #+TOOLS metadata."
           (kill-emacs exit-code))))))
 
 (provide 'iar-agent-cycle)
+;;; ---------------------------------------------------------
+;;; One-shot mode
+;;; ---------------------------------------------------------
+
+;; Forward-declared: owned by configs/delimiters.el.
+(defvar iar-one-shot-response-open nil
+  "Opening delimiter for one-shot final response.")
+(defvar iar-one-shot-response-close nil
+  "Closing delimiter for one-shot final response.")
+
+(defconst iar--one-shot-nudge-prompt
+  "Continue working on your task. When you are finished, wrap your final response in === BEGIN FINAL RESPONSE === and === END FINAL RESPONSE === markers."
+  "Nudge prompt sent when a one-shot agent produces a response without delimiters.")
+
+(defvar iar--one-shot-state nil
+  "Current one-shot state as a plist:
+:agent           -- agent name string
+:buffer          -- one-shot buffer
+:max-turns       -- max LLM turns
+:turn-count      -- current turn count
+:tool-call-count -- total tool calls made
+:completed       -- t when one-shot is done
+:exit-code       -- 0 for success, 1 for timeout/error
+:final-response  -- extracted response string or nil")
+
+(defun iar--one-shot-make-state (agent buf max-turns)
+  "Create a fresh one-shot state plist."
+  (list :agent agent :buffer buf :max-turns max-turns
+        :turn-count 0 :tool-call-count 0
+        :completed nil :exit-code 0 :final-response nil))
+
+(defun iar--one-shot-tool-call-tracker (_info)
+  "Track tool calls in one-shot mode. Increments tool-call-count."
+  (cl-incf (plist-get iar--one-shot-state :tool-call-count)))
+
+(defun iar--one-shot-extract-response (text)
+  "Extract content between one-shot delimiters in TEXT.
+Returns the extracted string if delimiters are found, nil otherwise.
+Finds the first opening delimiter and the last closing delimiter
+to handle content that mentions the delimiter text."
+  (let ((open-del (or iar-one-shot-response-open "=== BEGIN FINAL RESPONSE ==="))
+        (close-del (or iar-one-shot-response-close "=== END FINAL RESPONSE ===")))
+    (with-temp-buffer
+      (insert text)
+      (goto-char (point-min))
+      (when (search-forward open-del nil t)
+        (let ((start (point)))
+          ;; Search for the last occurrence of close-del after start
+          (goto-char (point-max))
+          (when (search-backward close-del start t)
+            (let ((end (point)))
+              (string-trim (buffer-substring-no-properties start end)))))))))
+
+
+(defun iar--one-shot-post-response-handler ()
+  "Post-response handler for one-shot mode.
+Scans the buffer for one-shot delimiters. If found, extracts the
+final response and marks the one-shot as completed. If not found
+and under max turns, sends a nudge prompt. If max turns reached,
+marks as completed with exit code 1."
+  (let* ((state iar--one-shot-state)
+         (agent (plist-get state :agent))
+         (turn-count (plist-get state :turn-count))
+         (max-turns (plist-get state :max-turns)))
+    (cl-incf (plist-get iar--one-shot-state :turn-count))
+    ;; Log the response to cycle.log for audit
+    (iar--cycle-log-append agent (point-min) (point-max))
+    ;; Check for delimiters in the full buffer
+    (let* ((response (buffer-substring-no-properties (point-min) (point-max)))
+           (extracted (iar--one-shot-extract-response response)))
+      (cond
+       (extracted
+        (setf (plist-get iar--one-shot-state :final-response) extracted)
+        (setf (plist-get iar--one-shot-state :completed) t)
+        (setf (plist-get iar--one-shot-state :exit-code) 0)
+        (message "[%s] One-shot: final response detected (%d chars)"
+                 agent (length extracted)))
+       ((>= turn-count max-turns)
+        (message "[%s] One-shot: max turns (%d) reached without final response"
+                 agent max-turns)
+        (setf (plist-get iar--one-shot-state :completed) t)
+        (setf (plist-get iar--one-shot-state :exit-code) 1))
+       (t
+        ;; No delimiters, under turn limit -- send nudge
+        (goto-char (point-max))
+        (insert iar--one-shot-nudge-prompt)
+        (gptel-send))))))
+
+(defun iar-run-one-shot (&rest args)
+  "Run a one-shot agent in batch mode.
+Sends a single instruction to an agent, waits for it to produce a
+final response (between delimiters), extracts it, and prints to stdout.
+
+Keywords args:
+  :agent NAME       -- personality name (default: \"mirror\")
+  :timeout SECONDS  -- timeout in seconds (default: 7200)
+  :self-modification BOOL -- enable self-modification (default: nil)
+
+The prompt text is read from the IAR_ONE_SHOT_PROMPT environment variable.
+The archetype is forced to \"one-shot\" (not from the personality map).
+The project is determined by the personality name.
+Knowledge is auto-loaded from the project's #+KNOWLEDGE metadata.
+Tools are gated by the project's #+TOOLS metadata."
+  (interactive)
+  (let* ((agent-name (or (plist-get args :agent) "mirror"))
+         (raw-timeout (or (plist-get args :timeout) 7200))
+         (timeout (if (and (integerp raw-timeout) (> raw-timeout 0))
+                      raw-timeout
+                    7200))
+         (prompt (getenv "IAR_ONE_SHOT_PROMPT"))
+         (archetype "one-shot")
+         (project (iar--project-for-personality agent-name))
+         (self-mod (let ((sm (plist-get args :self-modification)))
+                     (if (null sm) nil sm)))
+         (os-buf (get-buffer-create (format "*%s-oneshot*" agent-name)))
+         (max-turns (if (and (integerp iar-cycle-max-turns)
+                             (> iar-cycle-max-turns 0))
+                        iar-cycle-max-turns
+                      40)))
+    (unless (and prompt (not (string-empty-p (string-trim prompt))))
+      (message "[%s] One-shot: no prompt provided (IAR_ONE_SHOT_PROMPT env var is empty)"
+               agent-name)
+      (kill-emacs 1))
+    (message "[%s] Starting one-shot with %ds timeout (archetype: %s, project: %s)"
+             agent-name timeout archetype project)
+    (iar--usage-reset)
+    (setq iar--one-shot-state (iar--one-shot-make-state agent-name os-buf max-turns))
+    (with-current-buffer os-buf
+      (text-mode)
+      (gptel-mode 1)
+      ;; Assemble prompt from one-shot archetype + personality + project
+      (let ((result (iar--setup-assembled-buffer archetype agent-name project)))
+        (message "[%s] Assembled prompt: %d chars (~%d tokens), %d tools"
+                 agent-name
+                 (length (plist-get result :prompt))
+                 (/ (length (plist-get result :prompt)) 4)
+                 (length (plist-get result :tools))))
+      (setq-local gptel-stream t)
+      ;; Self-modification: buffer-local so delegates inherit global nil
+      (setq-local iar-guard-allow-self-modification self-mod)
+
+      ;; Install hooks (named functions, idempotent per rule 57)
+      (remove-hook 'iar-post-tool-call-functions #'iar--one-shot-tool-call-tracker t)
+      (add-hook 'iar-post-tool-call-functions #'iar--one-shot-tool-call-tracker nil t)
+      (remove-hook 'iar-pre-tool-call-functions #'iar--block-unknown-tools t)
+      (add-hook 'iar-pre-tool-call-functions #'iar--block-unknown-tools nil t)
+      (remove-hook 'iar-post-response-functions #'iar--one-shot-post-response-handler t)
+      (add-hook 'iar-post-response-functions #'iar--one-shot-post-response-handler nil t)
+
+      ;; Insert prompt and send
+      (insert prompt)
+      (message "[%s] Sending one-shot prompt to %s..." agent-name agent-name)
+      (gptel-send))
+
+    ;; Batch mode event loop: wait until completed or timeout
+    (when noninteractive
+      (let ((idle-count 0)
+            (deadline (time-add nil (seconds-to-time timeout))))
+        (while (and (not (plist-get iar--one-shot-state :completed))
+                   (time-less-p nil deadline))
+          (accept-process-output nil 1)
+          (unless (or (plist-get iar--one-shot-state :completed)
+                      (get-buffer-process os-buf))
+            ;; No active process -- check for idle timeout
+            (cl-incf idle-count)
+            (when (> idle-count 1800)
+              (message "[%s] One-shot: no active requests for 1800s, exiting"
+                       agent-name)
+              (setf (plist-get iar--one-shot-state :completed) t))))
+        ;; One-shot ended -- print result and exit
+        (let ((exit-code (plist-get iar--one-shot-state :exit-code))
+              (turn-count (plist-get iar--one-shot-state :turn-count))
+              (tool-call-count (plist-get iar--one-shot-state :tool-call-count))
+              (final-response (plist-get iar--one-shot-state :final-response)))
+          (if (plist-get iar--one-shot-state :completed)
+              (message "[%s] One-shot complete. Turns: %d, Tool calls: %d, Exit: %d%s"
+                       agent-name turn-count tool-call-count exit-code
+                       (iar--cycle-token-summary))
+            (message "[%s] One-shot timed out after %ds. Turns: %d, Tool calls: %d%s"
+                     agent-name timeout turn-count tool-call-count
+                     (iar--cycle-token-summary)))
+          ;; Print final response to stdout (clean output)
+          (when final-response
+            (princ final-response))
+          (setq iar--one-shot-state nil)
+          (kill-emacs exit-code))))))

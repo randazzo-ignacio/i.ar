@@ -4,9 +4,10 @@ set -euo pipefail
 # =============================================================================
 # i.ar -- Unified entry point for the agent system
 #
-# Two modes:
+# Three modes:
 #   Interactive (default)  -- Drops you into an Emacs gptel chat buffer.
 #   Loop (--loop)          -- Runs an agent autonomously for N cycles.
+#   One-shot (--one-shot)  -- Single instruction, single response, exits.
 #
 # Usage:
 #   ./utils/iar.sh --personalization PATH [OPTIONS]
@@ -41,6 +42,7 @@ usage() {
     cat <<EOF
 Usage: iar.sh --personalization PATH [OPTIONS]
        iar.sh --loop --personalization PATH --agent NAME [OPTIONS]
+       iar.sh --one-shot --personalization PATH --agent NAME --prompt "TEXT" [OPTIONS]
 
 Required:
   --personalization PATH
@@ -54,6 +56,10 @@ Required:
                        Agents access subdirs at /root/personalization/{docs,knowledge,tasks,audit}.
 
 Mode:
+  --one-shot            Run in one-shot mode (requires --agent and --prompt).
+                       Sends a single instruction, agent produces a final
+                       response, and exits. Clean stdout (final response only).
+                       Diagnostics go to stderr.
   --loop               Run in autonomous loop mode (requires --agent).
                        Default: interactive mode (Emacs gptel chat buffer).
 
@@ -91,10 +97,15 @@ Options (both modes):
                        the default agent cycle prompt.
   --help, -h            Show this message and exit.
 
+
+Options (loop and one-shot mode):
+  --agent NAME          Agent personality name (required in --loop and --one-shot mode).
+                       Must exist as agents.d/personalities/<name>.org.
+  --prompt TEXT         Instruction for one-shot mode (required with --one-shot).
+                       Passed to the agent as the initial message.
+                       Only valid with --one-shot.
+
 Options (loop mode only):
-  --agent NAME          Agent profile name (required in --loop mode).
-                       Must exist as agents.d/agents/<name>/prompt.org and have
-                       a cycle prompt at agents.d/common/<name>_cycle.org.
   --max-cycles N        Maximum number of cycles (default: 1).
   --cooldown SECONDS   Seconds to wait between cycles (default: 60).
   --max-failures N     Max consecutive failures before stopping (default: 5).
@@ -130,6 +141,11 @@ Examples:
   iar.sh --loop --project iar --personalization ~/repos/iar-personalization \\
     --agent playground --model granite4.1:30b --ctx 131072 \\
     --ollama-host 10.66.0.3:11434 --max-cycles 999 --cooldown 300
+
+  # One-shot: single instruction, clean stdout
+  iar.sh --one-shot --project iar --personalization ~/repos/iar-personalization \\
+    --agent mirror --prompt "Review init.el and report any issues" \\
+    --model granite4.1:8b-q8_0 --ctx 131072
 EOF
 }
 
@@ -157,9 +173,14 @@ MOUNT_ARGS=()
 MOUNT_RO_ARGS=()
 KNOWLEDGE_LABELS=()
 CYCLE_PROMPT=""
+ONE_SHOT_PROMPT=""
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
+        --one-shot)
+            MODE="one-shot"
+            shift
+            ;;
         --loop)
             MODE="loop"
             shift
@@ -228,6 +249,11 @@ while [[ $# -gt 0 ]]; do
             KNOWLEDGE_LABELS+=("$2")
             shift 2
             ;;
+        --prompt)
+            [[ $# -lt 2 ]] && error "--prompt requires a text argument" && exit 1
+            ONE_SHOT_PROMPT="$2"
+            shift 2
+            ;;
         --cycle-prompt)
             [[ $# -lt 2 ]] && error "--cycle-prompt requires a name argument" && exit 1
             CYCLE_PROMPT="$2"
@@ -289,6 +315,30 @@ done
 # Validate required arguments
 if [[ -z "${PERSONALIZATION_DIR}" ]]; then
     error "--personalization is required. Specify the path to your personalization directory."
+    echo ""
+    usage
+    exit 1
+fi
+
+# One-shot mode validation
+if [[ "${MODE}" == "one-shot" ]]; then
+    if [[ -z "${AGENT_NAME}" ]]; then
+        error "--agent is required in --one-shot mode."
+        echo ""
+        usage
+        exit 1
+    fi
+    if [[ -z "${ONE_SHOT_PROMPT}" ]]; then
+        error "--prompt is required in --one-shot mode."
+        echo ""
+        usage
+        exit 1
+    fi
+fi
+
+# --prompt is only valid in one-shot mode
+if [[ -n "${ONE_SHOT_PROMPT}" && "${MODE}" != "one-shot" ]]; then
+    error "--prompt is only valid with --one-shot mode."
     echo ""
     usage
     exit 1
@@ -373,6 +423,10 @@ if [[ "${MODE}" == "loop" ]]; then
     CONTAINER_NAME="${AGENT_NAME}-loop-$$"
     GIT_AUTHOR_NAME="${AGENT_NAME}-agent"
     GIT_AUTHOR_EMAIL="${AGENT_NAME}@emacboros.local"
+elif [[ "${MODE}" == "one-shot" ]]; then
+    CONTAINER_NAME="${AGENT_NAME}-oneshot-$$"
+    GIT_AUTHOR_NAME="${AGENT_NAME}-agent"
+    GIT_AUTHOR_EMAIL="${AGENT_NAME}@emacboros.local"
 else
     CONTAINER_NAME="iar-interactive-$$"
     GIT_AUTHOR_NAME="emacboros"
@@ -392,17 +446,23 @@ else
 fi
 
 # =============================================================================
-# Logging (loop mode only)
+# Logging (loop and one-shot mode)
 # =============================================================================
-if [[ "${MODE}" == "loop" ]]; then
-    LOG_FILE="${PERSONALIZATION_DIR}/audit/${AGENT_NAME}-loop-$(date +%Y-%m-%d).log"
+if [[ "${MODE}" == "loop" || "${MODE}" == "one-shot" ]]; then
+    if [[ "${MODE}" == "loop" ]]; then
+        LOG_FILE="${PERSONALIZATION_DIR}/audit/${AGENT_NAME}-loop-$(date +%Y-%m-%d).log"
+    else
+        LOG_FILE="${PERSONALIZATION_DIR}/audit/${AGENT_NAME}-oneshot-$(date +%Y-%m-%d).log"
+    fi
     mkdir -p "$(dirname "${LOG_FILE}")"
 else
     LOG_FILE="/dev/null"
 fi
 
 log() {
-    if [[ "${MODE}" == "loop" ]]; then
+    if [[ "${MODE}" == "one-shot" ]]; then
+        echo -e "$@" >> "${LOG_FILE}"
+    elif [[ "${MODE}" == "loop" ]]; then
         echo -e "$@" | tee -a "${LOG_FILE}"
     else
         echo -e "$@"
@@ -410,6 +470,7 @@ log() {
 }
 
 # --- Telegram helpers (loop mode only) ---
+
 tg_send() {
     [[ "${MODE}" != "loop" ]] && return
     local message="$1"
@@ -649,14 +710,64 @@ run_cycle() {
 
     return ${PIPESTATUS[0]}
 }
+# =============================================================================
+# One-shot mode
+# =============================================================================
+run_one_shot() {
+    info "=========================================="
+    info "i.ar One-Shot"
+    info "  Agent: ${AGENT_NAME}"
+    info "  Personalization: ${PERSONALIZATION_DIR}"
+    info "  Timeout: ${TIMEOUT}s"
+    info "  Ollama: ${OLLAMA_HOST}"
+    info "  Model: ${OLLAMA_MODEL:-glm-5.2:cloud (default)}"
+    info "  Context: ${OLLAMA_CTX:-1048576 (default)}"
+    if [[ "${SELF_MODIFICATION}" -eq 1 ]]; then
+        info "  Self-modification: ENABLED"
+    else
+        info "  Self-modification: disabled"
+    fi
+    info "  Container: ${CONTAINER_NAME}"
+    info "  Log: ${LOG_FILE}"
+    info "=========================================="
 
+    if ! check_ollama "${OLLAMA_HOST}"; then
+        error "Ollama unreachable at ${OLLAMA_HOST}"
+        exit 1
+    fi
+
+    cleanup_container
+
+    info "Starting one-shot execution (timeout: ${TIMEOUT}s)"
+
+    # shellcheck disable=SC2086
+    podman run \
+        $(build_podman_args) \
+        -e "TERM=dumb" \
+        -e "IAR_ONE_SHOT_PROMPT=${ONE_SHOT_PROMPT}" \
+        --entrypoint /bin/bash \
+        "${IMAGE_NAME}" \
+        -c "preflight.sh && emacs --batch -l /root/.emacs.d/init.el --eval '(iar-run-one-shot :agent \"${AGENT_NAME}\" :timeout ${TIMEOUT} :self-modification ${SELF_MODIFICATION:-0})'" 2>>"${LOG_FILE}"
+
+    local exit_code=$?
+    info "One-shot exited with code ${exit_code}"
+    return ${exit_code}
+}
 # =============================================================================
 # Main
+
 # =============================================================================
 if [[ "${MODE}" == "interactive" ]]; then
     run_interactive
     exit $?
 fi
+
+if [[ "${MODE}" == "one-shot" ]]; then
+    run_one_shot
+    exit $?
+fi
+
+# =============================================================================
 
 # =============================================================================
 # Loop mode -- cycle management
