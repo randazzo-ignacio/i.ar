@@ -102,7 +102,8 @@ and avoids a double-callback race."
 
 (defun iar--tool-delegate (callback agent task &optional context timeout)
   "Delegate a task to a sub-agent with a specific profile.  ASYNC tool.
-CALLBACK is gptel's async tool callback.  AGENT is the profile name.
+CALLBACK is gptel's async tool callback.  AGENT is the profile name
+(optional, defaults to agent-assistant for pipeline delegation).
 TASK is the task description.  CONTEXT is optional context.
 TIMEOUT is optional max seconds to wait (default 600, minimum 1)."
   (let* ((ctx (or context "No additional context provided."))
@@ -113,28 +114,30 @@ TIMEOUT is optional max seconds to wait (default 600, minimum 1)."
                         (t 600)))
          ;; Ensure timeout is at least 1 second
          (timeout-secs (max 1 timeout-secs))
-         (agent-valid (and agent (stringp agent) (> (length agent) 0)
-                           (string-match "[^[:space:]]" agent)))
+         ;; Default to agent-assistant when agent is nil or empty
+         (effective-agent
+          (if (and agent (stringp agent) (> (length agent) 0)
+                   (string-match "[^[:space:]]" agent))
+              agent
+            "agent-assistant"))
          (task-valid (and task (stringp task) (> (length task) 0)
                           (string-match "[^[:space:]]" task))))
     (cond
-     ((not agent-valid)
-      (funcall callback "Delegate tool error: :agent must be a non-empty string"))
      ((not task-valid)
       (funcall callback "Delegate tool error: :task must be a non-empty string"))
      (t
       (condition-case err
-          (let* ((archetype (iar--archetype-for-personality agent))
-                 (project (iar--project-for-personality agent))
-                 (result (iar--assemble-prompt archetype agent project))
+          (let* ((archetype (iar--archetype-for-personality effective-agent))
+                 (project (iar--project-for-personality effective-agent))
+                 (result (iar--assemble-prompt archetype effective-agent project))
                  (profile (plist-get result :prompt))
                  (tools (plist-get result :tools)))
             (iar--spawn-async-delegate
-             callback agent task ctx timeout-secs profile tools))
+             callback effective-agent task ctx timeout-secs profile tools))
         (error
          (funcall callback
                   (format "Delegate error: personality '%s' not found: %s"
-                          agent (error-message-string err)))))))))
+                          effective-agent (error-message-string err)))))))))
 
 (defconst iar--delegate-continue-prompt
   (iar--load-prompt "delegate_continue")
@@ -341,8 +344,8 @@ so the user can watch progress in real time."
 (iar-tool-register
  (gptel-make-tool
   :name "delegate"
-  :description "Spawn a sub-agent with a specific profile to handle a sub-task. Returns the sub-agent's final response. Use for complex tasks requiring specialized expertise or parallel processing."
-  :args (list '(:name "agent" :type "string" :description "Profile name (e.g., 'coder', 'reviewer', 'researcher', 'mccarthy'). Must exist as agents.d/agents/<name>/prompt.org")
+  :description "Spawn a sub-agent to handle a sub-task. If agent is omitted, defaults to agent-assistant (pipeline mode: plans, delegates to implementer/reviewer, coordinates correction loop). If agent is specified, spawns that personality directly. Returns the sub-agent's final response."
+  :args (list '(:name "agent" :type "string" :description "Personality name (e.g., 'mirror', 'darwin', 'implementer', 'reviewer'). Must exist as agents.d/personalities/<name>.org. If omitted, defaults to 'agent-assistant' for pipeline delegation." :optional t)
               '(:name "task" :type "string" :description "What you want the sub-agent to accomplish. Be specific and detailed.")
               '(:name "context" :type "string" :description "Relevant context from the current conversation to pass along. Optional but recommended.")
               '(:name "timeout" :type "integer" :description "Maximum seconds to wait for delegate response. Default 600." :optional t))

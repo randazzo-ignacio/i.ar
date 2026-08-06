@@ -36,6 +36,8 @@
   "Relative path to archetype definition files.")
 (defvar iar-projects-path nil
   "Relative path to project definition files.")
+(defvar iar-personalization-path nil
+  "Absolute path to the personalization mount point.")
 
 ;; Declared in iar-knowledge-loader.el.
 (defvar iar--knowledge-base-prompt nil)
@@ -73,7 +75,10 @@ Set buffer-local by `iar-load-agent'. Kept for backward compat.")
     ("gardener" . "continuous")
     ("librarian" . "continuous")
     ("davinci" . "interactive")
-    ("colin" . "interactive"))
+    ("colin" . "interactive")
+    ("agent-assistant" . "agent-assistant")
+    ("implementer" . "implementer")
+    ("reviewer" . "reviewer"))
   "Mapping from personality names to default archetype names.
 Used by the cycle runner to determine the archetype from the --agent flag.")
 
@@ -102,7 +107,7 @@ If a project file matching the personality name exists, use it.
 Otherwise, use \"default\"."
   (let ((project-path (expand-file-name
                        (format "%s.org" personality-name)
-                       (expand-file-name iar-projects-path user-emacs-directory))))
+                       (expand-file-name iar-projects-path iar-personalization-path))))
     (if (file-exists-p project-path)
         personality-name
       "iar")))

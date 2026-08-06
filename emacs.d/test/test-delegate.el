@@ -14,12 +14,24 @@
 
 ;;; --- Validation tests ---
 
-(ert-deftest test-delegate-validates-agent-name ()
-  "delegate tool should reject empty or whitespace-only agent names."
-  (let ((result nil))
-    (iar--tool-delegate (lambda (r) (setq result r)) "" "task" "context")
-    (should result)
-    (should (string-match-p "agent" result))))
+(ert-deftest test-delegate-defaults-to-agent-assistant ()
+  "delegate tool should default to agent-assistant when agent is nil or empty."
+  (let ((captured-agent nil))
+    (cl-letf (((symbol-function 'iar--spawn-async-delegate)
+               (lambda (_cb agent _task _ctx _timeout _profile _tools)
+                 (setq captured-agent agent))))
+      ;; Empty string should default to agent-assistant
+      (iar--tool-delegate (lambda (_r)) "" "task" "context")
+      (should (string= captured-agent "agent-assistant"))
+      ;; nil should also default to agent-assistant
+      (iar--tool-delegate (lambda (_r)) nil "task" "context")
+      (should (string= captured-agent "agent-assistant"))
+      ;; Whitespace-only should also default
+      (iar--tool-delegate (lambda (_r)) "   " "task" "context")
+      (should (string= captured-agent "agent-assistant"))
+      ;; Valid agent should pass through
+      (iar--tool-delegate (lambda (_r)) "darwin" "task" "context")
+      (should (string= captured-agent "darwin")))))
 
 (ert-deftest test-delegate-validates-task ()
   "delegate tool should reject empty or whitespace-only task strings."
@@ -602,6 +614,63 @@ negatives, but this is defense-in-depth at the consumer level."
                  ;; Depth should be 1 (0 + 1), not -99 (-100 + 1)
                  (should (= iar--delegate-depth 1))))
           (when (buffer-live-p buf) (kill-buffer buf)))))))
+
+
+;;; --- Pipeline personality tests ---
+
+(ert-deftest test-delegate-agent-assistant-personality-exists ()
+  "agent-assistant personality file should exist and be loadable."
+  (let ((profile (iar--read-personality "agent-assistant")))
+    (should (stringp profile))
+    (should (< 0 (length profile)))))
+
+(ert-deftest test-delegate-implementer-personality-exists ()
+  "implementer personality file should exist and be loadable."
+  (let ((profile (iar--read-personality "implementer")))
+    (should (stringp profile))
+    (should (< 0 (length profile)))))
+
+(ert-deftest test-delegate-reviewer-personality-exists ()
+  "reviewer personality file should exist and be loadable."
+  (let ((profile (iar--read-personality "reviewer")))
+    (should (stringp profile))
+    (should (< 0 (length profile)))))
+
+(ert-deftest test-delegate-agent-assistant-archetype-is-delegated ()
+  "agent-assistant should map to delegated archetype."
+  (should (string= (iar--archetype-for-personality "agent-assistant") "agent-assistant")))
+
+(ert-deftest test-delegate-implementer-archetype-is-delegated ()
+  "implementer should map to delegated archetype."
+  (should (string= (iar--archetype-for-personality "implementer") "implementer")))
+
+(ert-deftest test-delegate-reviewer-archetype-is-delegated ()
+  "reviewer should map to delegated archetype."
+  (should (string= (iar--archetype-for-personality "reviewer") "reviewer")))
+
+(ert-deftest test-delegate-agent-assistant-project-resolves ()
+  "agent-assistant should resolve to agent-assistant project."
+  (should (string= (iar--project-for-personality "agent-assistant") "agent-assistant")))
+
+(ert-deftest test-delegate-implementer-project-resolves ()
+  "implementer should resolve to implementer project."
+  (should (string= (iar--project-for-personality "implementer") "implementer")))
+
+(ert-deftest test-delegate-reviewer-project-resolves ()
+  "reviewer should resolve to reviewer project."
+  (should (string= (iar--project-for-personality "reviewer") "reviewer")))
+
+(ert-deftest test-delegate-agent-assistant-in-personality-list ()
+  "agent-assistant should appear in the personality list."
+  (should (member "agent-assistant" (iar--personality-names))))
+
+(ert-deftest test-delegate-implementer-in-personality-list ()
+  "implementer should appear in the personality list."
+  (should (member "implementer" (iar--personality-names))))
+
+(ert-deftest test-delegate-reviewer-in-personality-list ()
+  "reviewer should appear in the personality list."
+  (should (member "reviewer" (iar--personality-names))))
 
 (provide 'test-delegate)
 ;;; test-delegate.el ends here
