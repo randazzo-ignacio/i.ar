@@ -10,6 +10,10 @@ A self-modifying AI operating environment built in Emacs, running in a hardened 
 - Ollama running on a reachable host (local or WireGuard mesh)
 - A personalization repository (see below)
 
+Run 
+sudo loginctl enable-linger
+
+
 ** Clone
 
 #+begin_src bash
